@@ -1,0 +1,31 @@
+[package]
+
+name = "yaxpeax"
+version = "0.0.1"
+authors = [ "iximeow <me@iximeow.net>" ]
+license = "0BSD"
+repository = ""
+description = "program analysis for machine code"
+
+[dependencies]
+yaxpeax-arch = { path = "../yaxpeax-arch" }
+yaxpeax-x86 = { path = "../arch/x86" }
+yaxpeax-msp430-mc = { path = "../arch/msp430" }
+yaxpeax-pic17 = { path = "../arch/pic17" }
+yaxpeax-pic18 = { path = "../arch/pic18" }
+yaxpeax-pic24 = { path = "../arch/pic24" }
+"num-traits" = "0.2"
+"termios" = "0.2.2"
+"termion" = "1.4.0"
+"serde" = "*"
+"serde_json" = "*"
+"serde_derive" = "*"
+"petgraph" = "*"
+"nix" = "*"
+"proc-maps" = "*"
+
+# [[bin]]
+# name = "picanalyzer"
+# test = false
+# bench = false
+# source = "src/picanalyzer.rs"
