@@ -28,8 +28,9 @@ use yaxpeax_arch::Arch;
 use std::hash::Hash;
 use std::collections::HashMap;
 
-pub trait ContextTable<'it, A: Arch, Ctx> {
-    fn at(&'it self, address: &<A as Arch>::Address) -> Ctx;
+pub trait ContextTable<A: Arch, Ctx, CtxUpdate> {
+    fn at(&self, address: &<A as Arch>::Address) -> Ctx;
+    fn put(&mut self, address: <A as Arch>::Address, update: CtxUpdate);
 }
 
 pub trait SyntaxedRender<A, T, F> {

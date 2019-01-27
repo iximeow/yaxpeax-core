@@ -7,7 +7,7 @@ use petgraph::graphmap::GraphMap;
 
 use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
 
-use num_traits::Bounded;
+use num_traits::{Bounded, WrappingAdd};
 
 use ContextTable;
 
@@ -18,6 +18,10 @@ pub struct Effect<Addr> {
 }
 
 impl <Addr> Effect<Addr> {
+    pub fn is_stop(&self) -> bool {
+        self.stop_after
+    }
+
     pub fn stop() -> Effect<Addr> {
         Effect {
             stop_after: true,
@@ -343,29 +347,35 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
 
 use std::fmt::Debug;
 
-pub fn explore_all<A, T, U>(
+pub fn explore_all<'it, A, U, Contexts, Update, InstrCallback>(
     data: &[u8],
-    contexts: &HashMap<A, U>,
-    cfg: &mut ControlFlowGraph<A>,
-    starts: Vec<A>
+    contexts: &mut Contexts,
+    cfg: &mut ControlFlowGraph<A::Address>,
+    starts: Vec<A::Address>,
+    on_instruction_discovered: &InstrCallback
 ) where
-    A: Address + Hash + petgraph::graphmap::NodeTrait,
-    T: Debug + Decodable + Determinant<U, A> + LengthedInstruction<Unit=A>
+    A: Arch,
+    Contexts: ContextTable<A, U, Update>,
+    A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
+    A::Instruction: Debug + Determinant<U, A::Address>,
+    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &mut Contexts) -> Vec<(A::Address, Update)>
 {
-    let mut to_explore: VecDeque<A> = VecDeque::new();
-    let mut seen: HashSet<A> = HashSet::new();
+    let mut to_explore: VecDeque<A::Address> = VecDeque::new();
+    let mut seen: HashSet<A::Address> = HashSet::new();
 
     for addr in starts.iter() {
         to_explore.push_back(*addr);
         seen.insert(*addr);
 
-        // we've been told by `starts` that control flow leads here
-        // so it must be the start of a basic block.
-        cfg.with_effect(*addr - A::from(1), *addr, &Effect::stop());
+        if *addr > A::Address::from(0) {
+            // we've been told by `starts` that control flow leads here
+            // so it must be the start of a basic block.
+            cfg.with_effect(*addr - A::Address::from(1), *addr, &Effect::stop());
+        }
     }
 
     while let Some(addr) = to_explore.pop_front() {
-        let dests = explore_control_flow::<_, T, _>(data, contexts, cfg, addr);
+        let dests = explore_control_flow(data, contexts, cfg, addr, on_instruction_discovered);
         for next in dests.into_iter() {
             if !seen.contains(&next) {
                 to_explore.push_back(next);
@@ -375,14 +385,18 @@ pub fn explore_all<A, T, U>(
     }
 }
 
-pub fn explore_control_flow<A, T, U>(
+pub fn explore_control_flow<A, U, Contexts, Update, InstrCallback>(
     data: &[u8],
-    contexts: &HashMap<A, U>,
-    cfg: &mut ControlFlowGraph<A>,
-    start: A
-) -> Vec<A> where
-    A: Address + Hash + petgraph::graphmap::NodeTrait,
-    T: Debug + Decodable + Determinant<U, A> + LengthedInstruction<Unit=A> {
+    contexts: &mut Contexts,
+    cfg: &mut ControlFlowGraph<A::Address>,
+    start: A::Address,
+    on_instruction_discovered: &InstrCallback
+) -> Vec<A::Address> where
+    A: Arch,
+    Contexts: ContextTable<A, U, Update>,
+    A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
+    A::Instruction: Debug + Determinant<U, A::Address>,
+    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &mut Contexts) -> Vec<(A::Address, Update)> {
     // we don't know if we've just observed some flow to start,
     // or that start has already been explored,
     // so for now just go through start to end like normal
@@ -393,9 +407,16 @@ pub fn explore_control_flow<A, T, U>(
 
     let mut addr = start;
     loop {
-        match T::decode(data[addr.to_linear()..].iter()) {
+        match A::Instruction::decode(data[addr.to_linear()..].iter()) {
             Some(instr) => {
-                let effect = instr.control_flow(contexts.get(&addr));
+                let effect = {
+                    let ctx = contexts.at(&addr);
+                    instr.control_flow(Some(&ctx))
+                };
+                let results = on_instruction_discovered(&instr, addr, &effect, contexts);
+                for (addr, update) in results.into_iter() {
+                    contexts.put(addr, update);
+                }
                 match effect {
                     Effect { stop_after: false, dest: None } => {
                         // we can continue!
@@ -416,11 +437,11 @@ pub fn explore_control_flow<A, T, U>(
 
 //                                        v-- (Addr, T). this probably will have to go in favor of Vec<u8> and T:
 //                                        Decodable?
-pub fn build_global_cfgs<'a, A: Arch, U, UTable>(ts: &Vec<(A::Address, A::Instruction)>, contexts: &'a UTable, start: u16) -> ControlFlowGraph<A::Address>
+pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A::Instruction)>, contexts: &'a UTable, start: u16) -> ControlFlowGraph<A::Address>
     where
         A::Instruction: Determinant<U, A::Address> + LengthedInstruction<Unit=A::Address>,
         A::Address: petgraph::graphmap::NodeTrait,
-        UTable: ContextTable<'a, A, U>
+        UTable: ContextTable<A, U, Update>
 {
     let mut cfg = ControlFlowGraph {
         blocks: vec![BasicBlock::new(A::Address::min_value(), A::Address::max_value())], // TODO: this should be the lower and upper bounds of rust-num Bounded one day

@@ -8,8 +8,8 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use arch::InstructionSpan;
 use arch::msp430;
 use arch::msp430::syntaxed_render;
-use arch::msp430::{MSP430, PartialInstructionContext};
-use yaxpeax_msp430_mc::{Instruction, Opcode, Operand, Width};
+use arch::msp430::{PartialInstructionContext};
+use yaxpeax_msp430_mc::{Instruction, Opcode, Operand, Width, MSP430};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::cytron::SSA;
 use std::collections::HashMap;
@@ -286,6 +286,9 @@ pub fn show_linear_with_blocks(
         show_linear(data, user_infos, continuation, end);
 
         // and continue on right after this block
+        if block.end == 0xffff {
+            break;
+        }
         continuation = block.end + <MSP430 as Arch>::Address::from(1u16);
     }
 }

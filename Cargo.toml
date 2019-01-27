@@ -1,6 +1,6 @@
 [package]
 
-name = "yaxpeax"
+name = "yaxpeax-core"
 version = "0.0.1"
 authors = [ "iximeow <me@iximeow.net>" ]
 license = "0BSD"

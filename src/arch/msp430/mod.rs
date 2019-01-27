@@ -11,7 +11,8 @@ use serde;
 use serde::Deserialize;
 
 use yaxpeax_arch::Arch;
-use yaxpeax_msp430_mc::{Opcode, Operand};
+use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
+use ContextTable;
 
 use analyses::control_flow;
 
@@ -164,6 +165,25 @@ pub struct MergedContext<'a, 'b> {
     pub computed: Option<&'b ComputedContext>
 }
 
+pub struct MergedContextTable {
+    pub user_contexts: HashMap<<MSP430 as Arch>::Address, PartialContext>,
+    pub computed_contexts: HashMap<<MSP430 as Arch>::Address, ComputedContext>
+}
+
+impl <'it> ContextTable<MSP430, MergedContext<'it, 'it>, StateUpdate> for &'it MergedContextTable {
+    fn at(&self, address: &<MSP430 as Arch>::Address) -> MergedContext<'it, 'it> {
+        MergedContext {
+            user: self.user_contexts.get(address),
+            computed: self.computed_contexts.get(address)
+        }
+    }
+    fn put(&mut self, address: <MSP430 as Arch>::Address, update: StateUpdate) {}
+}
+
+pub enum StateUpdate {
+    FullContext(ComputedContext)
+}
+
 impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
     fn indicator_tag(&self) -> &'static str {
         "+"
@@ -177,17 +197,6 @@ impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
     fn control_flow(&self) -> Option<&control_flow::Effect<u16>> {
         self.user.and_then(|x| x.control_flow()).or_else(|| { self.computed.and_then(|x| x.control_flow()) })
     }
-}
-
-#[derive(Debug)]
-pub struct MSP430 { }
-impl Arch for MSP430 {
-    type Address = u16;
-    type Instruction = yaxpeax_msp430_mc::Instruction;
-    type Operand = yaxpeax_msp430_mc::Operand;
-}
-
-impl MSP430 {
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

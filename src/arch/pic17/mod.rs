@@ -366,7 +366,7 @@ pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext)
 
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<PIC17 as Arch>::Address, PartialContext>,
-    pub computed_contexts: HashMap<<PIC17 as Arch>::Address, ComputedContext>
+    pub computed_contexts: Vec<Option<ComputedContext>>
 }
 
 /*"
@@ -377,19 +377,26 @@ impl <'a, T: PartialInstructionContext + Default> ContextTable<'a, &'a T> for Ha
 }
 */
 
-impl <'a, 'b, 'it: 'a + 'b> ContextTable<'it, PIC17, MergedContext<'a, 'b>> for MergedContextTable {
-    fn at(&'it self, address: &<PIC17 as Arch>::Address) -> MergedContext<'a, 'b> {
+impl <'it> ContextTable<PIC17, MergedContext<'it, 'it>, StateUpdate> for &'it MergedContextTable {
+    fn at(&self, address: &<PIC17 as Arch>::Address) -> MergedContext<'it, 'it> {
         MergedContext {
             user: self.user_contexts.get(address),
-            computed: self.computed_contexts.get(address)
+            computed: if *address < self.computed_contexts.len() as u16 {
+                self.computed_contexts[*address as usize].as_ref()
+            } else { None }
         }
     }
+    fn put(&mut self, address: <PIC17 as Arch>::Address, update: StateUpdate) { }
 }
 
 #[derive(Debug)]
 pub struct MergedContext<'a, 'b> {
     pub computed: Option<&'a ComputedContext>,
     pub user: Option<&'b PartialContext>
+}
+
+pub enum StateUpdate {
+    FullContext(ComputedContext)
 }
 
 impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
