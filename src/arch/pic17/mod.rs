@@ -369,6 +369,15 @@ pub struct MergedContextTable {
     pub computed_contexts: Vec<Option<ComputedContext>>
 }
 
+impl MergedContextTable {
+    pub fn create_empty() -> MergedContextTable {
+        MergedContextTable {
+            user_contexts: HashMap::new(),
+            computed_contexts: vec![None; 65535]
+        }
+    }
+}
+
 /*"
 impl <'a, T: PartialInstructionContext + Default> ContextTable<'a, &'a T> for HashMap<<PIC17 as Arch>::Address, T> {
     fn at(&self, address: <PIC17 as Arch>::Address) -> T {

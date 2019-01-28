@@ -368,7 +368,7 @@ pub fn explore_all<'it, A, U, Contexts, Update, InstrCallback>(
     Contexts: ContextTable<A, U, Update>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
-    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &mut Contexts) -> Vec<(A::Address, Update)>
+    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)>
 {
     let mut to_explore: VecDeque<A::Address> = VecDeque::new();
     let mut seen: HashSet<A::Address> = HashSet::new();
@@ -406,7 +406,7 @@ pub fn explore_control_flow<A, U, Contexts, Update, InstrCallback>(
     Contexts: ContextTable<A, U, Update>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
-    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &mut Contexts) -> Vec<(A::Address, Update)> {
+    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)> {
     // we don't know if we've just observed some flow to start,
     // or that start has already been explored,
     // so for now just go through start to end like normal

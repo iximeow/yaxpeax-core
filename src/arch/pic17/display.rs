@@ -312,7 +312,7 @@ pub fn show_function_by_ssa(
     addr: <PIC17 as Arch>::Address,
     ssa: &SSA<PIC17>) {
 
-    let fn_graph = cfg.get_function(addr);
+    let fn_graph = cfg.get_function(addr, function_table);
 
     let mut blocks: Vec<<PIC17 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();
@@ -367,7 +367,7 @@ pub fn show_function(
     cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
     addr: <PIC17 as Arch>::Address) {
 
-    let fn_graph = cfg.get_function(addr);
+    let fn_graph = cfg.get_function(addr, function_table);
 
     let mut blocks: Vec<<PIC17 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();

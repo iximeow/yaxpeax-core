@@ -368,7 +368,7 @@ pub fn show_function_by_ssa(
     addr: <MSP430 as Arch>::Address,
     ssa: &SSA<MSP430>) {
 
-    let fn_graph = cfg.get_function(addr);
+    let fn_graph = cfg.get_function::<()>(addr, &HashMap::new());
 
     let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();
@@ -431,7 +431,7 @@ pub fn show_function(
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     addr: <MSP430 as Arch>::Address) {
 
-    let fn_graph = cfg.get_function(addr);
+    let fn_graph = cfg.get_function::<()>(addr, &HashMap::new());
 
     let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();
