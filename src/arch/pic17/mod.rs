@@ -224,23 +224,6 @@ impl <T> control_flow::Determinant<T, <PIC17 as Arch>::Address> for yaxpeax_pic1
     }
 }
 
-pub fn build_fn_cfg(start: <PIC17 as Arch>::Address, full_graphs: &GraphMap<<PIC17 as Arch>::Address, (), petgraph::Directed>, function_table: &HashMap<<PIC17 as Arch>::Address, Function>) -> GraphMap<<PIC17 as Arch>::Address, (), petgraph::Directed> {
-    let mut fn_graph = GraphMap::new();
-    let mut walk = petgraph::visit::Bfs::new(full_graphs, start);
-    while let Some(next) = walk.next(&full_graphs) {
-        for i in full_graphs.neighbors_directed(next, petgraph::Direction::Outgoing) {
-            // TODO: this is a hacky way to deal with tail calls.
-            // if there's a conditional branch, unconditional branch, or
-            // just a straight lead into a function, assumr this is some
-            // sort of tail call to it.
-            if !function_table.contains_key(&i) {
-                fn_graph.add_edge(next, i, ());
-            }
-        }
-    }
-    fn_graph
-}
-
 pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext) -> ComputedContext {
     let mut result = merged.computed.map(|c| c.clone()).unwrap_or(ComputedContext::new());
     result.without_comment();
