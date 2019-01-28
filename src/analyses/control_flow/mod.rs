@@ -182,12 +182,22 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         cfg
     }
 
-    pub fn get_function(&self, start: A) -> ControlFlowGraph<A> {
+    /*
+     * U should be a function, function_table should be an oracle
+     * we can query to answer "does there exist a function at this place?"
+     *
+     * TODO: are there other reasons a basic block edge should be
+     * disincluded?
+     */
+    pub fn get_function<U>(&self, start: A, function_table: &HashMap<A, U>) -> ControlFlowGraph<A> {
         let mut result: ControlFlowGraph<A> = ControlFlowGraph::new();
+        result.graph.add_node(start);
         let mut walk = petgraph::visit::Bfs::new(&self.graph, start);
         while let Some(next) = walk.next(&self.graph) {
             for i in self.graph.neighbors_directed(next, petgraph::Direction::Outgoing) {
-                result.graph.add_edge(next, i, ());
+                if !function_table.contains_key(&i) {
+                    result.graph.add_edge(next, i, ());
+                }
             }
         }
         result.blocks = vec![];
