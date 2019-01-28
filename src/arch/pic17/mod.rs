@@ -16,6 +16,7 @@ pub mod cpu;
 pub mod deps;
 pub mod display;
 pub mod syntaxed_render;
+pub mod analyses;
 
 use self::deps::{Dependence, Update};
 
@@ -388,7 +389,8 @@ pub struct MergedContext<'a, 'b> {
 }
 
 pub enum StateUpdate {
-    FullContext(ComputedContext)
+    FullContext(ComputedContext),
+    ComputedComment(String)
 }
 
 impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
