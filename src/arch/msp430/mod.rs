@@ -81,16 +81,27 @@ impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction wh
             },
             Opcode::RRA |
             Opcode::SXT |
-            Opcode::AND |
-            Opcode::XOR |
             Opcode::BIT |
             Opcode::BIC |
-            Opcode::RRC |
-            Opcode::SWPB |
             Opcode::BIS |
+            Opcode::RRC |
+            Opcode::SWPB => {
+                match self.operands[0] {
+                    Operand::Register(0) => {
+                        control_flow::Effect::stop_and(
+                            control_flow::Target::Indeterminate
+                        )
+                    },
+                    _ => {
+                        control_flow::Effect::cont()
+                    }
+                }
+            }
             Opcode::ADD |
             Opcode::ADDC |
             Opcode::SUBC |
+            Opcode::AND |
+            Opcode::XOR |
             Opcode::SUB |
             Opcode::DADD => {
                 match self.operands[1] {
