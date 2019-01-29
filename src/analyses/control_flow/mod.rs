@@ -7,7 +7,7 @@ use petgraph::graphmap::GraphMap;
 
 use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
 
-use num_traits::{Bounded, WrappingAdd};
+use num_traits::{Bounded, WrappingAdd, Zero, One};
 
 use ContextTable;
 
@@ -261,7 +261,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             if start != split_loc {
                 let new_block = BasicBlock::new(split_loc, end);
                 graph.blocks.insert(idx + 1, new_block);
-                graph.blocks[idx].end = split_loc - A::from(1);
+                graph.blocks[idx].end = split_loc - A::one();
                 let neighbors: Vec<A> = graph.graph.neighbors(graph.blocks[idx].start).into_iter().collect();
                 for next in neighbors.into_iter() {
                     graph.graph.remove_edge(graph.blocks[idx].start, next);
@@ -377,10 +377,10 @@ pub fn explore_all<'it, A, U, Contexts, Update, InstrCallback>(
         to_explore.push_back(*addr);
         seen.insert(*addr);
 
-        if *addr > A::Address::from(0) {
+        if *addr > A::Address::zero() {
             // we've been told by `starts` that control flow leads here
             // so it must be the start of a basic block.
-            cfg.with_effect(*addr - A::Address::from(1), *addr, &Effect::stop());
+            cfg.with_effect(*addr - A::Address::one(), *addr, &Effect::stop());
         }
     }
 
@@ -485,7 +485,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
         if start != split_loc {
             let new_block = BasicBlock::new(split_loc, end);
             blocks.insert(idx + 1, new_block);
-            blocks[idx].end = split_loc - A::from(1);
+            blocks[idx].end = split_loc - A::one();
         };
     }
 
