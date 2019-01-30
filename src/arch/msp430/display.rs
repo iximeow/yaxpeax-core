@@ -5,6 +5,8 @@ use termion::color;
 use SyntaxedRender;
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, LengthedInstruction};
+use arch;
+use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::msp430;
 use arch::msp430::syntaxed_render;
@@ -198,48 +200,50 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
     }
 }
 
-pub fn render_frame<T>(
-    addr: u16,
-    instr: &<MSP430 as Arch>::Instruction,
-    bytes: &[u8],
-    ctx: Option<&T>,
-    function_table: &HashMap<u16, ()>
-) where T: msp430::PartialInstructionContext {
-    if let Some(comment) = ctx.and_then(|x| x.comment()) {
-        println!("{:04x}: {}{}{}",
+impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContext {
+    fn render_frame(
+        addr: u16,
+        instr: &<MSP430 as Arch>::Instruction,
+        bytes: &[u8],
+        ctx: Option<&T>,
+        function_table: &HashMap<u16, ()>
+    ) {
+        if let Some(comment) = ctx.and_then(|x| x.comment()) {
+            println!("{:04x}: {}{}{}",
+                addr,
+                color::Fg(&color::Blue as &color::Color),
+                comment,
+                color::Fg(&color::Reset as &color::Color)
+            );
+        }
+        if let Some(fn_dec) = function_table.get(&addr) {
+            println!("      {}{}{}",
+                color::Fg(&color::LightYellow as &color::Color),
+                "___",
+    //                        fn_dec.decl_string(),
+                color::Fg(&color::Reset as &color::Color)
+            );
+        }
+        print!(
+            "{:04x}: {}{} {}{} {}{}: |{}|",
             addr,
-            color::Fg(&color::Blue as &color::Color),
-            comment,
-            color::Fg(&color::Reset as &color::Color)
+            bytes.get(0).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(1).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(2).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(3).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(4).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(5).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
         );
     }
-    if let Some(fn_dec) = function_table.get(&addr) {
-        println!("      {}{}{}",
-            color::Fg(&color::LightYellow as &color::Color),
-            "___",
-//                        fn_dec.decl_string(),
-            color::Fg(&color::Reset as &color::Color)
-        );
-    }
-    print!(
-        "{:04x}: {}{} {}{} {}{}: |{}|",
-        addr,
-        bytes.get(0).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(1).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(2).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(3).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(4).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(5).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
-    );
-}
 
-pub fn render_instruction<T>(
-    instr: &<MSP430 as Arch>::Instruction,
-    ctx: Option<&T>,
-    function_table: &HashMap<u16, ()>
-) where T: msp430::PartialInstructionContext {
-    println!(" {}", instr.render(ctx, &function_table))
+    fn render_instruction(
+        instr: &<MSP430 as Arch>::Instruction,
+        ctx: Option<&T>,
+        function_table: &HashMap<u16, ()>
+    ) where T: msp430::PartialInstructionContext {
+        println!(" {}", instr.render(ctx, &function_table))
+    }
 }
 
 use analyses::static_single_assignment::cytron::SSAValues;
@@ -259,10 +263,11 @@ pub fn render_instruction_with_ssa_values<T>(
 
 pub fn show_linear_with_blocks(
     data: &[u8],
-    user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
+    ctx: &msp430::MergedContextTable, //HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     start_addr: <MSP430 as Arch>::Address,
-    end_addr: <MSP430 as Arch>::Address) {
+    end_addr: <MSP430 as Arch>::Address,
+    function_table: &HashMap<<MSP430 as Arch>::Address, ()>) {
     let mut continuation = start_addr;
     while continuation < end_addr {
         // Do we have a block here?
@@ -283,73 +288,13 @@ pub fn show_linear_with_blocks(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        show_linear(data, user_infos, continuation, end);
+        arch::display::show_linear(data, &ctx, continuation, end, function_table);
 
         // and continue on right after this block
         if block.end == 0xffff {
             break;
         }
         continuation = block.end + <MSP430 as Arch>::Address::from(1u16);
-    }
-}
-
-pub fn show_linear(
-    data: &[u8],
-    user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
-    start_addr: <MSP430 as Arch>::Address,
-    end_addr: <MSP430 as Arch>::Address) {
-    let mut continuation = start_addr;
-    while continuation < end_addr {
-        let mut invalid: yaxpeax_msp430_mc::Instruction = Instruction::blank();
-        let mut iter = data.instructions_spanning::<yaxpeax_msp430_mc::Instruction>(continuation, end_addr);
-        let mut cont = true;
-        loop {
-            let (address, instr) = match iter.next() {
-                Some((address, instr)) => {
-                    (address, instr)
-                },
-                None => {
-                    invalid = yaxpeax_msp430_mc::Instruction {
-                        opcode: Opcode::Invalid(
-                            (data[(continuation as usize)] as u16) |
-                            ((data[(continuation as usize) + 1] as u16) << 8)
-                        ),
-                        op_width: Width::W,
-                        operands: [Operand::Nothing, Operand::Nothing]
-                    };
-                    continuation += invalid.len() as u16;
-                    break; // ... the iterator doesn't distinguish
-                           // between None and Invalid ...
-                    cont = false;
-                    (continuation, &invalid)
-                }
-            };
-
-            let mut computed = msp430::ComputedContext {
-                address: Some(address),
-                comment: None
-            };
-            render_frame(
-                address,
-                instr,
-                &data[(address as usize)..(address as usize + instr.len() as usize)],
-                Some(&msp430::MergedContext {
-                    user: user_infos.get(&address),
-                    computed: Some(&computed)
-                }),
-                &HashMap::new()
-            );
-            render_instruction(
-                instr,
-                Some(&msp430::MergedContext {
-                    user: user_infos.get(&address),
-                    computed: Some(&computed)
-                }),
-                &HashMap::new()
-            );
-            continuation += instr.len() as u16;
-            if !cont { break; }
-        }
     }
 }
 
@@ -396,7 +341,7 @@ pub fn show_function_by_ssa(
                 address: Some(address),
                 comment: None
             };
-            render_frame(
+            MSP430::render_frame(
                 address,
                 instr,
                 &data[(address as usize)..(address as usize + instr.len() as usize)],
@@ -449,7 +394,7 @@ pub fn show_function(
                 address: Some(address),
                 comment: None
             };
-            render_frame(
+            MSP430::render_frame(
                 address,
                 instr,
                 &data[(address as usize)..(address as usize + instr.len() as usize)],
@@ -459,7 +404,7 @@ pub fn show_function(
                 }),
                 &HashMap::new()
             );
-            render_instruction(
+            MSP430::render_instruction(
                 instr,
                 Some(&msp430::MergedContext {
                     user: user_infos.get(&address),
@@ -469,45 +414,5 @@ pub fn show_function(
             );
            //println!("{:#04x}: {}", address, instr);
         }
-    }
-}
-
-pub fn show_block(
-    data: &[u8],
-    user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
-    cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
-    block: &BasicBlock<<MSP430 as Arch>::Address>) {
-
-    println!("Basic block --\n  start: {:#x}\n  end:   {:#x}", block.start, block.end);
-    println!("  next:");
-    for neighbor in cfg.graph.neighbors(block.start) {
-        println!("    {:#x}", neighbor);
-    }
-    let mut iter = data.instructions_spanning::<yaxpeax_msp430_mc::Instruction>(block.start, block.end);
-    while let Some((address, instr)) = iter.next() {
-        let mut computed = msp430::ComputedContext {
-            address: Some(address),
-            comment: None
-        };
-        render_frame(
-            address,
-            instr,
-            &data[(address as usize)..(address as usize + instr.len() as usize)],
-            Some(&msp430::MergedContext {
-                user: user_infos.get(&address),
-                computed: Some(&computed)
-            }),
-            &HashMap::new()
-        );
-        render_instruction(
-            instr,
-            Some(&msp430::MergedContext {
-                user: user_infos.get(&address),
-                computed: Some(&computed)
-            }),
-            &HashMap::new()
-        );
-        use analyses::control_flow::Determinant;
-        println!("Control flow: {:?}", instr.control_flow(user_infos.get(&address)));
     }
 }

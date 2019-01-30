@@ -5,6 +5,8 @@ pub mod msp430;
 
 pub mod x86_64;
 
+pub mod display;
+
 use std::collections::VecDeque;
 
 use std::fmt::Debug;

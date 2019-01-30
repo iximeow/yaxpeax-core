@@ -6,6 +6,8 @@ use termion::color;
 use SyntaxedRender;
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, LengthedInstruction};
+use arch;
+use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::pic17;
 use arch::pic17::{ContextTable, PartialInstructionContext};
@@ -157,43 +159,45 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
     }
 }
 
-pub fn render_frame<T>(
-    addr: u16,
-    instr: &<PIC17 as Arch>::Instruction,
-    bytes: &[u8],
-    ctx: Option<&T>,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
-) where T: pic17::PartialInstructionContext {
-    if let Some(comment) = ctx.and_then(|x| x.comment()) {
-        println!("{:04x}: {}{}{}",
+impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstructionContext {
+    fn render_frame(
+        addr: u16,
+        instr: &<PIC17 as Arch>::Instruction,
+        bytes: &[u8],
+        ctx: Option<&T>,
+        function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
+    ) where T: pic17::PartialInstructionContext {
+        if let Some(comment) = ctx.and_then(|x| x.comment()) {
+            println!("{:04x}: {}{}{}",
+                addr,
+                color::Fg(&color::Blue as &color::Color),
+                comment,
+                color::Fg(&color::Reset as &color::Color)
+            );
+        }
+        if let Some(fn_dec) = function_table.get(&addr) {
+            println!("      {}{}{}",
+                color::Fg(&color::LightYellow as &color::Color),
+                fn_dec.decl_string(),
+                color::Fg(&color::Reset as &color::Color)
+            );
+        }
+        print!(
+            "{:04x}: {}{}: |{}|",
             addr,
-            color::Fg(&color::Blue as &color::Color),
-            comment,
-            color::Fg(&color::Reset as &color::Color)
+            bytes.get(0).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.get(1).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            ctx.map(|c| c.indicator_tag()).unwrap_or("   ".to_owned())
         );
     }
-    if let Some(fn_dec) = function_table.get(&addr) {
-        println!("      {}{}{}",
-            color::Fg(&color::LightYellow as &color::Color),
-            fn_dec.decl_string(),
-            color::Fg(&color::Reset as &color::Color)
-        );
-    }
-    print!(
-        "{:04x}: {}{}: |{}|",
-        addr,
-        bytes.get(0).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        bytes.get(1).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-        ctx.map(|c| c.indicator_tag()).unwrap_or("   ".to_owned())
-    );
-}
 
-pub fn render_instruction<T>(
-    instr: &<PIC17 as Arch>::Instruction,
-    ctx: Option<&T>,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
-) where T: pic17::PartialInstructionContext {
-    println!(" {}", instr.render(ctx, &function_table))
+    fn render_instruction(
+        instr: &<PIC17 as Arch>::Instruction,
+        ctx: Option<&T>,
+        function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
+    ) where T: pic17::PartialInstructionContext {
+        println!(" {}", instr.render(ctx, &function_table))
+    }
 }
 
 use analyses::static_single_assignment::cytron::SSAValues;
@@ -238,61 +242,10 @@ pub fn show_linear_with_blocks(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        show_linear(data, ctx, function_table, continuation, end);
+        arch::display::show_linear(data, &ctx, continuation, end, function_table);
 
         // and continue on right after this block
         continuation = block.end + <PIC17 as Arch>::Address::from(1u16);
-    }
-}
-
-pub fn show_linear(
-    data: &[u8],
-    ctx: &pic17::MergedContextTable,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
-    start_addr: <PIC17 as Arch>::Address,
-    end_addr: <PIC17 as Arch>::Address) {
-    let mut continuation = start_addr;
-    while continuation < end_addr {
-        let mut invalid: yaxpeax_pic17::Instruction = Instruction::blank();
-        let mut iter = data.instructions_spanning::<yaxpeax_pic17::Instruction>(continuation, end_addr);
-        let mut cont = true;
-        loop {
-            let (address, instr) = match iter.next() {
-                Some((address, instr)) => {
-                    (address, instr)
-                },
-                None => {
-                    invalid = yaxpeax_pic17::Instruction {
-                        opcode: Opcode::Invalid(
-                            data[(continuation as usize)],
-                            data[(continuation as usize) + 1]
-                        ),
-                        operands: [Operand::Nothing, Operand::Nothing]
-                    };
-                    continuation += invalid.len() as u16;
-                    break; // ... the iterator doesn't distinguish
-                           // between None and Invalid ...
-                    cont = false;
-                    (continuation, &invalid)
-                }
-            };
-
-            let mut computed = pic17::ComputedContext::new();
-            render_frame(
-                address,
-                instr,
-                &data[(address as usize)..(address as usize + instr.len() as usize)],
-                Some(&ctx.at(&address)),
-                function_table
-            );
-            render_instruction(
-                instr,
-                Some(&ctx.at(&address)),
-                function_table
-            );
-            continuation += instr.len() as u16;
-            if !cont { break; }
-        }
     }
 }
 
@@ -337,7 +290,7 @@ pub fn show_function_by_ssa(
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
             let mut computed = pic17::ComputedContext::new();
-            render_frame(
+            PIC17::render_frame(
                 address,
                 instr,
                 &data[(address as usize)..(address as usize + instr.len() as usize)],
@@ -382,52 +335,19 @@ pub fn show_function(
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
             let mut computed = pic17::ComputedContext::new();
-            render_frame(
+            PIC17::render_frame(
                 address,
                 instr,
                 &data[(address as usize)..(address as usize + instr.len() as usize)],
                 Some(&ctx.at(&address)),
                 function_table
             );
-            render_instruction(
+            PIC17::render_instruction(
                 instr,
                 Some(&ctx.at(&address)),
                 function_table
             );
            //println!("{:#04x}: {}", address, instr);
         }
-    }
-}
-
-pub fn show_block(
-    data: &[u8],
-    // user_infos: &HashMap<<PIC17 as Arch>::Address, <PIC17 as Arch>::PartialInstructionContext>,
-    ctx: &pic17::MergedContextTable,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
-    cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
-    block: &BasicBlock<<PIC17 as Arch>::Address>) {
-
-    println!("Basic block --\n  start: {:#x}\n  end:   {:#x}", block.start, block.end);
-    println!("  next:");
-    for neighbor in cfg.graph.neighbors(block.start) {
-        println!("    {:#x}", neighbor);
-    }
-    let mut iter = data.instructions_spanning::<yaxpeax_pic17::Instruction>(block.start, block.end);
-    while let Some((address, instr)) = iter.next() {
-        let mut computed = pic17::ComputedContext::new();
-        render_frame(
-            address,
-            instr,
-            &data[(address as usize)..(address as usize + instr.len() as usize)],
-            Some(&ctx.at(&address)),
-            &HashMap::new()
-        );
-        render_instruction(
-            instr,
-            Some(&ctx.at(&address)),
-            function_table
-        );
-        use analyses::control_flow::Determinant;
-        println!("Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
     }
 }
