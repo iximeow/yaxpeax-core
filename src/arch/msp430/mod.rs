@@ -12,7 +12,8 @@ use serde::Deserialize;
 
 use yaxpeax_arch::Arch;
 use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
-use ContextTable;
+use ContextRead;
+use ContextWrite;
 
 use analyses::control_flow;
 
@@ -181,14 +182,28 @@ pub struct MergedContextTable {
     pub computed_contexts: HashMap<<MSP430 as Arch>::Address, ComputedContext>
 }
 
-impl <'it> ContextTable<MSP430, MergedContext<'it, 'it>, StateUpdate> for &'it MergedContextTable {
+impl MergedContextTable {
+    pub fn create_empty() -> MergedContextTable {
+        MergedContextTable {
+            user_contexts: HashMap::new(),
+            computed_contexts: HashMap::new()
+        }
+    }
+}
+
+impl <'it> ContextWrite<MSP430, StateUpdate> for &'it mut MergedContextTable {
+    fn put(&mut self, address: <MSP430 as Arch>::Address, update: StateUpdate) {
+        self.user_contexts.remove(&address);
+    }
+}
+
+impl <'it> ContextRead<MSP430, MergedContext<'it, 'it>> for &'it MergedContextTable {
     fn at(&self, address: &<MSP430 as Arch>::Address) -> MergedContext<'it, 'it> {
         MergedContext {
             user: self.user_contexts.get(address),
             computed: self.computed_contexts.get(address)
         }
     }
-    fn put(&mut self, address: <MSP430 as Arch>::Address, update: StateUpdate) {}
 }
 
 pub enum StateUpdate {

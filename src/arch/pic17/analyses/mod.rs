@@ -5,6 +5,8 @@ use arch::pic17::cpu::try_debank;
 use arch::pic17::StateUpdate;
 use arch::pic17;
 use ContextTable;
+use ContextRead;
+use ContextWrite;
 
 pub fn all_instruction_analyses(
     instr: &<PIC17 as Arch>::Instruction,

@@ -10,7 +10,7 @@ use arch;
 use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::pic17;
-use arch::pic17::{ContextTable, PartialInstructionContext};
+use arch::pic17::{ContextRead, PartialInstructionContext};
 use yaxpeax_pic17::{Instruction, Opcode, Operand, PIC17};
 use analyses::control_flow;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};

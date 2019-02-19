@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use petgraph;
 use petgraph::graphmap::GraphMap;
 
-use ContextTable;
+use ContextRead;
+use ContextWrite;
 
 pub mod cpu;
 pub mod deps;
@@ -370,7 +371,7 @@ impl <'a, T: PartialInstructionContext + Default> ContextTable<'a, &'a T> for Ha
 }
 */
 
-impl <'it> ContextTable<PIC17, MergedContext<'it, 'it>, StateUpdate> for &'it MergedContextTable {
+impl <'it> ContextRead<PIC17, MergedContext<'it, 'it>> for &'it MergedContextTable {
     fn at(&self, address: &<PIC17 as Arch>::Address) -> MergedContext<'it, 'it> {
         MergedContext {
             user: self.user_contexts.get(address),
@@ -379,6 +380,9 @@ impl <'it> ContextTable<PIC17, MergedContext<'it, 'it>, StateUpdate> for &'it Me
             } else { None }
         }
     }
+}
+
+impl <'it> ContextWrite<PIC17, StateUpdate> for &'it mut MergedContextTable {
     fn put(&mut self, address: <PIC17 as Arch>::Address, update: StateUpdate) { }
 }
 

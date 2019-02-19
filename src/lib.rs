@@ -28,10 +28,17 @@ use yaxpeax_arch::Arch;
 use std::hash::Hash;
 use std::collections::HashMap;
 
-pub trait ContextTable<A: Arch, Ctx, CtxUpdate> {
+pub trait ContextTable<A: Arch, Ctx, CtxUpdate>: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
+
+pub trait ContextRead<A: Arch, Ctx> {
     fn at(&self, address: &<A as Arch>::Address) -> Ctx;
+}
+
+pub trait ContextWrite<A: Arch, CtxUpdate> {
     fn put(&mut self, address: <A as Arch>::Address, update: CtxUpdate);
 }
+
+impl <'a, T, A: Arch, Ctx, CtxUpdate> ContextTable<A, Ctx, CtxUpdate> for &'a mut T where &'a mut T: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
 
 pub trait SyntaxedRender<A, T, F> {
     fn render(&self, context: Option<&T>, function_table: &HashMap<A, F>) -> String;

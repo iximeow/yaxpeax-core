@@ -1,7 +1,7 @@
 use yaxpeax_arch::{Arch, Address, AddressDisplay, Decodable, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
-use ContextTable;
+use ContextRead;
 use arch::InstructionSpan;
 
 pub trait BaseDisplay<F, U> where Self: Arch, Self::Address: std::hash::Hash + petgraph::graphmap::NodeTrait {
@@ -20,7 +20,7 @@ pub trait BaseDisplay<F, U> where Self: Arch, Self::Address: std::hash::Hash + p
     ) -> ();
 }
 
-pub fn show_block<A: Arch + BaseDisplay<F, U>, U, F, Update, Contexts: ContextTable<A, U, Update>>(
+pub fn show_block<A: Arch + BaseDisplay<F, U>, U, F, Contexts: ContextRead<A, U>>(
     data: &[u8],
     ctx: &Contexts,
     function_table: &HashMap<A::Address, F>,
@@ -51,7 +51,7 @@ pub fn show_block<A: Arch + BaseDisplay<F, U>, U, F, Update, Contexts: ContextTa
     }
 }
 
-pub fn show_linear<A: Arch + BaseDisplay<F, U>, U, F, Update, Contexts: ContextTable<A, U, Update>>(
+pub fn show_linear<A: Arch + BaseDisplay<F, U>, U, F, Contexts: ContextRead<A, U>>(
     data: &[u8],
     ctx: &Contexts,
     start_addr: A::Address,
