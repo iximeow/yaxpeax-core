@@ -1,3 +1,4 @@
+pub mod arm;
 pub mod pic17;
 pub mod pic18;
 pub mod pic24;

@@ -10,6 +10,7 @@ extern crate proc_maps;
 
 extern crate yaxpeax_arch;
 
+extern crate yaxpeax_arm;
 extern crate yaxpeax_x86;
 extern crate yaxpeax_msp430_mc;
 extern crate yaxpeax_pic17;

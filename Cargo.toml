@@ -9,6 +9,7 @@ description = "program analysis for machine code"
 
 [dependencies]
 yaxpeax-arch = { path = "../yaxpeax-arch" }
+yaxpeax-arm = { path = "../arch/arm" }
 yaxpeax-x86 = { path = "../arch/x86" }
 yaxpeax-msp430-mc = { path = "../arch/msp430" }
 yaxpeax-pic17 = { path = "../arch/pic17" }
