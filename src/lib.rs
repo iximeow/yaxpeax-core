@@ -58,11 +58,3 @@ pub trait SyntaxedSSARender<Architecture: Arch + SSAValues, T, F> where
         function_table: &HashMap<<Architecture as Arch>::Address, F>,
         ssa: &SSA<Architecture>) -> String;
 }
-
-enum ISA {
-    PIC17,
-    PIC18,
-    PIC18e,
-    PIC24
-}
-

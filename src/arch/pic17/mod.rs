@@ -354,6 +354,12 @@ pub struct MergedContextTable {
     pub computed_contexts: Vec<Option<ComputedContext>>
 }
 
+impl Default for MergedContextTable {
+    fn default() -> Self {
+        MergedContextTable::create_empty()
+    }
+}
+
 impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {

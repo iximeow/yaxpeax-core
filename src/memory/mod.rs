@@ -114,6 +114,7 @@ fn from_hex(data: &Vec<u8>) -> Result<MemoryRepr, String> {
     }
 }
 
+#[derive(Clone)]
 pub struct MemoryRepr {
     pub sections: HashMap<u8, Vec<u8>>
 }

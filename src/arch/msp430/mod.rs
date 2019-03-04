@@ -182,6 +182,16 @@ pub struct MergedContextTable {
     pub computed_contexts: HashMap<<MSP430 as Arch>::Address, ComputedContext>
 }
 
+
+impl Default for MergedContextTable {
+    fn default() -> Self {
+        MergedContextTable {
+            user_contexts: HashMap::new(),
+            computed_contexts: HashMap::new()
+        }
+    }
+}
+
 impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {

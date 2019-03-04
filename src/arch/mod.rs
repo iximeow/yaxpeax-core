@@ -7,6 +7,7 @@ pub mod msp430;
 pub mod x86_64;
 
 pub mod display;
+pub mod interface;
 
 use std::collections::VecDeque;
 
@@ -60,49 +61,6 @@ impl <'a, Addr> InstructionSpan<'a, Addr> for [u8] where Addr: Address {
         }
     }
 }
-
-/*
-impl <'a, Addr, Instr> Iterator /*<Item=Instr>*/ for InstructionIteratorSpanned<'a, Addr, Instr> where Addr: Address + Copy + Clone, Instr: Decodable + LengthedInstruction + Copy + Clone {
-    type Item = (Addr, Instr);
-    fn next(&mut self) -> Option<(Addr, Instr)> {
-        match self.elem {
-            Some(mut instr) => {
-                //  TODO: check for wrappipng..
-                match Some(self.current.add((instr.len() as u16).into())) {
-                    Some(next) => {
-                        if next <= self.end {
-                            self.current = next;
-                            let decode_result = instr.decode_into(self.data[self.current.to_linear()..].iter());
-                            match decode_result {
-                                Some(_) => {
-                                    Some((self.current.clone(), instr.clone()))
-                                },
-                                None => None
-                            }
-                        } else {
-                            None
-                        }
-                    },
-                    None => None
-                }
-            },
-            None => {
-                if self.current <= self.end {
-                    self.elem = Instr::decode(self.data[self.current.to_linear()..].iter());
-                    match self.elem {
-                        Some(instr) => {
-                            Some((self.current.clone(), instr.clone()))
-                        },
-                        None => None
-                    }
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-*/
 
 pub enum ControlFlowEffect<Addr> {
     FollowingInstruction,
