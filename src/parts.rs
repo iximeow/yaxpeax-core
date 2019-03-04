@@ -6,6 +6,7 @@ use arch::pic17;
 use arch::pic18;
 use arch::pic24;
 use arch::msp430;
+use arch::x86_64;
 
 pub struct PartConfig {
     pub isa: ISA,
@@ -64,6 +65,12 @@ pub fn get_chip_map() -> HashMap<String, PartConfig> {
         data_size: 2048,
         eeprom_size: 256
     });
+    map.insert("x86".to_string(), PartConfig {
+        isa: ISA::x86,
+        program_size: 0xffffffff,
+        data_size: 0xffffffff,
+        eeprom_size: 0
+    });
     map
 }
 
@@ -73,6 +80,7 @@ pub fn get_cpu(part_config: &PartConfig) -> Result<Device, String> {
         ISA::PIC18e => Ok(Device::PIC18(pic18::cpu::CPU::new(part_config.program_size, part_config.data_size))),
         ISA::PIC18 => Err("Cannot construct PIC18 CPUs right now.".to_owned()),
         ISA::PIC17 => Ok(Device::PIC17(pic17::cpu::CPU::new(part_config.program_size, part_config.data_size))),
-        ISA::MSP430 => Ok(Device::MSP430(msp430::cpu::CPU::new()))
+        ISA::MSP430 => Ok(Device::MSP430(msp430::cpu::CPU::new())),
+        ISA::x86 => Ok(Device::x86(x86_64::cpu::CPU::new()))
     }
 }

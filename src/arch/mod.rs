@@ -29,7 +29,8 @@ pub enum Device {
     PIC24(pic24::CPU),
     PIC18(pic18::cpu::CPU),
     PIC17(pic17::cpu::CPU),
-    MSP430(msp430::cpu::CPU)
+    MSP430(msp430::cpu::CPU),
+    x86(x86_64::cpu::CPU)
 }
 
 pub enum ISA {
@@ -37,7 +38,8 @@ pub enum ISA {
     PIC18,
     PIC18e,
     PIC24,
-    MSP430
+    MSP430,
+    x86
 }
 
 pub struct InstructionIteratorSpanned<'a, Addr, Instr> {

@@ -11,6 +11,8 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::io;
 
+pub mod cpu;
+
 pub struct ProcessX86_64 {
     pid: nix::unistd::Pid
 }
