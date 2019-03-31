@@ -71,16 +71,26 @@ pub fn get_chip_map() -> HashMap<String, PartConfig> {
         data_size: 0xffffffff,
         eeprom_size: 0
     });
+    map.insert("x86_64".to_string(), PartConfig {
+        isa: ISA::x86_64,
+        program_size: 0xffffffff,
+        data_size: 0xffffffff,
+        eeprom_size: 0
+    });
     map
 }
 
 pub fn get_cpu(part_config: &PartConfig) -> Result<Device, String> {
-    match part_config.isa {
+    match &part_config.isa {
         ISA::PIC24 => Ok(Device::PIC24(pic24::CPU::new(part_config.program_size, part_config.data_size))),
         ISA::PIC18e => Ok(Device::PIC18(pic18::cpu::CPU::new(part_config.program_size, part_config.data_size))),
         ISA::PIC18 => Err("Cannot construct PIC18 CPUs right now.".to_owned()),
         ISA::PIC17 => Ok(Device::PIC17(pic17::cpu::CPU::new(part_config.program_size, part_config.data_size))),
         ISA::MSP430 => Ok(Device::MSP430(msp430::cpu::CPU::new())),
-        ISA::x86 => Ok(Device::x86(x86_64::cpu::CPU::new()))
+        ISA::x86 => Ok(Device::x86(x86_64::cpu::CPU::new())),
+        ISA::x86_64 => Ok(Device::x86(x86_64::cpu::CPU::new())),
+        arch @ _ => {
+            Err(format!("Unsupported ISA: {:?}", arch))
+        }
     }
 }

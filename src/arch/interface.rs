@@ -47,20 +47,20 @@ use yaxpeax_arch::Arch;
 use analyses::control_flow::BasicBlock;
 
 #[derive(Debug)]
-pub enum Display<'a, A: Arch> {
-    RenderInstruction(A::Address, &'a A::Instruction),
-    RenderBlock(BasicBlock<A::Address>),
+pub enum Display<A: Arch> {
+    RenderInstruction(A::Address),
+    RenderBlock(A::Address),
     RenderRange(A::Address, A::Address),
     RenderFunction(A::Address),
-    RenderInstructionSSA(A::Address, &'a A::Instruction),
-    RenderBlockSSA(BasicBlock<A::Address>),
+    RenderInstructionSSA(A::Address),
+    RenderBlockSSA(A::Address),
     RenderFunctionSSA(A::Address)
 }
 
 #[derive(Debug)]
-pub enum Operation<'a, A: Arch, T> {
+pub enum Operation<A: Arch, T> {
     /* base ops */
-    Display(Display<'a, A>),
+    Display(Display<A>),
     Analysis(Analysis<A>),
     Specific(T)
 }
@@ -69,7 +69,8 @@ pub enum Operation<'a, A: Arch, T> {
 pub enum Analysis<A: Arch> {
     ComputeSSAForm(A::Address),
     ControlFlowLinear(A::Address, A::Address),
-    ControlFlowIncremental(Vec<A::Address>)
+    ControlFlowIncremental(Vec<A::Address>),
+    DoEverything
 }
 
 #[derive(Debug)]
@@ -79,13 +80,13 @@ pub enum OperationSuccess {
 }
 
 #[derive(Debug)]
-pub enum OperationError<'a, A: Arch, T> {
-    Unsupported(Operation<'a, A, T>, String),
+pub enum OperationError {
+    Unsupported(String),
     Misc(String)
 }
 
-pub trait Operate<'a, T, A: Arch> {
+pub trait Operate<T, A: Arch> {
 //    type TargetArch: Arch;
-//    fn evaluate(operation: Operation<'a, Self::TargetArch, T>) -> Result<OperationSuccess, OperationError<'a, Self::TargetArch, T>>;
-    fn evaluate(&mut self, operation: Operation<'a, A, T>) -> Result<OperationSuccess, OperationError<'a, A, T>>;
+//    fn evaluate(operation: Operation<Self::TargetArch, T>) -> Result<OperationSuccess, OperationError<Self::TargetArch, T>>;
+    fn evaluate(&mut self, operation: Operation<A, T>) -> Result<OperationSuccess, OperationError>;
 }

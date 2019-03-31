@@ -1,7 +1,10 @@
 use yaxpeax_arch::Decodable;
 use arch::MCU;
 use yaxpeax_arch::LengthedInstruction;
-use memory::MemoryRepr;
+use yaxpeax_arch::Arch;
+use yaxpeax_arch::ShowContextual;
+use memory::{MemoryRepr, MemoryRange};
+use memory::repr::FlatMemoryRepr;
 use std::collections::HashMap;
 use SyntaxedRender;
 use debug;
@@ -10,6 +13,7 @@ use arch::pic17;
 use arch::pic17::{FullInstructionContext, PIC17, SFRS};
 use yaxpeax_pic17::{Operand, Opcode};
 use arch::pic17::deps::{updates_of, dependencies_of};
+use arch::pic17::MergedContextTable;
 
 pub struct PIC17DebugTarget<'a> {
     pub target: &'a mut pic17::cpu::CPU,
@@ -450,8 +454,10 @@ impl CPU {
         match self.decode() {
             Ok(instr) => {
                 let ctx: Option<&pic17::cpu::CPU> = Some(self);
-                let empty_fn_table = HashMap::new();
-                println!("instruction: {}", instr.render(ctx, &empty_fn_table))
+                let mut s = String::new();
+                let ctx: Option<&MergedContextTable> = None;
+                instr.contextualize(None, self.ip, /* TODO: ctx */ ctx, &mut s).unwrap();
+                println!("instruction: {}", s);
             },
             Err(e) => println!("[invalid: {}]", e)
         };
@@ -463,8 +469,8 @@ impl CPU {
         println!("tblptr: 0x{:x}", self.tblptr());
         println!("");
     }
-    pub fn program(&mut self, program: MemoryRepr) -> Result<(), String> {
-        match program.sections.get(&0) {
+    pub fn program<T: MemoryRange<<PIC17 as Arch>::Address>>(&mut self, program: Option<T>, config: Option<FlatMemoryRepr>) -> Result<(), String> {
+        match program.and_then(|x| x.to_flat()) {
             Some(data) => {
                 if data.len() > self.program.len() {
                     return Err(
@@ -477,7 +483,7 @@ impl CPU {
                 }
                 println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
                 for i in 0..data.len() {
-                    self.program[i] = data[i];
+                    self.program[i] = data.read(i as <PIC17 as Arch>::Address).unwrap();
                 }
             },
             None => {
@@ -486,9 +492,9 @@ impl CPU {
         };
 
         // TODO: where do config bits show up in pic17?
-        match program.sections.get(&8) {
+        match config {
             Some(config) => {
-                println!("WARN: ignoring config {:?}", config);
+                println!("WARN: ignoring config");
             },
             None => {
             }
@@ -1027,7 +1033,7 @@ impl MCU for CPU {
             opcode: Opcode::NOP,
             operands: [Operand::Nothing, Operand::Nothing]
         };
-        match result.decode_into(&self.program[(self.ip as usize)..]) {
+        match result.decode_into(self.program.range_from(self.ip).unwrap()) {
             Some(()) => Ok(result),
             None => {
                 Err(

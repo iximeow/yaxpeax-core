@@ -1,12 +1,13 @@
 use arch;
 use arch::MCU;
 use yaxpeax_arch::{Arch, Decodable, LengthedInstruction};
-use memory::MemoryRepr;
+use memory::{MemoryRepr, MemoryRange};
+use memory::repr::FlatMemoryRepr;
 use debug;
 use debug::DebugTarget;
 use arch::pic18;
 use yaxpeax_pic18::consts::SFRS;
-use yaxpeax_pic18::{Instruction, Operand, Opcode};
+use yaxpeax_pic18::{PIC18, Instruction, Operand, Opcode};
 
 pub struct PIC18DebugTarget<'a> {
     pub target: &'a mut pic18::cpu::CPU,
@@ -572,8 +573,8 @@ impl CPU {
         println!("tblptr: 0x{:x}", self.tblptr());
         println!("");
     }
-    pub fn program(&mut self, program: MemoryRepr) -> Result<(), String> {
-        match program.sections.get(&0) {
+    pub fn program<T: MemoryRange<<PIC18 as Arch>::Address>>(&mut self, program: Option<T>, config: Option<FlatMemoryRepr>) -> Result<(), String> {
+        match program.and_then(|x| x.to_flat()) {
             Some(data) => {
                 if data.len() > self.program.len() {
                     return Err(
@@ -586,7 +587,7 @@ impl CPU {
                 }
                 println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
                 for i in 0..data.len() {
-                    self.program[i] = data[i];
+                    self.program[i] = data.read(i as <PIC18 as Arch>::Address).unwrap();
                 }
             },
             None => {
@@ -594,9 +595,9 @@ impl CPU {
             }
         };
 
-        match program.sections.get(&8) {
+        match config {
             Some(config) => {
-                println!("WARN: ignoring config {:?}", config);
+                println!("WARN: ignoring config");
             },
             None => {
             }
@@ -1472,7 +1473,7 @@ impl MCU for CPU {
             opcode: Opcode::NOP,
             operands: [Operand::Nothing, Operand::Nothing]
         };
-        match result.decode_into(&self.program[(self.ip as usize)..]) {
+        match result.decode_into(self.program.range_from(self.ip).unwrap()) {
             Some(()) => Ok(result),
             None => {
                 Err(

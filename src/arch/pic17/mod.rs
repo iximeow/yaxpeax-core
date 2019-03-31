@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use yaxpeax_arch::Arch;
 use yaxpeax_pic17::PIC17;
 use yaxpeax_pic17::{Opcode, Operand};
@@ -10,6 +12,8 @@ use std::collections::HashMap;
 use petgraph;
 use petgraph::graphmap::GraphMap;
 
+use num_traits::Zero;
+
 use ContextRead;
 use ContextWrite;
 
@@ -18,6 +22,25 @@ pub mod deps;
 pub mod display;
 pub mod syntaxed_render;
 pub mod analyses;
+
+
+pub struct PIC17Data {
+    pub preferred_addr: <PIC17 as Arch>::Address,
+    pub contexts: MergedContextTable,
+    pub cfg: control_flow::ControlFlowGraph<<PIC17 as Arch>::Address>,
+    pub functions: HashMap<<PIC17 as Arch>::Address, Function>
+}
+
+impl Default for PIC17Data {
+    fn default() -> Self {
+        PIC17Data {
+            preferred_addr: <PIC17 as Arch>::Address::zero(),
+            contexts: MergedContextTable::create_empty(),
+            cfg: control_flow::ControlFlowGraph::new(),
+            functions: HashMap::new()
+        }
+    }
+}
 
 use self::deps::{Dependence, Update};
 
@@ -227,9 +250,16 @@ impl <T> control_flow::Determinant<T, <PIC17 as Arch>::Address> for yaxpeax_pic1
 }
 
 pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext) -> ComputedContext {
-    let mut result = merged.computed.map(|c| c.clone()).unwrap_or(ComputedContext::new());
+    let mut result: ComputedContext = merged.computed.as_ref().map(|c| {
+        /*
+         * Well this is messy..
+         */
+        let r: Rc<ComputedContext> = c.clone();
+        let cc: ComputedContext = (*r).clone();
+        cc
+    }).unwrap_or(ComputedContext::new());
     result.without_comment();
-    if let Some(user_ctx) = merged.user {
+    if let Some(ref user_ctx) = merged.user.as_ref() {
         if user_ctx.bsr_sfr.is_some() {
             result.bsr_sfr = user_ctx.bsr_sfr
         }
@@ -238,7 +268,7 @@ pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext)
         }
     }
 
-    let unhandled_deps: Vec<Dependence> = dependencies_of(instr, &merged).into_iter().filter(|dep| {
+    let unhandled_deps: Vec<Dependence> = dependencies_of(instr, merged).into_iter().filter(|dep| {
         match dep {
             Dependence::W => {
                 result.memory(SFRS::WREG).is_none()
@@ -350,8 +380,8 @@ pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext)
 }
 
 pub struct MergedContextTable {
-    pub user_contexts: HashMap<<PIC17 as Arch>::Address, PartialContext>,
-    pub computed_contexts: Vec<Option<ComputedContext>>
+    pub user_contexts: HashMap<<PIC17 as Arch>::Address, Rc<PartialContext>>,
+    pub computed_contexts: Vec<Option<Rc<ComputedContext>>>
 }
 
 impl Default for MergedContextTable {
@@ -377,25 +407,30 @@ impl <'a, T: PartialInstructionContext + Default> ContextTable<'a, &'a T> for Ha
 }
 */
 
-impl <'it> ContextRead<PIC17, MergedContext<'it, 'it>> for &'it MergedContextTable {
-    fn at(&self, address: &<PIC17 as Arch>::Address) -> MergedContext<'it, 'it> {
+/*
+ * TODO: I would LOVE to not have to copy contexts all the time, but I
+ * just don't know how to spell this satisfactorily to rustc. It is
+ * undoubtedly going to be a source of performance issues, needlessly.
+ */
+impl ContextRead<PIC17, MergedContext> for MergedContextTable {
+    fn at(&self, address: &<PIC17 as Arch>::Address) -> MergedContext {
         MergedContext {
-            user: self.user_contexts.get(address),
+            user: self.user_contexts.get(address).map(|v| Rc::clone(v)),
             computed: if *address < self.computed_contexts.len() as u16 {
-                self.computed_contexts[*address as usize].as_ref()
+                self.computed_contexts[*address as usize].as_ref().map(|v| Rc::clone(v))
             } else { None }
         }
     }
 }
 
-impl <'it> ContextWrite<PIC17, StateUpdate> for &'it mut MergedContextTable {
+impl ContextWrite<PIC17, StateUpdate> for MergedContextTable {
     fn put(&mut self, address: <PIC17 as Arch>::Address, update: StateUpdate) { }
 }
 
 #[derive(Debug)]
-pub struct MergedContext<'a, 'b> {
-    pub computed: Option<&'a ComputedContext>,
-    pub user: Option<&'b PartialContext>
+pub struct MergedContext {
+    pub computed: Option<Rc<ComputedContext>>,
+    pub user: Option<Rc<PartialContext>>
 }
 
 pub enum StateUpdate {
@@ -403,15 +438,15 @@ pub enum StateUpdate {
     ComputedComment(String)
 }
 
-impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
+impl PartialInstructionContext for MergedContext {
     fn memory(&self, addr: u16) -> Option<u8> {
-        self.user.and_then(|u| u.memory(addr)).or(self.computed.and_then(|c| c.memory(addr)))
+        self.user.as_ref().and_then(|u| u.memory(addr)).or(self.computed.as_ref().and_then(|c| c.memory(addr)))
     }
-    fn bsr_sfr(&self) -> Option<u8> { self.user.and_then(|u| u.bsr_sfr()).or(self.computed.and_then(|c| c.bsr_sfr())) }
-    fn bsr_gpr(&self) -> Option<u8> { self.user.and_then(|u| u.bsr_gpr()).or(self.computed.and_then(|c| c.bsr_gpr())) }
-    fn pclath(&self) -> Option<u8> { self.user.and_then(|u| u.pclath()).or(self.computed.and_then(|c| c.pclath())) }
+    fn bsr_sfr(&self) -> Option<u8> { self.user.as_ref().and_then(|u| u.bsr_sfr()).or(self.computed.as_ref().and_then(|c| c.bsr_sfr())) }
+    fn bsr_gpr(&self) -> Option<u8> { self.user.as_ref().and_then(|u| u.bsr_gpr()).or(self.computed.as_ref().and_then(|c| c.bsr_gpr())) }
+    fn pclath(&self) -> Option<u8> { self.user.as_ref().and_then(|u| u.pclath()).or(self.computed.as_ref().and_then(|c| c.pclath())) }
     fn comment(&self) -> Option<String> {
-        match (self.user.and_then(|u| u.comment()), self.computed.and_then(|u| u.comment())) {
+        match (self.user.as_ref().and_then(|u| u.comment()), self.computed.as_ref().and_then(|u| u.comment())) {
             (Some(user_comment), Some(computed_comment)) => {
                 Some(format!("U: {}\nC: {}", user_comment, computed_comment))
             },
@@ -424,31 +459,12 @@ impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
             (None, None) => { None }
         }
     }
-    fn control_flow(&self) -> Option<&control_flow::Effect<<PIC17 as Arch>::Address>> { self.user.and_then(|u| u.control_flow()) }
+    fn control_flow(&self) -> Option<&control_flow::Effect<<PIC17 as Arch>::Address>> { self.user.as_ref().and_then(|u| u.control_flow()) }
     fn indicator_tag(&self) -> String {
         format!(
             "{}{}{}",
-            self.computed.map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
-            self.user.map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
-            " "
-        )
-    }
-}
-
-impl <'it, 'a, 'b> PartialInstructionContext for &'it MergedContext<'a, 'b> {
-    fn memory(&self, addr: u16) -> Option<u8> {
-        self.user.and_then(|u| u.memory(addr)).or(self.computed.and_then(|c| c.memory(addr)))
-    }
-    fn bsr_sfr(&self) -> Option<u8> { self.user.and_then(|u| u.bsr_sfr()).or(self.computed.and_then(|c| c.bsr_sfr())) }
-    fn bsr_gpr(&self) -> Option<u8> { self.user.and_then(|u| u.bsr_gpr()).or(self.computed.and_then(|c| c.bsr_gpr())) }
-    fn pclath(&self) -> Option<u8> { self.user.and_then(|u| u.pclath()).or(self.computed.and_then(|c| c.pclath())) }
-    fn comment(&self) -> Option<String> { self.user.and_then(|u| u.comment()) }
-    fn control_flow(&self) -> Option<&control_flow::Effect<<PIC17 as Arch>::Address>> { self.user.and_then(|u| u.control_flow()) }
-    fn indicator_tag(&self) -> String {
-        format!(
-            "{}{}{}",
-            self.computed.map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
-            self.user.map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
+            self.computed.as_ref().map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
+            self.user.as_ref().map(|x| x.indicator_tag()).unwrap_or(" ".to_owned()),
             " "
         )
     }

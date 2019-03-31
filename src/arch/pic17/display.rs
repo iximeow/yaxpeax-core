@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::fmt::Display;
 
 use termion::color;
 
 use SyntaxedRender;
 use SyntaxedSSARender;
-use yaxpeax_arch::{Arch, LengthedInstruction};
+use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction};
 use arch;
 use arch::display::BaseDisplay;
 use arch::InstructionSpan;
@@ -14,6 +15,7 @@ use arch::pic17::{ContextRead, PartialInstructionContext};
 use yaxpeax_pic17::{Instruction, Opcode, Operand, PIC17};
 use analyses::control_flow;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
+use memory::MemoryRange;
 
 use analyses::static_single_assignment::cytron::SSA;
 
@@ -21,6 +23,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
     fn render_with_ssa_values(
         &self,
         address: <PIC17 as Arch>::Address,
+        colors: Option<&ColorSettings>,
         context: Option<&T>,
         function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
         ssa: &SSA<PIC17>) -> String {
@@ -91,7 +94,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
             }
         }
 
-        let start_color = pic17::syntaxed_render::opcode_color(self.opcode);
+        let start_color = yaxpeax_pic17::opcode_color(self.opcode);
         let mut result = format!("{}{}{}",
              start_color,
              self.opcode,
@@ -160,10 +163,10 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
 }
 
 impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstructionContext {
-    fn render_frame(
+    fn render_frame<Data: Iterator<Item=u8>>(
         addr: u16,
         instr: &<PIC17 as Arch>::Instruction,
-        bytes: &[u8],
+        bytes: &mut Data,
         ctx: Option<&T>,
         function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
     ) where T: pic17::PartialInstructionContext {
@@ -185,18 +188,10 @@ impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstru
         print!(
             "{:04x}: {}{}: |{}|",
             addr,
-            bytes.get(0).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-            bytes.get(1).map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
+            bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
             ctx.map(|c| c.indicator_tag()).unwrap_or("   ".to_owned())
         );
-    }
-
-    fn render_instruction(
-        instr: &<PIC17 as Arch>::Instruction,
-        ctx: Option<&T>,
-        function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
-    ) where T: pic17::PartialInstructionContext {
-        println!(" {}", instr.render(ctx, &function_table))
     }
 }
 
@@ -204,6 +199,7 @@ use analyses::static_single_assignment::cytron::SSAValues;
 pub fn render_instruction_with_ssa_values<T>(
     address: <PIC17 as Arch>::Address,
     instr: &<PIC17 as Arch>::Instruction,
+    colors: Option<&ColorSettings>,
     ctx: Option<&T>,
     function_table: &HashMap<u16, pic17::Function>,
     ssa: &SSA<PIC17>
@@ -212,16 +208,17 @@ pub fn render_instruction_with_ssa_values<T>(
     <PIC17 as SSAValues>::Location: Eq + Hash,
     <PIC17 as Arch>::Address: Eq + Hash,
     <PIC17 as Arch>::Instruction: SyntaxedSSARender<PIC17, T, pic17::Function> {
-    println!(" {}", instr.render_with_ssa_values(address, ctx, function_table, ssa))
+    println!(" {}", instr.render_with_ssa_values(address, colors, ctx, function_table, ssa))
 }
 
-pub fn show_linear_with_blocks(
-    data: &[u8],
+pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
+    data: &M,
     ctx: &pic17::MergedContextTable,
     function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
     cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
     start_addr: <PIC17 as Arch>::Address,
-    end_addr: <PIC17 as Arch>::Address) {
+    end_addr: <PIC17 as Arch>::Address,
+    colors: Option<&ColorSettings>) {
     let mut continuation = start_addr;
     while continuation < end_addr {
         // Do we have a block here?
@@ -242,7 +239,7 @@ pub fn show_linear_with_blocks(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        arch::display::show_linear(data, &ctx, continuation, end, function_table);
+        arch::display::show_linear(data, ctx, continuation, end, function_table, colors);
 
         // and continue on right after this block
         continuation = block.end + <PIC17 as Arch>::Address::from(1u16);
@@ -257,8 +254,9 @@ pub fn show_functions(
 
 }
 
-pub fn show_function_by_ssa(
-    data: &[u8],
+pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
+    data: &M,
+    colors: Option<&ColorSettings>,
     ctx: &pic17::MergedContextTable,
     function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
     cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
@@ -293,13 +291,14 @@ pub fn show_function_by_ssa(
             PIC17::render_frame(
                 address,
                 instr,
-                &data[(address as usize)..(address as usize + instr.len() as usize)],
+                &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(&ctx.at(&address)),
                 function_table
             );
             render_instruction_with_ssa_values(
                 address,
                 instr,
+                colors,
                 Some(&ctx.at(&address)),
                 function_table,
                 ssa
@@ -310,44 +309,5 @@ pub fn show_function_by_ssa(
            //println!("{:#04x}: {}", address, instr);
         }
 //        println!("------------------------------");
-    }
-}
-
-pub fn show_function(
-    data: &[u8],
-    ctx: &pic17::MergedContextTable,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
-    cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
-    addr: <PIC17 as Arch>::Address) {
-
-    let fn_graph = cfg.get_function(addr, function_table);
-
-    let mut blocks: Vec<<PIC17 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
-    blocks.sort();
-
-    for blockaddr in blocks.iter() {
-        let block = cfg.get_block(*blockaddr);
-        if block.start == 0x00 { continue; }
-//        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
-//        continue;
-        let mut iter = data.instructions_spanning::<yaxpeax_pic17::Instruction>(block.start, block.end);
-//                println!("Block: {:#04x}", next);
-//                println!("{:#04x}", block.start);
-        while let Some((address, instr)) = iter.next() {
-            let mut computed = pic17::ComputedContext::new();
-            PIC17::render_frame(
-                address,
-                instr,
-                &data[(address as usize)..(address as usize + instr.len() as usize)],
-                Some(&ctx.at(&address)),
-                function_table
-            );
-            PIC17::render_instruction(
-                instr,
-                Some(&ctx.at(&address)),
-                function_table
-            );
-           //println!("{:#04x}: {}", address, instr);
-        }
     }
 }

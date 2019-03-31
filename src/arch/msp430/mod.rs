@@ -3,6 +3,7 @@ pub mod cpu;
 pub mod display;
 pub mod syntaxed_render;
 
+use std::rc::Rc;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::path::Path;
@@ -10,12 +11,32 @@ use serde_json;
 use serde;
 use serde::Deserialize;
 
+use num_traits::Zero;
+
 use yaxpeax_arch::Arch;
 use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
 use ContextRead;
 use ContextWrite;
 
 use analyses::control_flow;
+
+pub struct MSP430Data {
+    pub preferred_addr: <MSP430 as Arch>::Address,
+    pub contexts: MergedContextTable,
+    pub cfg: control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>,
+    pub functions: HashMap<<MSP430 as Arch>::Address, ()>
+}
+
+impl Default for MSP430Data {
+    fn default() -> Self {
+        MSP430Data {
+            preferred_addr: <MSP430 as Arch>::Address::zero(),
+            contexts: MergedContextTable::create_empty(),
+            cfg: control_flow::ControlFlowGraph::new(),
+            functions: HashMap::new()
+        }
+    }
+}
 
 impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction where T: PartialInstructionContext {
     fn control_flow(&self, ctx: Option<&T>) -> control_flow::Effect<u16> {
@@ -126,7 +147,7 @@ impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction wh
 pub trait PartialInstructionContext {
     fn indicator_tag(&self) -> &'static str;
     fn address(&self) -> Option<u16>;
-    fn comment(&self) -> Option<String>;
+    fn comment(&self) -> Option<&str>;
     fn control_flow(&self) -> Option<&control_flow::Effect<u16>>;
 }
 
@@ -144,8 +165,8 @@ impl PartialInstructionContext for PartialContext {
     fn address(&self) -> Option<u16> {
         self.address.map(|x| x.to_owned())
     }
-    fn comment(&self) -> Option<String> {
-        self.comment.as_ref().map(|x| x.to_owned())
+    fn comment(&self) -> Option<&str> {
+        self.comment.as_ref().map::<&str, _>(|x| &x)
     }
     fn control_flow(&self) -> Option<&control_flow::Effect<u16>> {
         self.control_flow.as_ref()
@@ -162,24 +183,24 @@ impl PartialInstructionContext for ComputedContext {
         "~"
     }
     fn address(&self) -> Option<u16> {
-        self.address.map(|x| x.to_owned())
+        self.address.as_ref().map(|x| x.to_owned())
     }
-    fn comment(&self) -> Option<String> {
-        self.comment.as_ref().map(|x| x.to_owned())
+    fn comment(&self) -> Option<&str> {
+        self.comment.as_ref().map::<&str, _>(|x| &x)
     }
     fn control_flow(&self) -> Option<&control_flow::Effect<u16>> {
         None
     }
 }
 
-pub struct MergedContext<'a, 'b> {
-    pub user: Option<&'a PartialContext>,
-    pub computed: Option<&'b ComputedContext>
+pub struct MergedContext {
+    pub user: Option<Rc<PartialContext>>,
+    pub computed: Option<Rc<ComputedContext>>
 }
 
 pub struct MergedContextTable {
-    pub user_contexts: HashMap<<MSP430 as Arch>::Address, PartialContext>,
-    pub computed_contexts: HashMap<<MSP430 as Arch>::Address, ComputedContext>
+    pub user_contexts: HashMap<<MSP430 as Arch>::Address, Rc<PartialContext>>,
+    pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>
 }
 
 
@@ -201,17 +222,17 @@ impl MergedContextTable {
     }
 }
 
-impl <'it> ContextWrite<MSP430, StateUpdate> for &'it mut MergedContextTable {
+impl ContextWrite<MSP430, StateUpdate> for MergedContextTable {
     fn put(&mut self, address: <MSP430 as Arch>::Address, update: StateUpdate) {
         self.user_contexts.remove(&address);
     }
 }
 
-impl <'it> ContextRead<MSP430, MergedContext<'it, 'it>> for &'it MergedContextTable {
-    fn at(&self, address: &<MSP430 as Arch>::Address) -> MergedContext<'it, 'it> {
+impl ContextRead<MSP430, MergedContext> for MergedContextTable {
+    fn at(&self, address: &<MSP430 as Arch>::Address) -> MergedContext {
         MergedContext {
-            user: self.user_contexts.get(address),
-            computed: self.computed_contexts.get(address)
+            user: self.user_contexts.get(address).map(|v| Rc::clone(v)),
+            computed: self.computed_contexts.get(address).map(|v| Rc::clone(v))
         }
     }
 }
@@ -220,18 +241,20 @@ pub enum StateUpdate {
     FullContext(ComputedContext)
 }
 
-impl <'a, 'b> PartialInstructionContext for MergedContext<'a, 'b> {
+impl PartialInstructionContext for MergedContext {
     fn indicator_tag(&self) -> &'static str {
         "+"
     }
     fn address(&self) -> Option<u16> {
-        self.user.and_then(|x| x.address()).or_else(|| { self.computed.and_then(|x| x.address()) })
+        self.user.as_ref().and_then(|x| x.address()).or_else(|| { self.computed.as_ref().and_then(|x| x.address()) })
     }
-    fn comment(&self) -> Option<String> {
-        self.user.and_then(|x| x.comment()).or_else(|| { self.computed.and_then(|x| x.comment()) })
+    fn comment(&self) -> Option<&str> {
+        self.user.as_ref().and_then(|x| x.comment())
+            .or_else(|| { self.computed.as_ref().and_then(|x| x.comment()) })
     }
     fn control_flow(&self) -> Option<&control_flow::Effect<u16>> {
-        self.user.and_then(|x| x.control_flow()).or_else(|| { self.computed.and_then(|x| x.control_flow()) })
+        self.user.as_ref().and_then(|x| x.control_flow())
+            .or_else(|| self.computed.as_ref().and_then(|x| x.control_flow()))
     }
 }
 
@@ -266,9 +289,9 @@ const ReadAllFlags: [(Option<Location>, Direction); 4] = [
 
 use analyses::static_single_assignment::cytron::AliasInfo;
 impl AliasInfo for Location {
-    fn aliases_of(loc: &Self) -> Vec<Self> { vec![] }
-    fn maximal_alias_of(loc: Self) -> Self {
-        match loc {
+    fn aliases_of(&self) -> Vec<Self> { vec![] }
+    fn maximal_alias_of(&self) -> Self {
+        match self {
             Location::FlagZ | Location::FlagN
                 | Location::FlagC | Location::FlagV => {
                 SR
@@ -277,7 +300,7 @@ impl AliasInfo for Location {
                 Location::MemoryAny
             },
             Location::Register(r) | Location::RegisterB(r) => {
-                Location::Register(r)
+                Location::Register(*r)
             }
         }
     }

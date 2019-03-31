@@ -9,7 +9,11 @@ use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
 
 use num_traits::{Bounded, WrappingAdd, Zero, One};
 
-use ContextTable;
+use ContextRead;
+use ContextWrite;
+use yaxpeax_arch::AddressDisplay;
+
+use memory::MemoryRange;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Effect<Addr> {
@@ -182,6 +186,10 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         cfg
     }
 
+    pub fn destinations(&self, block: A) -> Vec<A> {
+        self.graph.neighbors_directed(block, petgraph::Direction::Outgoing).into_iter().collect()
+    }
+
     /*
      * U should be a function, function_table should be an oracle
      * we can query to answer "does there exist a function at this place?"
@@ -193,6 +201,9 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         let mut result: ControlFlowGraph<A> = ControlFlowGraph::new();
         result.graph.add_node(start);
         let mut walk = petgraph::visit::Bfs::new(&self.graph, start);
+        for k in function_table.keys() {
+            walk.discovered.insert(*k);
+        }
         while let Some(next) = walk.next(&self.graph) {
             for i in self.graph.neighbors_directed(next, petgraph::Direction::Outgoing) {
                 if !function_table.contains_key(&i) {
@@ -201,7 +212,9 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             }
         }
         result.blocks = vec![];
-        for addr in result.graph.nodes() {
+        let mut starts: Vec<A> = result.graph.nodes().collect();
+        starts.sort();
+        for addr in starts.into_iter() {
             result.blocks.push(BasicBlock { start: addr, end: self.get_block(addr).end });
         }
         return result;
@@ -216,7 +229,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             } else {
                 Ordering::Equal
             }
-        }).expect("<blocks> should over the entire address space. Binary search should not fail. This is a critical algorithmic bug.")
+        }).expect("<blocks> should cover the entire address space. Binary search should not fail. This is a critical algorithmic bug.")
     }
     pub fn get_block<'a>(&'a self, addr: A) -> &'a BasicBlock<A> {
         let idx = self.get_block_idx(addr);
@@ -357,15 +370,16 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
 
 use std::fmt::Debug;
 
-pub fn explore_all<'it, A, U, Contexts, Update, InstrCallback>(
-    data: &[u8],
-    contexts: &mut Contexts,
+pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
+    data: &M,
+    contexts: &'a mut Contexts,
     cfg: &mut ControlFlowGraph<A::Address>,
     starts: Vec<A::Address>,
     on_instruction_discovered: &InstrCallback
 ) where
     A: Arch,
-    Contexts: ContextTable<A, U, Update>,
+    M: MemoryRange<A::Address>,
+    Contexts: ContextRead<A, U> + ContextWrite<A, Update>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
     InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)>
@@ -395,15 +409,16 @@ pub fn explore_all<'it, A, U, Contexts, Update, InstrCallback>(
     }
 }
 
-pub fn explore_control_flow<A, U, Contexts, Update, InstrCallback>(
-    data: &[u8],
-    contexts: &mut Contexts,
+pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
+    data: &M,
+    contexts: &'a mut Contexts,
     cfg: &mut ControlFlowGraph<A::Address>,
     start: A::Address,
     on_instruction_discovered: &InstrCallback
 ) -> Vec<A::Address> where
     A: Arch,
-    Contexts: ContextTable<A, U, Update>,
+    M: MemoryRange<A::Address>,
+    Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
     InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)> {
@@ -417,7 +432,20 @@ pub fn explore_control_flow<A, U, Contexts, Update, InstrCallback>(
 
     let mut addr = start;
     loop {
-        match A::Instruction::decode(data[addr.to_linear()..].iter()) {
+        let range = match data.range_from(addr) {
+            Some(range) => range,
+            None => {
+                use petgraph::Direction;
+                println!("Reached {}, which is not a valid address - marking start ({}) as hazard.", addr.stringy(), start.stringy());
+                let problem_blocks = cfg.graph.neighbors_directed(start, Direction::Incoming).collect::<Vec<A::Address>>();
+                println!("Problem blocks: {:?}", problem_blocks);
+                for problem in problem_blocks.iter() {
+                    cfg.graph.remove_edge(*problem, start);
+                }
+                return vec![];
+            }
+        };
+        match A::Instruction::decode(range) {
             Some(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);
@@ -451,7 +479,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
     where
         A::Instruction: Determinant<U, A::Address> + LengthedInstruction<Unit=A::Address>,
         A::Address: petgraph::graphmap::NodeTrait,
-        UTable: ContextTable<A, U, Update>
+        UTable: ContextRead<A, U> + ContextWrite<A, Update>
 {
     let mut cfg = ControlFlowGraph {
         blocks: vec![BasicBlock::new(A::Address::min_value(), A::Address::max_value())], // TODO: this should be the lower and upper bounds of rust-num Bounded one day

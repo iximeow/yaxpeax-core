@@ -15,6 +15,8 @@ yaxpeax-msp430-mc = { path = "../arch/msp430" }
 yaxpeax-pic17 = { path = "../arch/pic17" }
 yaxpeax-pic18 = { path = "../arch/pic18" }
 yaxpeax-pic24 = { path = "../arch/pic24" }
+# "goblin" = "0.0.20"
+goblin = { path = "/toy/rust/goblin" }
 "num-traits" = "0.2"
 "termios" = "0.2.2"
 "termion" = "1.4.0"
@@ -30,3 +32,6 @@ yaxpeax-pic24 = { path = "../arch/pic24" }
 # test = false
 # bench = false
 # source = "src/picanalyzer.rs"
+
+[profile.release]
+lto = true

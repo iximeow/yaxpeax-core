@@ -1,3 +1,4 @@
+extern crate goblin;
 #[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
@@ -24,22 +25,23 @@ pub mod memory;
 pub mod parts;
 pub mod comment;
 
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{Arch, ColorSettings};
 
+use std::fmt::Display;
 use std::hash::Hash;
 use std::collections::HashMap;
 
-pub trait ContextTable<A: Arch, Ctx, CtxUpdate>: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
+pub trait ContextTable<A: Arch + ?Sized, Ctx, CtxUpdate>: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
 
-pub trait ContextRead<A: Arch, Ctx> {
+pub trait ContextRead<A: Arch + ?Sized, Ctx> {
     fn at(&self, address: &<A as Arch>::Address) -> Ctx;
 }
 
-pub trait ContextWrite<A: Arch, CtxUpdate> {
+pub trait ContextWrite<A: Arch + ?Sized, CtxUpdate> {
     fn put(&mut self, address: <A as Arch>::Address, update: CtxUpdate);
 }
 
-impl <'a, T, A: Arch, Ctx, CtxUpdate> ContextTable<A, Ctx, CtxUpdate> for &'a mut T where &'a mut T: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
+// impl <'a, T, A: Arch, Ctx, CtxUpdate> ContextTable<A, Ctx, CtxUpdate> for &'a mut T where &'a mut T: ContextRead<A, Ctx> + ContextWrite<A, CtxUpdate> { }
 
 pub trait SyntaxedRender<A, T, F> {
     fn render(&self, context: Option<&T>, function_table: &HashMap<A, F>) -> String;
@@ -54,6 +56,7 @@ pub trait SyntaxedSSARender<Architecture: Arch + SSAValues, T, F> where
     fn render_with_ssa_values(
         &self,
         address: <Architecture as Arch>::Address,
+        colors: Option<&ColorSettings>,
         context: Option<&T>,
         function_table: &HashMap<<Architecture as Arch>::Address, F>,
         ssa: &SSA<Architecture>) -> String;

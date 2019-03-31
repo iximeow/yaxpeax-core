@@ -11,7 +11,154 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::io;
 
+use yaxpeax_arch::{Arch, AddressDisplay};
+use analyses::control_flow;
+use analyses::static_single_assignment::cytron::SSA;
+use analyses::xrefs;
+
+use std::collections::HashMap;
+use yaxpeax_x86::{x86_64, Opcode, Operand};
+use std::rc::Rc;
+use num_traits::Zero;
+
+use arch::{BaseUpdate, Function, Symbol, Library};
+
+use ContextRead;
+use ContextWrite;
+
+pub mod analyses;
 pub mod cpu;
+pub mod display;
+
+pub struct x86_64Data {
+    pub preferred_addr: <x86_64 as Arch>::Address,
+    pub contexts: MergedContextTable,
+    pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
+    pub functions: HashMap<<x86_64 as Arch>::Address, Function>
+}
+
+impl Default for x86_64Data {
+    fn default() -> Self {
+        x86_64Data {
+            preferred_addr: <x86_64 as Arch>::Address::zero(),
+            contexts: MergedContextTable::create_empty(),
+            cfg: control_flow::ControlFlowGraph::new(),
+            functions: HashMap::new()
+        }
+    }
+}
+
+pub struct MergedContextTable {
+    pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
+    pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
+    pub xrefs: xrefs::XRefCollection<<x86_64 as Arch>::Address>,
+    pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
+    pub functions: HashMap<<x86_64 as Arch>::Address, Function>,
+    pub function_hints: Vec<<x86_64 as Arch>::Address>,
+    pub ssa: HashMap<
+        <x86_64 as Arch>::Address,
+        (control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>)
+    >
+}
+
+
+
+#[derive(Debug)]
+pub struct MergedContext {
+    pub computed: Option<Rc<()>>,
+    pub user: Option<Rc<()>>
+}
+
+impl Default for MergedContextTable {
+    fn default() -> Self {
+        MergedContextTable::create_empty()
+    }
+}
+
+impl MergedContextTable {
+    pub fn create_empty() -> MergedContextTable {
+        MergedContextTable {
+            user_contexts: HashMap::new(),
+            computed_contexts: HashMap::new(),
+            xrefs: xrefs::XRefCollection::new(),
+            functions: HashMap::new(),
+            function_hints: Vec::new(),
+            symbols: HashMap::new(),
+            ssa: HashMap::new()
+        }
+    }
+}
+
+/*
+pub enum Value {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u64, u64),
+    U256(u64, u64, u64, u64),
+    U512(u64, u64, u64, u64, u64, u64, u64, u64)
+}
+
+trait PartialInstructionContext {
+    pub fn reg_value(reg: RegSpec) -> Option<Value>;
+    pub fn mem_value(addr: u64, width: u8) -> Option<Value>;
+}
+*/
+
+pub type Update = BaseUpdate<x86Update>;
+
+#[derive(Debug)]
+pub enum x86Update {
+    AddXRef(xrefs::RefType, xrefs::RefAction, <x86_64 as Arch>::Address),
+    RemoveXRef(xrefs::RefType, xrefs::RefAction, <x86_64 as Arch>::Address),
+    FunctionHint
+}
+
+impl ContextRead<x86_64, MergedContext> for MergedContextTable {
+    fn at(&self, address: &<x86_64 as Arch>::Address) -> MergedContext {
+        MergedContext {
+            user: self.user_contexts.get(address).map(|v| Rc::clone(v)),
+            computed: self.computed_contexts.get(address).map(|v| Rc::clone(v))
+        }
+    }
+}
+
+impl ContextWrite<x86_64, Update> for MergedContextTable {
+    fn put(&mut self, address: <x86_64 as Arch>::Address, update: Update) {
+        // println!("Applying update: {} -> {:?}", address.stringy(), update);
+        match update {
+            BaseUpdate::Specialized(x86Update::FunctionHint) => {
+                if !self.function_hints.contains(&address) && !self.functions.contains_key(&address) {
+                    println!("Function hint: {}", address.stringy());
+                    self.function_hints.push(address)
+                }
+            },
+            BaseUpdate::Specialized(x86Update::AddXRef(tpe, action, dest)) => {
+                // TODO: xrefs from non-code sources
+                self.xrefs.insert_from_code(tpe, action, address, dest);
+            },
+            BaseUpdate::Specialized(x86Update::RemoveXRef(tpe, action, dest)) => {
+                self.xrefs.delete_from_code(tpe, action, address, dest);
+            }
+            BaseUpdate::DefineSymbol(sym) => {
+                println!("address of {:?} recorded at {}", sym, address.stringy());
+                match Symbol::to_function(&sym) {
+                    Some(f) => {
+                        self.functions.insert(address, f);
+                    }
+                    None => { }
+                }
+                self.symbols.insert(address, sym);
+            }
+            BaseUpdate::DefineFunction(f) => {
+                self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
+                self.functions.insert(address, f);
+            }
+            _ => { /* todo: the rest */ }
+        }
+    }
+}
 
 pub struct ProcessX86_64 {
     pid: nix::unistd::Pid
@@ -269,5 +416,275 @@ impl <'a> DebugTarget<'a, ProcessX86_64> for DebugeeX86_64 {
 
     fn add_break_condition(&mut self, target: Self::BreakCondition) -> Result<(), String> {
         panic!("UHHH");
+    }
+}
+
+impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86::Instruction {
+    // TODO: this assumes that instructions won't fault
+    // we really don't know that, but also no T provided here gives
+    // context such that we can make that determination
+    fn control_flow(&self, ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
+        match self.opcode {
+            Opcode::MOVZX_b |
+            Opcode::MOVZX_w |
+            Opcode::MOVSX |
+            Opcode::SAR |
+            Opcode::SAL |
+            Opcode::SHR |
+            Opcode::SHL |
+            Opcode::RCR |
+            Opcode::RCL |
+            Opcode::ROR |
+            Opcode::ROL |
+            Opcode::INC |
+            Opcode::DEC |
+            Opcode::SBB |
+            Opcode::AND |
+            Opcode::XOR |
+            Opcode::OR |
+            Opcode::PUSH |
+            Opcode::POP |
+            Opcode::LEA |
+            Opcode::NOP |
+            Opcode::XCHG |
+            Opcode::POPF |
+            Opcode::ADD |
+            Opcode::ADC |
+            Opcode::SUB |
+            Opcode::ENTER |
+            Opcode::LEAVE |
+            Opcode::MOV |
+            Opcode::PUSHF |
+            Opcode::WAIT |
+            Opcode::CBW |
+            Opcode::CDW |
+            Opcode::LAHF |
+            Opcode::SAHF |
+            Opcode::TEST |
+            Opcode::CMP |
+            Opcode::INS |
+            Opcode::OUTS |
+            Opcode::IMUL |
+            Opcode::DIV |
+            Opcode::IDIV |
+            Opcode::MUL |
+            Opcode::NEG |
+            Opcode::NOT |
+            Opcode::SGDT |
+            Opcode::SIDT |
+            Opcode::SMSW |
+            Opcode::LGDT |
+            Opcode::LIDT |
+            Opcode::LMSW |
+            Opcode::SWAPGS |
+            Opcode::RDTSCP |
+            Opcode::INVLPG |
+            Opcode::WBINVD |
+            Opcode::INVD |
+            Opcode::CPUID |
+            Opcode::LSL |
+            Opcode::LAR |
+            Opcode::CLTS |
+            Opcode::SYSCALL |
+            Opcode::FXSAVE |
+            Opcode::FXRSTOR |
+            Opcode::LDMXCSR |
+            Opcode::STMXCSR |
+            Opcode::XSAVE |
+            Opcode::XSTOR |
+            Opcode::XSAVEOPT |
+            Opcode::LFENCE |
+            Opcode::MFENCE |
+            Opcode::SFENCE |
+            Opcode::CLFLUSH |
+            Opcode::SLDT |
+            Opcode::STR |
+            Opcode::LLDT |
+            Opcode::LTR |
+            Opcode::VERR |
+            Opcode::VERW |
+            Opcode::JMPE |
+            Opcode::RDMSR |
+            Opcode::WRMSR |
+            Opcode::RDTSC |
+            Opcode::RDPMC |
+            Opcode::CMPXCHG => {
+                control_flow::Effect::cont()
+            },
+            Opcode::CALLF => {
+                // TODO: honestly not sure how to model callf
+                control_flow::Effect::stop()
+            },
+            Opcode::CALL => {
+                // TODO: this is where i ought to reference context
+                // to determine that the called address begins a well-formed
+                // region that may or may not let the caller consider "call"
+                // a single non-effectual instruction w.r.t control flow
+                let dest = match self.operands[0] {
+                    Operand::ImmediateI8(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI16(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI32(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI64(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    _ => {
+                        // TODO one day when ctx can let this reach ... the current
+                        // exeuction context ... this may be able to be smarter
+                        // (f.ex, if this jumps to a jump table, 
+                        None
+                    }
+                };
+
+                match dest {
+                    Some(dest) => {
+                    //    control_flow::Effect::cont_and(dest)
+                        control_flow::Effect::cont()
+                    },
+                    None => control_flow::Effect::cont()
+                }
+
+            }
+            Opcode::JMP => {
+                let dest = match self.operands[0] {
+                    Operand::ImmediateI8(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI16(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI32(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    Operand::ImmediateI64(i) => {
+                        Some(control_flow::Target::Relative(i as i64 as u64))
+                    },
+                    _ => {
+                        // TODO one day when ctx can let this reach ... the current
+                        // exeuction context ... this may be able to be smarter
+                        // (f.ex, if this jumps to a jump table, 
+                        None
+                    }
+                };
+
+                match dest {
+                    Some(dest) => {
+                        control_flow::Effect::stop_and(dest)
+                    },
+                    None => control_flow::Effect::stop()
+                }
+            },
+            Opcode::JMPF => {
+                // TODO: ...
+                control_flow::Effect::stop()
+            },
+            Opcode::INT |
+            Opcode::INTO |
+            Opcode::IRET |
+            Opcode::RETF |
+            Opcode::SYSRET |
+            Opcode::RETURN => {
+                control_flow::Effect::stop()
+            }
+            Opcode::HLT => {
+                control_flow::Effect::stop()
+            },
+            Opcode::JO |
+            Opcode::JNO |
+            Opcode::JB |
+            Opcode::JNB |
+            Opcode::JZ |
+            Opcode::JNZ |
+            Opcode::JA |
+            Opcode::JNA |
+            Opcode::JS |
+            Opcode::JNS |
+            Opcode::JP |
+            Opcode::JNP |
+            Opcode::JL |
+            Opcode::JGE |
+            Opcode::JLE |
+            Opcode::JG => {
+                match self.operands[0] {
+                    Operand::ImmediateI8(i) => {
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(i as i64 as u64)
+                        )
+                    },
+                    Operand::ImmediateI16(i) => {
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(i as i64 as u64)
+                        )
+                    },
+                    Operand::ImmediateI32(i) => {
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(i as i64 as u64)
+                        )
+                    },
+                    Operand::ImmediateI64(i) => {
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(i as i64 as u64)
+                        )
+                    },
+                    _ => {
+                        unreachable!()
+                    }
+                }
+            },
+
+            Opcode::UD2 |
+            Opcode::Invalid => {
+                control_flow::Effect::stop()
+            },
+
+            Opcode::CMOVA |
+            Opcode::CMOVB |
+            Opcode::CMOVG |
+            Opcode::CMOVGE |
+            Opcode::CMOVL |
+            Opcode::CMOVLE |
+            Opcode::CMOVNA |
+            Opcode::CMOVNB |
+            Opcode::CMOVNO |
+            Opcode::CMOVNP |
+            Opcode::CMOVNS |
+            Opcode::CMOVNZ |
+            Opcode::CMOVO |
+            Opcode::CMOVP |
+            Opcode::CMOVS |
+            Opcode::CMOVZ |
+            Opcode::SETO |
+            Opcode::SETNO |
+            Opcode::SETB |
+            Opcode::SETAE |
+            Opcode::SETZ |
+            Opcode::SETNZ |
+            Opcode::SETBE |
+            Opcode::SETA |
+            Opcode::SETS |
+            Opcode::SETNS |
+            Opcode::SETP |
+            Opcode::SETNP |
+            Opcode::SETL |
+            Opcode::SETGE |
+            Opcode::SETLE |
+            Opcode::SETG => {
+                control_flow::Effect::cont()
+            }
+
+            // these have control flow dependent on the rep prefix
+            Opcode::CMPS |
+            Opcode::SCAS |
+            Opcode::MOVS |
+            Opcode::LODS |
+            Opcode::STOS => {
+                control_flow::Effect::cont()
+            }
+        }
     }
 }

@@ -4,7 +4,6 @@ use analyses::control_flow::Effect;
 use arch::pic17::cpu::try_debank;
 use arch::pic17::StateUpdate;
 use arch::pic17;
-use ContextTable;
 use ContextRead;
 use ContextWrite;
 
@@ -12,7 +11,7 @@ pub fn all_instruction_analyses(
     instr: &<PIC17 as Arch>::Instruction,
     address: <PIC17 as Arch>::Address,
     effect: &Effect<<PIC17 as Arch>::Address>,
-    ctxs: &&pic17::MergedContextTable
+    ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     let mut results = compute_bit_name(instr, address, effect, ctxs);
     results.extend(collect_function_hint(instr, address, effect, ctxs));
@@ -24,7 +23,7 @@ pub fn compute_next_state(
     instr: &<PIC17 as Arch>::Instruction,
     address: <PIC17 as Arch>::Address,
     effect: &Effect<<PIC17 as Arch>::Address>,
-    ctxs: &&pic17::MergedContextTable
+    ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     // this exposes a bug. if the current instruction ends a basic block
     // we might compute some state applied to the next instruction eg after the
@@ -53,7 +52,7 @@ pub fn collect_function_hint(
     instr: &<PIC17 as Arch>::Instruction,
     address: <PIC17 as Arch>::Address,
     effect: &Effect<<PIC17 as Arch>::Address>,
-    ctxs: &&pic17::MergedContextTable
+    ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     vec![]
     /*
@@ -91,7 +90,7 @@ pub fn compute_bit_name(
     instr: &<PIC17 as Arch>::Instruction,
     address: <PIC17 as Arch>::Address,
     effect: &Effect<<PIC17 as Arch>::Address>,
-    ctxs: &&pic17::MergedContextTable
+    ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     let comment = match instr.opcode {
         yaxpeax_pic17::Opcode::BTG |

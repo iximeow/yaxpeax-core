@@ -1,10 +1,10 @@
 use arch::{Decodable, MCU};
-use memory::MemoryRepr;
+use memory::{MemoryRange, MemoryRepr};
 use debug;
 use debug::DebugTarget;
 use arch::msp430;
-use yaxpeax_msp430_mc::{Operand, Opcode, Width};
-
+use yaxpeax_msp430_mc::{MSP430, Operand, Opcode, Width};
+use yaxpeax_arch::Arch;
 
 pub struct MSP430DebugTarget<'a> {
     pub target: &'a mut msp430::cpu::CPU,
@@ -216,8 +216,8 @@ impl CPU {
             Err(e) => println!("[invalid: {}]", e)
         };
     }
-    pub fn program(&mut self, program: MemoryRepr) -> Result<(), String> {
-        match program.sections.get(&0) {
+    pub fn program<T: MemoryRepr<<MSP430 as Arch>::Address>>(&mut self, program: Option<T>) -> Result<(), String> {
+        match program.and_then(|x| x.to_flat()) {
             Some(data) => {
                 if data.len() > self.memory.len() {
                     return Err(
@@ -230,7 +230,7 @@ impl CPU {
                 }
                 println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
                 for i in 0..data.len() {
-                    self.memory[i] = data[i];
+                    self.memory[i] = data.read(i as <yaxpeax_msp430_mc::MSP430 as Arch>::Address).unwrap();
                 }
             },
             None => {
@@ -271,7 +271,7 @@ impl MCU for CPU {
             op_width: Width::W,
             operands: [Operand::Nothing, Operand::Nothing]
         };
-        match result.decode_into(&self.memory[(self.ip() as usize)..]) {
+        match result.decode_into(self.memory.range_from(self.ip()).unwrap()) {
             Some(()) => Ok(result),
             None => {
                 Err(

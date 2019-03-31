@@ -11,9 +11,73 @@ pub mod interface;
 
 use std::collections::VecDeque;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
+
+use memory::{MemoryRange, MemoryRepr};
+
+#[derive(Debug)]
+pub struct Function {
+    name: String,
+    arguments: Vec<String>,
+    returns: Vec<String>
+}
+
+impl Function {
+    pub fn of(name: String, args: Vec<String>, rets: Vec<String>) -> Function {
+        Function {
+            name: name,
+            arguments: args,
+            returns: rets
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Library {
+    Name(String),
+    This
+}
+
+#[derive(Debug)]
+pub struct Symbol(pub Library, pub String);
+
+impl Symbol {
+    fn to_function(sym: &Symbol) -> Option<Function> {
+        match sym {
+            Symbol(Library::Name(library), f) if library == "kernel32.dll" && f == "GetProcAddress" => {
+//                Some(Function::of("kernel32.dll!GetProcAddress", vec![Types::ptr, Types::ptr], vec![Types::ptr]))
+                Some(Function::of("kernel32.dll!GetProcAddress".to_string(), vec!["void*".to_string(), "void*".to_string()], vec!["void*".to_string()]))
+            }
+            _ => {
+                None
+            }
+        }
+    }
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0 {
+            Library::Name(ref lib) => {
+                write!(f, "{}!{}", lib, self.1)
+            },
+            Library::This => {
+                write!(f, "{}", self.1)
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum BaseUpdate<T> {
+    AddDataComment(String),
+    AddCodeComment(String),
+    DefineSymbol(Symbol),
+    DefineFunction(Function),
+    Specialized(T)
+}
 
 // The type param is only to thread PartialInstructionContext through.. not a huge fan.
 pub trait OperandDefinitions<C> {
@@ -30,31 +94,63 @@ pub enum Device {
     PIC18(pic18::cpu::CPU),
     PIC17(pic17::cpu::CPU),
     MSP430(msp430::cpu::CPU),
-    x86(x86_64::cpu::CPU)
+    x86(x86_64::cpu::CPU),
+    x86_64(x86_64::cpu::CPU)
 }
 
+#[derive(Debug)]
 pub enum ISA {
     PIC17,
     PIC18,
     PIC18e,
     PIC24,
     MSP430,
-    x86
+    Alpha,
+    AArch64,
+    ARC,
+    ARM,
+    Alpha64,
+    C6X,
+    Csky,
+    H8300,
+    Hexagon,
+    IA64,
+    M86k,
+    MIPS,
+    Microblaze,
+    NDS32,
+    NIOS2,
+    OpenRISC,
+    PARISC,
+    PowerPC,
+    RISCV,
+    S390,
+    SH3,
+    SH3DSP,
+    SH3E,
+    SH4,
+    SH5,
+    SPARC,
+    Tricore,
+    Unicore32,
+    Xtensa,
+    x86,
+    x86_64
 }
 
-pub struct InstructionIteratorSpanned<'a, Addr, Instr> {
-    data: &'a [u8],
+pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr> {
+    data: &'a M,
     current: Addr,
     end: Addr,
     elem: Option<Instr>
 }
 
-pub trait InstructionSpan<'a, Addr> where Addr: Address {
-    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Instr>;
+pub trait InstructionSpan<'a, Addr: Address> where Self: MemoryRepr<Addr> {
+    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr>;
 }
 
-impl <'a, Addr> InstructionSpan<'a, Addr> for [u8] where Addr: Address {
-    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Instr> {
+impl <'a, Addr: Address, M: MemoryRepr<Addr>> InstructionSpan<'a, Addr> for M {
+    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr> {
         InstructionIteratorSpanned {
             data: self,
             current: start,
@@ -90,7 +186,7 @@ pub trait SimpleStreamingIterator {
     fn next<'b>(&mut self) -> Option<&'b Self::Item>;
 }
 
-impl <'a, Addr, Instr> InstructionIteratorSpanned<'a, Addr, Instr> where Addr: Address + Copy + Clone, Instr: Decodable + LengthedInstruction<Unit=Addr> {
+impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> InstructionIteratorSpanned<'a, Addr, M, Instr> where Instr: Decodable + LengthedInstruction<Unit=Addr> {
     pub fn next<'b>(&mut self) -> Option<(Addr, &Instr)> {
         if self.elem.is_some() {
             let instr: &mut Instr = self.elem.as_mut().unwrap();
@@ -99,7 +195,7 @@ impl <'a, Addr, Instr> InstructionIteratorSpanned<'a, Addr, Instr> where Addr: A
                 Some(next) => {
                     if next <= self.end {
                         self.current = next;
-                        let decode_result = instr.decode_into(self.data[self.current.to_linear()..].iter());
+                        let decode_result = instr.decode_into(self.data.range_from(self.current).unwrap());
                         match decode_result {
                             Some(_) => {
                                 Some((self.current, instr))
@@ -114,7 +210,7 @@ impl <'a, Addr, Instr> InstructionIteratorSpanned<'a, Addr, Instr> where Addr: A
             }
         } else {
             if self.current <= self.end {
-                self.elem = Instr::decode(self.data[self.current.to_linear()..].iter());
+                self.elem = Instr::decode(self.data.range_from(self.current).unwrap());
                 match self.elem {
                     Some(ref instr) => {
                         Some((self.current, &instr))

@@ -12,6 +12,7 @@ use std::fmt::Debug;
 
 use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
+use memory::MemoryRange;
 
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
@@ -54,14 +55,14 @@ impl <A: SSAValues> Value<A> {
 
 pub trait NoAliasing { }
 
-impl <T> AliasInfo for T where T: NoAliasing {
-    fn aliases_of(loc: &Self) -> Vec<Self> { vec![] }
-    fn maximal_alias_of(loc: Self) -> Self { loc }
+impl <T> AliasInfo for T where T: NoAliasing + Clone + Copy {
+    fn aliases_of(&self) -> Vec<Self> { vec![] }
+    fn maximal_alias_of(&self) -> Self { self.clone() }
 }
 
 pub trait AliasInfo where Self: Sized {
-    fn aliases_of(loc: &Self) -> Vec<Self>;
-    fn maximal_alias_of(loc: Self) -> Self;
+    fn aliases_of(&self) -> Vec<Self>;
+    fn maximal_alias_of(&self) -> Self;
 }
 
 pub trait SSAValues where Self: Arch {
@@ -172,12 +173,12 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-pub fn generate_ssa<A: Arch + SSAValues>(
-    data: &[u8],
+pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
+    data: &M,
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>
-) -> SSA<A> where A::Instruction: Debug + LengthedInstruction<Unit=A::Address> + Copy + Clone, A::Address: Copy + Ord + Hash + Eq, A::Location: Copy + Hash + Eq {
+) -> SSA<A> where A::Address: Copy + Ord + Hash + Eq, A::Location: Copy + Hash + Eq {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
     let dominance_frontiers = compute_dominance_frontiers_from_idom(cfg, entry, &idom);
@@ -202,7 +203,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
             for (maybeloc, direction) in A::decompose(&instr).into_iter() {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
-                        let widening = <A as SSAValues>::Location::maximal_alias_of(loc);
+                        let widening = loc.maximal_alias_of();
                         all_locations.insert(widening);
                         assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(address);
                     }
@@ -211,7 +212,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
                         // this should set a bit to indicate potential all-clobber or something
                     }
                     (Some(loc), Direction::Read) => {
-                        let widening = <A as SSAValues>::Location::maximal_alias_of(loc);
+                        let widening = loc.maximal_alias_of();
                         all_locations.insert(widening);
                     }
                     (None, Direction::Read) => {
@@ -282,8 +283,8 @@ pub fn generate_ssa<A: Arch + SSAValues>(
      */
 
     #[allow(non_snake_case)]
-    fn search<A: Arch + SSAValues>(
-        data: &[u8],
+    fn search<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
+        data: &M,
         block: &BasicBlock<A::Address>,
         values: &mut HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>>,
         phi: &mut HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>,
@@ -300,7 +301,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
         if let Some(phis) = phi.get(&block.start) {
             for (loc, data) in phis {
                 // these are very clear reads vs assignments:
-                let widening = <A as SSAValues>::Location::maximal_alias_of(*loc);
+                let widening = loc.maximal_alias_of();
                 let i = C[&widening];
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].0);
                 phi_dest.replace(Value::new(*loc, i));
@@ -317,7 +318,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
             for (maybeloc, direction) in A::decompose(&instr).into_iter() {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Read) => {
-                        let widening = <A as SSAValues>::Location::maximal_alias_of(loc);
+                        let widening = loc.maximal_alias_of();
                         let at_address = values.entry(address).or_insert_with(||
                             HashMap::new()
                         );
@@ -327,7 +328,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
                         // it's a read of something, but we don't know what, 
                     },
                     (Some(loc), Direction::Write) => {
-                        let widening = <A as SSAValues>::Location::maximal_alias_of(loc);
+                        let widening = loc.maximal_alias_of();
                         let i = C[&widening];
                         let new_value = Rc::new(RefCell::new(Value::new(loc, i)));
                         let at_address = values.entry(address).or_insert_with(||
@@ -356,7 +357,7 @@ pub fn generate_ssa<A: Arch + SSAValues>(
             if let Some(block_phis) = phi.get_mut(&Y) {
 //                for loc in phi.get(Y)
                 for (loc, (dest, args)) in block_phis.iter_mut() {
-                    let widening = <A as SSAValues>::Location::maximal_alias_of(*loc);
+                    let widening = loc.maximal_alias_of();
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough
                     args.push(S[&widening][S[&widening].len() - 1].clone());
