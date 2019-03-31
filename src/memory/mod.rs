@@ -30,6 +30,8 @@ pub trait MemoryRepr<A: Address> {
     fn module_info(&self) -> Option<&ModuleInfo>;
     fn read(&self, addr: A) -> Option<u8>;
     fn to_flat(self) -> Option<FlatMemoryRepr>;
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>>;
+    fn name(&self) -> &str;
 }
 
 pub trait PatchyMemoryRepr<A: Address> {

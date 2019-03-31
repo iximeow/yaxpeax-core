@@ -104,7 +104,8 @@ pub struct ELFExport {}
 #[derive(Debug)]
 pub struct Segment {
     start: usize,
-    data: Vec<u8>
+    data: Vec<u8>,
+    name: String
 }
 
 impl Segment {
@@ -132,6 +133,16 @@ impl <A: Address> MemoryRepr<A> for Segment {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+        if self.contains(addr) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 #[derive(Debug)]
@@ -322,7 +333,8 @@ impl ModuleInfo {
 #[derive(Debug)]
 pub struct ModuleData {
     pub segments: Vec<Segment>,
-    pub module_info: ModuleInfo
+    pub module_info: ModuleInfo,
+    pub name: String
 //    pub headers: Option<goblin::Object<'a>>
 }
 
@@ -335,7 +347,8 @@ impl ModuleData {
             Ok(obj @ Object::PE(_)) => {
                 let mut module = ModuleData {
                     segments: vec![],
-                    module_info: ModuleInfo::from_goblin(&obj, data).unwrap()
+                    module_info: ModuleInfo::from_goblin(&obj, data).unwrap(),
+                    name: "anon_module".to_string()
                 };
 
                 let pe = match obj {
@@ -370,7 +383,8 @@ impl ModuleData {
 
                     let new_section = Segment {
                         start: section.virtual_address as usize + pe.header.optional_header.map(|x| x.windows_fields.image_base as usize).unwrap_or(0x400000),
-                        data: section_data
+                        data: section_data,
+                        name: std::str::from_utf8(&section.name[..]).unwrap().to_string()
                     };
                     println!("mapped {} to [{}, {})",
                         std::str::from_utf8(&section.name[..]).unwrap(),
@@ -427,6 +441,16 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { Some(&self.module_info) }
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+        if self.segment_for(addr).is_some() {
+            Some(self)
+        } else {
+            None
+        }
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl <A: Address> MemoryRange<A> for ModuleData {
@@ -466,6 +490,17 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { /* TODO: how to get one specific moduleinfo? or should all of them get merged? */ None }
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+        for module in self.modules.iter() {
+            if module.segment_for(addr).is_some() {
+                return Some(module)
+            }
+        }
+        None
+    }
+    fn name(&self) -> &str {
+        "process"
+    }
 }
 
 impl <A: Address> PatchyMemoryRepr<A> for ProcessMemoryRepr {

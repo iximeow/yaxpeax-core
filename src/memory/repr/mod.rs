@@ -28,6 +28,12 @@ impl <A: Address> MemoryRepr<A> for Vec<u8> {
         Some(FlatMemoryRepr::of(self))
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+        Some(self)
+    }
+    fn name(&self) -> &str {
+        "anonymous_vec"
+    }
 }
 
 /*

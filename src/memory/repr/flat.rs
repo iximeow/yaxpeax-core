@@ -6,17 +6,19 @@ use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct FlatMemoryRepr {
-    data: Vec<u8>
+    data: Vec<u8>,
+    name: String
 }
 
 impl FlatMemoryRepr {
-    pub fn empty() -> FlatMemoryRepr {
+    pub fn empty(name: String) -> FlatMemoryRepr {
         FlatMemoryRepr {
-            data: vec![]
+            data: vec![],
+            name: name
         }
     }
     pub fn of(data: Vec<u8>) -> FlatMemoryRepr {
-        let mut mem = FlatMemoryRepr::empty();
+        let mut mem = FlatMemoryRepr::empty("anon_flat_repr".to_string());
         mem.add(data, 0 as u32).unwrap();
         mem
     }
@@ -37,6 +39,12 @@ impl <A: Address> MemoryRepr<A> for FlatMemoryRepr {
         Some(self)
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
+    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+        Some(self)
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl <A: Address> PatchyMemoryRepr<A> for FlatMemoryRepr {
