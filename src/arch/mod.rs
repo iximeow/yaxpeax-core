@@ -98,7 +98,20 @@ pub enum Device {
     x86_64(x86_64::cpu::CPU)
 }
 
-#[derive(Debug)]
+impl From<Device> for ISA {
+    fn from(d: Device) -> ISA {
+        match d {
+            Device::PIC24(_) => { ISA::PIC24 }
+            Device::PIC18(_) => { ISA::PIC24 }
+            Device::PIC17(_) => { ISA::PIC24 }
+            Device::MSP430(_) => { ISA::PIC24 }
+            Device::x86(_) => { ISA::x86 }
+            Device::x86_64(_) => { ISA::x86_64 }
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum ISA {
     PIC17,
     PIC18,

@@ -5,7 +5,7 @@ use nix::sys::ptrace::Request;
 use nix::sys::wait::WaitStatus;
 use nix::sys::signal::Signal;
 use proc_maps::{get_process_maps, MapRange};
-use debug::{DebugTarget, RunResult};
+use debug::{DebugTarget, RunResult, Peek};
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -19,6 +19,7 @@ use analyses::xrefs;
 use std::collections::HashMap;
 use yaxpeax_x86::{x86_64, Opcode, Operand};
 use std::rc::Rc;
+use std::cell::RefCell;
 use num_traits::Zero;
 
 use arch::{BaseUpdate, Function, Symbol, Library};
@@ -171,17 +172,17 @@ pub struct Regs {
     r14: u64,
     r13: u64,
     r12: u64,
-    rbp: u64,
-    rbx: u64,
+    pub rbp: u64,
+    pub rbx: u64,
     r11: u64,
     r10: u64,
     r9: u64,
     r8: u64,
-    rax: u64,
-    rcx: u64,
-    rdx: u64,
-    rsi: u64,
-    rdi: u64,
+    pub rax: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
     orig_rax: u64,
     pub rip: u64,
     cs: u64,
@@ -201,6 +202,32 @@ impl ProcessX86_64 {
         ProcessX86_64 {
             pid: pid
         }
+    }
+
+    /// Returns a list of process ids corresponding to threads under this debug target
+    pub fn threads(&self) -> std::io::Result<Vec<i32>> {
+        let mut thread_ids: Vec<i32> = vec![];
+        let proc_dir = std::fs::read_dir(std::path::Path::new(&format!("/proc/{}/task", self.pid)))?;
+        for dir in proc_dir {
+            let thread_id = dir?.file_name();
+            match thread_id.into_string() {
+                Ok(s) => {
+                    let parsed_thread_id = s.parse();
+                    match parsed_thread_id {
+                        Ok(tid) => {
+                            thread_ids.push(tid);
+                        },
+                        Err(_) => {
+                            panic!("Junk data in thread id {} for pid {}", s, self.pid);
+                        }
+                    }
+                },
+                Err(_) => {
+                    panic!("Junk data in thread id path for pid {}", self.pid);
+                }
+            }
+        }
+        Ok(thread_ids)
     }
 
     pub fn mem_maps(&mut self) -> Vec<MapRange> {
@@ -280,9 +307,51 @@ impl ProcessMemory {
     }
 }
 
+#[derive(Debug)]
 pub struct DebugeeX86_64 {
     pub pid: nix::unistd::Pid,
     pub pending_signal: Option<(bool, nix::sys::signal::Signal)>
+}
+
+impl Peek for Rc<RefCell<DebugeeX86_64>> {
+    fn read<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<u8> {
+        Some(self.borrow_mut().read_qword(addr.to_linear()) as u8)
+    }
+    fn read16<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 2]> {
+        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
+        Some(
+            [
+                ((word >> 0) & 0xff) as u8,
+                ((word >> 8) & 0xff) as u8,
+            ]
+        )
+    }
+    fn read32<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 4]> {
+        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
+        Some(
+            [
+                ((word >> 0) & 0xff) as u8,
+                ((word >> 8) & 0xff) as u8,
+                ((word >> 16) & 0xff) as u8,
+                ((word >> 24) & 0xff) as u8,
+            ]
+        )
+    }
+    fn read64<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 8]> {
+        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
+        Some(
+            [
+                ((word >> 0) & 0xff) as u8,
+                ((word >> 8) & 0xff) as u8,
+                ((word >> 16) & 0xff) as u8,
+                ((word >> 24) & 0xff) as u8,
+                ((word >> 32) & 0xff) as u8,
+                ((word >> 40) & 0xff) as u8,
+                ((word >> 48) & 0xff) as u8,
+                ((word >> 56) & 0xff) as u8
+            ]
+        )
+    }
 }
 
 impl DebugeeX86_64 {
@@ -303,7 +372,7 @@ impl DebugeeX86_64 {
         }
     }
 
-    pub fn read_qword(&mut self, ptr: usize) -> u64 {
+    pub fn read_qword(&self, ptr: usize) -> u64 {
         ptrace::read(self.pid, ptr as *mut c_void).unwrap() as u64
     }
 

@@ -21,3 +21,14 @@ pub trait DebugTarget<'a, Target> {
     fn add_watch(&mut self, Self::WatchTarget) -> Result<(), String>;
     fn add_break_condition(&mut self, Self::BreakCondition) -> Result<(), String>;
 }
+
+pub trait DBTarget2<Target> {
+    type WatchTarget;
+    type BreakCondition;
+    fn attach(Target) -> Self;
+    fn detach(self) -> Target;
+    fn single_step(&mut self) -> Result<(), String>;
+    fn run(&mut self) -> RunResult;
+    fn add_watch(&mut self, Self::WatchTarget) -> Result<(), String>;
+    fn add_break_condition(&mut self, Self::BreakCondition) -> Result<(), String>;
+}

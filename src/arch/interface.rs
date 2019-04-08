@@ -44,6 +44,7 @@ trait SSAAnalyses<A: Arch + SSAValues> {
 */
 
 use yaxpeax_arch::Arch;
+use arch;
 use analyses::control_flow::BasicBlock;
 
 #[derive(Debug)]
@@ -62,7 +63,16 @@ pub enum Operation<A: Arch, T> {
     /* base ops */
     Display(Display<A>),
     Analysis(Analysis<A>),
+    Debug(Debug),
     Specific(T)
+}
+
+#[derive(Debug)]
+pub enum Debug {
+    ShowMaps,
+    ShowModules,
+    ShowThreads,
+    ShowInfo
 }
 
 #[derive(Debug)]
@@ -76,11 +86,13 @@ pub enum Analysis<A: Arch> {
 #[derive(Debug)]
 pub enum OperationSuccess {
     Ok,
-    OkWithOutput(Vec<String>)
+    OkWithOutput(Vec<String>),
+    SwitchArch(arch::ISA)
 }
 
 #[derive(Debug)]
 pub enum OperationError {
+    Unknown(String),
     Unsupported(String),
     Misc(String)
 }
