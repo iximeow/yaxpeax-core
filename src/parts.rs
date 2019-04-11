@@ -71,6 +71,12 @@ pub fn get_chip_map() -> HashMap<String, PartConfig> {
         data_size: 0xffffffff,
         eeprom_size: 0
     });
+    map.insert("armv7".to_string(), PartConfig {
+        isa: ISA::ARM,
+        program_size: 0xffffffff,
+        data_size: 0xffffffff,
+        eeprom_size: 0
+    });
     map.insert("x86_64".to_string(), PartConfig {
         isa: ISA::x86_64,
         program_size: 0xffffffff,
