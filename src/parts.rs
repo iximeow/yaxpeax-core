@@ -95,6 +95,7 @@ pub fn get_cpu(part_config: &PartConfig) -> Result<Device, String> {
         ISA::MSP430 => Ok(Device::MSP430(msp430::cpu::CPU::new())),
         ISA::x86 => Ok(Device::x86(x86_64::cpu::CPU::new())),
         ISA::x86_64 => Ok(Device::x86(x86_64::cpu::CPU::new())),
+        ISA::ARM => Ok(Device::ARM),
         arch @ _ => {
             Err(format!("Unsupported ISA: {:?}", arch))
         }

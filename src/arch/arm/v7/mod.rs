@@ -4,6 +4,35 @@ use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operands, ConditionCode};
 use analyses::control_flow;
 
 use std::collections::HashMap;
+use std::rc::Rc;
+
+use num_traits::Zero;
+use serde::{Deserialize, Serialize};
+use ContextRead;
+use ContextWrite;
+
+mod display;
+
+#[derive(Serialize, Deserialize)]
+pub struct Function { }
+
+pub struct ARMv7Data {
+    pub preferred_addr: <ARMv7 as Arch>::Address,
+    pub contexts: MergedContextTable,
+    pub cfg: control_flow::ControlFlowGraph<<ARMv7 as Arch>::Address>,
+    pub functions: HashMap<<ARMv7 as Arch>::Address, Function>
+}
+
+impl Default for ARMv7Data {
+    fn default() -> Self {
+        ARMv7Data {
+            preferred_addr: <ARMv7 as Arch>::Address::zero(),
+            contexts: MergedContextTable::create_empty(),
+            cfg: control_flow::ControlFlowGraph::new(),
+            functions: HashMap::new()
+        }
+    }
+}
 
 impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
     where T: PartialInstructionContext {
@@ -248,8 +277,8 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
 }
 
 pub struct MergedContextTable {
-    pub user_contexts: HashMap<<ARMv7 as Arch>::Address, PartialContext>,
-    pub computed_contexts: HashMap<<ARMv7 as Arch>::Address, ComputedContext>
+    pub user_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<PartialContext>>,
+    pub computed_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<ComputedContext>>
 }
 
 impl MergedContextTable {
@@ -261,14 +290,35 @@ impl MergedContextTable {
     }
 }
 
-trait PartialInstructionContext {
+impl ContextRead<ARMv7, MergedContext> for MergedContextTable {
+    fn at(&self, address: &<ARMv7 as Arch>::Address) -> MergedContext {
+        MergedContext {
+            user: self.user_contexts.get(address).map(|v| Rc::clone(v)),
+            computed: self.computed_contexts.get(address).map(|v| Rc::clone(v))
+        }
+    }
+}
 
+impl ContextWrite<ARMv7, /* Update */ ()> for MergedContextTable {
+    fn put(&mut self, address: <ARMv7 as Arch>::Address, update: ()) {
+        // do nothing
+    }
+}
+
+trait PartialInstructionContext {
+    fn indicator_tag(&self) -> &'static str;
 }
 
 #[derive(Debug)]
-pub struct MergedContext<'a, 'b> {
-    pub computed: Option<&'a ComputedContext>,
-    pub user: Option<&'b PartialContext>
+pub struct MergedContext {
+    pub computed: Option<Rc<ComputedContext>>,
+    pub user: Option<Rc<PartialContext>>
+}
+
+impl PartialInstructionContext for MergedContext {
+    fn indicator_tag(&self) -> &'static str {
+        "+"
+    }
 }
 
 #[derive(Debug)]
@@ -276,12 +326,16 @@ pub struct ComputedContext {
 
 }
 impl PartialInstructionContext for ComputedContext {
-
+    fn indicator_tag(&self) -> &'static str {
+        "@"
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PartialContext {
 }
 impl PartialInstructionContext for PartialContext {
-
+    fn indicator_tag(&self) -> &'static str {
+        "m"
+    }
 }

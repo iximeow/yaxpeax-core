@@ -95,7 +95,8 @@ pub enum Device {
     PIC17(pic17::cpu::CPU),
     MSP430(msp430::cpu::CPU),
     x86(x86_64::cpu::CPU),
-    x86_64(x86_64::cpu::CPU)
+    x86_64(x86_64::cpu::CPU),
+    ARM
 }
 
 impl From<Device> for ISA {
@@ -107,6 +108,7 @@ impl From<Device> for ISA {
             Device::MSP430(_) => { ISA::PIC24 }
             Device::x86(_) => { ISA::x86 }
             Device::x86_64(_) => { ISA::x86_64 }
+            Device::ARM => { ISA::ARM }
         }
     }
 }
