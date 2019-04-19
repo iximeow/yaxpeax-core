@@ -103,9 +103,9 @@ impl From<Device> for ISA {
     fn from(d: Device) -> ISA {
         match d {
             Device::PIC24(_) => { ISA::PIC24 }
-            Device::PIC18(_) => { ISA::PIC24 }
-            Device::PIC17(_) => { ISA::PIC24 }
-            Device::MSP430(_) => { ISA::PIC24 }
+            Device::PIC18(_) => { ISA::PIC18 }
+            Device::PIC17(_) => { ISA::PIC17 }
+            Device::MSP430(_) => { ISA::MSP430 }
             Device::x86(_) => { ISA::x86 }
             Device::x86_64(_) => { ISA::x86_64 }
             Device::ARM => { ISA::ARM }
