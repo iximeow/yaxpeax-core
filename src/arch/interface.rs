@@ -48,6 +48,12 @@ use arch;
 use analyses::control_flow::BasicBlock;
 
 #[derive(Debug)]
+pub enum Summary<A: Arch> {
+    ListFunctions,
+    ListFunctionBlocks(A::Address),
+}
+
+#[derive(Debug)]
 pub enum Display<A: Arch> {
     RenderInstruction(A::Address),
     RenderBlock(A::Address),
@@ -64,6 +70,7 @@ pub enum Operation<A: Arch, T> {
     Display(Display<A>),
     Analysis(Analysis<A>),
     Debug(Debug),
+    Summary(Summary<A>),
     Specific(T)
 }
 

@@ -153,6 +153,50 @@ pub enum ISA {
     x86_64
 }
 
+impl ISA {
+    pub fn try_from_str(s: &str) -> Option<ISA> {
+        match s {
+            "pic17" => Some(ISA::PIC17),
+            "pic18" => Some(ISA::PIC18),
+            "pic18e" => Some(ISA::PIC18e),
+            "pic24" => Some(ISA::PIC24),
+            "msp430" => Some(ISA::MSP430),
+            "alpha" => Some(ISA::Alpha),
+            "aarch64" => Some(ISA::AArch64),
+            "arc" => Some(ISA::ARC),
+            "arm" => Some(ISA::ARM),
+            "alpha64" => Some(ISA::Alpha64),
+            "c6x" => Some(ISA::C6X),
+            "csky" => Some(ISA::Csky),
+            "h8300" => Some(ISA::H8300),
+            "hexagon" => Some(ISA::Hexagon),
+            "ia64" => Some(ISA::IA64),
+            "m86k" => Some(ISA::M86k),
+            "mips" => Some(ISA::MIPS),
+            "microblaze" => Some(ISA::Microblaze),
+            "nds32" => Some(ISA::NDS32),
+            "nios2" => Some(ISA::NIOS2),
+            "openrisc" => Some(ISA::OpenRISC),
+            "parisc" => Some(ISA::PARISC),
+            "powerpc" => Some(ISA::PowerPC),
+            "riscv" => Some(ISA::RISCV),
+            "s390" => Some(ISA::S390),
+            "sh3" => Some(ISA::SH3),
+            "sh3dsp" => Some(ISA::SH3DSP),
+            "sh3e" => Some(ISA::SH3E),
+            "sh4" => Some(ISA::SH4),
+            "sh5" => Some(ISA::SH5),
+            "sparc" => Some(ISA::SPARC),
+            "tricore" => Some(ISA::Tricore),
+            "unicore32" => Some(ISA::Unicore32),
+            "xtensa" => Some(ISA::Xtensa),
+            "x86" => Some(ISA::x86),
+            "x86_64" => Some(ISA::x86_64),
+            _ => None
+        }
+    }
+}
+
 pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr> {
     data: &'a M,
     current: Addr,
