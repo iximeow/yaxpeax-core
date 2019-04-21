@@ -18,7 +18,11 @@ use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
 use ContextRead;
 use ContextWrite;
 
+use arch::{Function, Symbol};
+
 use analyses::control_flow;
+use analyses::static_single_assignment::cytron::SSA;
+use analyses::xrefs;
 
 pub struct MSP430Data {
     pub preferred_addr: <MSP430 as Arch>::Address,
@@ -200,16 +204,20 @@ pub struct MergedContext {
 
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<MSP430 as Arch>::Address, Rc<PartialContext>>,
-    pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>
+    pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>,
+    pub xrefs: xrefs::XRefCollection<<MSP430 as Arch>::Address>,
+    pub symbols: HashMap<<MSP430 as Arch>::Address, Symbol>,
+    pub functions: HashMap<<MSP430 as Arch>::Address, Function>,
+    pub function_hints: Vec<<MSP430 as Arch>::Address>,
+    pub ssa: HashMap<
+        <MSP430 as Arch>::Address,
+        (control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>, SSA<MSP430>)
+    >
 }
-
 
 impl Default for MergedContextTable {
     fn default() -> Self {
-        MergedContextTable {
-            user_contexts: HashMap::new(),
-            computed_contexts: HashMap::new()
-        }
+        MergedContextTable::create_empty()
     }
 }
 
@@ -217,7 +225,12 @@ impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {
             user_contexts: HashMap::new(),
-            computed_contexts: HashMap::new()
+            computed_contexts: HashMap::new(),
+            xrefs: xrefs::XRefCollection::new(),
+            functions: HashMap::new(),
+            function_hints: Vec::new(),
+            symbols: HashMap::new(),
+            ssa: HashMap::new()
         }
     }
 }

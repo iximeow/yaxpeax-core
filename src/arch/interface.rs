@@ -47,13 +47,16 @@ use yaxpeax_arch::Arch;
 use arch;
 use analyses::control_flow::BasicBlock;
 
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Summary<A: Arch> {
+    ListBlocks,
     ListFunctions,
     ListFunctionBlocks(A::Address),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Display<A: Arch> {
     RenderInstruction(A::Address),
     RenderBlock(A::Address),
@@ -64,7 +67,7 @@ pub enum Display<A: Arch> {
     RenderFunctionSSA(A::Address)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Operation<A: Arch, T> {
     /* base ops */
     Display(Display<A>),
@@ -74,7 +77,7 @@ pub enum Operation<A: Arch, T> {
     Specific(T)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Debug {
     ShowMaps,
     ShowModules,
@@ -82,7 +85,7 @@ pub enum Debug {
     ShowInfo
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Analysis<A: Arch> {
     ComputeSSAForm(A::Address),
     ControlFlowLinear(A::Address, A::Address),
@@ -90,14 +93,14 @@ pub enum Analysis<A: Arch> {
     DoEverything
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum OperationSuccess {
     Ok,
     OkWithOutput(Vec<String>),
     SwitchArch(arch::ISA)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum OperationError {
     Unknown(String),
     Unsupported(String),

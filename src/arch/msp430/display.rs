@@ -313,11 +313,12 @@ pub fn show_functions<M: MemoryRange<<MSP430 as Arch>::Address>>(
 
 pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
     data: &M,
-    colors: Option<&ColorSettings>,
     user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
+    ssa: &SSA<MSP430>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     addr: <MSP430 as Arch>::Address,
-    ssa: &SSA<MSP430>) {
+    colors: Option<&ColorSettings>
+    ) {
 
     let fn_graph = cfg.get_function::<()>(addr, &HashMap::new());
 

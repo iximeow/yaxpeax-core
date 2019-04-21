@@ -17,6 +17,8 @@ use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 
+use serde::{Serialize, Deserialize};
+
 #[derive(Debug)]
 pub struct Function {
     name: String,
@@ -113,7 +115,7 @@ impl From<Device> for ISA {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum ISA {
     PIC17,
     PIC18,
