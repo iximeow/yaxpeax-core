@@ -11,6 +11,11 @@ use debug::Peek;
 use arch::ISA;
 
 #[derive(Debug)]
+pub struct PESymbol {
+    pub name: String,
+    pub va: u64
+}
+#[derive(Debug)]
 pub struct PEReloc {}
 #[derive(Debug)]
 pub struct PEImport {
@@ -95,9 +100,19 @@ impl <'a, 'b> From<&'b goblin::pe::export::Export<'a>> for PEExport {
     }
 }
 #[derive(Debug)]
+pub struct ELFSymbol {
+    pub name: String,
+    pub section_index: usize,
+    pub addr: u64
+}
+#[derive(Debug)]
 pub struct ELFReloc {}
 #[derive(Debug)]
-pub struct ELFImport {}
+pub struct ELFImport {
+    pub name: String,
+    pub section_index: usize,
+    pub value: u64
+}
 #[derive(Debug)]
 pub struct ELFExport {}
 
@@ -153,13 +168,99 @@ pub enum ISAHint {
 
 #[derive(Debug)]
 pub enum ModuleInfo {
-    PE(ISAHint, goblin::pe::header::Header, Vec<goblin::pe::section_table::SectionTable>, u64, Vec<PEReloc>, Vec<PEImport>, Vec<PEExport>),
-    ELF(ISAHint, goblin::elf::header::Header, Vec<goblin::elf::program_header::ProgramHeader>, Vec<ELFReloc>, Vec<ELFImport>, Vec<ELFExport>)
+    PE(ISAHint, goblin::pe::header::Header, Vec<goblin::pe::section_table::SectionTable>, u64, Vec<PEReloc>, Vec<PEImport>, Vec<PEExport>, Vec<PESymbol>),
+    ELF(ISAHint, goblin::elf::header::Header, Vec<goblin::elf::program_header::ProgramHeader>, u64, Vec<ELFReloc>, Vec<ELFImport>, Vec<ELFExport>, Vec<ELFSymbol>)
     /*
      * One day, also MachO, .a, .o, .class, .jar, ...
      */
 }
 
+fn map_elf_machine(machine: u16) -> ISAHint {
+    match machine {
+        3 => {
+            // IMAGE_FILE_MACHINE_I386
+            ISAHint::Hint(ISA::x86)
+        },
+        20 => {
+            ISAHint::Hint(ISA::PowerPC)
+        },
+        40 => {
+            // ELF doesn't hint at *what kind* of ARM..
+            ISAHint::Hint(ISA::ARM)
+        }
+        41 => {
+            // IMAGE_FILE_MACHINE_ALPHA
+            ISAHint::Hint(ISA::Alpha)
+        },
+        /*
+         * The SuperH chips are interesting because ELF only hints SH, not what revision...
+        42 => {
+            // IMAGE_FILE_MACHINE_SH3
+            ISAHint::Hint(ISA::SH3)
+        },
+        0x01a3 => {
+            // IMAGE_FILE_MACHINE_SH3DSP
+            ISAHint::Hint(ISA::SH3DSP)
+        },
+        0x01a4 => {
+            // IMAGE_FILE_MACHINE_SH3E
+            ISAHint::Hint(ISA::SH3E)
+        },
+        0x01a6 => {
+            // IMAGE_FILE_MACHINE_SH4
+            ISAHint::Hint(ISA::SH4)
+        },
+        0x01a8 => {
+            // IMAGE_FILE_MACHINE_SH5
+            ISAHint::Unknown("SuperH-5 never had shipping hardware...".to_string())
+        },
+        */
+        44 => {
+            // IMAGE_FILE_MACHINE_TRICORE
+            ISAHint::Hint(ISA::Tricore)
+        },
+        50 => {
+            // IMAGE_FILE_MACHINE_IA64
+            ISAHint::Hint(ISA::IA64)
+        },
+        62 => {
+            // IMAGE_FILE_MACHINE_AMD64
+            ISAHint::Hint(ISA::x86_64)
+        },
+        /*
+        0x0162 => {
+            // IMAGE_FILE_MACHINE_R3000
+            // this is specifically MIPS-1?
+            ISAHint::Hint(ISA::MIPS)
+        },
+        0x0166 => {
+            // IMAGE_FILE_MACHINE_R4000
+            // specifically, MIPS-3?
+            ISAHint::Hint(ISA::MIPS)
+        },
+        0x0168 => {
+            // IMAGE_FILE_MACHINE_R10000
+            // specifically, MIPS-4?
+            ISAHint::Hint(ISA::MIPS)
+        },
+        0x0169 => {
+            // IMAGE_FILE_MACHINE_WCEMIPSV2
+            // ???
+            ISAHint::Hint(ISA::MIPS)
+        },
+        */
+        62 => {
+            // IMAGE_FILE_MACHINE_AMD64
+            ISAHint::Hint(ISA::x86_64)
+        },
+        183 => { // this is from osdev.org, because i can't find the actual header!
+            ISAHint::Hint(ISA::AArch64)
+        },
+        magic @ _ => {
+            ISAHint::Unknown(format!("Unknown machine magic: {:#x}", magic))
+        }
+    }
+}
 fn map_pe_machine(machine: u16) -> ISAHint {
     match machine {
         0x0000 => {
@@ -320,7 +421,51 @@ impl ModuleInfo {
                     pe.header.optional_header.map(|x| x.windows_fields.image_base as usize).unwrap_or(0x400000) as u64,
                     vec![],
                     pe.imports.iter().map(|x| x.into()).collect(),
-                    pe.exports.iter().map(|x| x.into()).collect()
+                    pe.exports.iter().map(|x| x.into()).collect(),
+                    vec![]
+                ))
+            }
+            Object::Elf(elf) => {
+                let mut imports: Vec<ELFImport> = Vec::new();
+                let mut syms: Vec<ELFSymbol> = Vec::new();
+                for sym in elf.syms.iter() {
+                    syms.push(ELFSymbol {
+                        name: elf.strtab.get(sym.st_name).unwrap().unwrap().to_string(),
+                        section_index: sym.st_shndx,
+                        addr: sym.st_value
+                    })
+                }
+
+                for dynsym in elf.dynsyms.iter() {
+                    // these are dynamically resolved symbols.
+                    // this is what i'll call an 'import'
+                    //
+                    // if sy_value == 0 it's probably (not necessarily?) a symbol to be referenced
+                    // by a reloc for a .got entry
+                    if dynsym.st_value != 0 {
+                        imports.push(ELFImport {
+                            name: elf.dynstrtab.get(dynsym.st_name).unwrap().unwrap().to_string(),
+                            section_index: dynsym.st_shndx,
+                            value: dynsym.st_value
+                        });
+                    } else {
+                        // got entry, figure this out.
+                    }
+                }
+
+                let isa = map_elf_machine(elf.header.e_machine);
+
+    // PE(ISAHint, goblin::pe::header::Header, Vec<goblin::pe::section_table::SectionTable>, Vec<PEReloc>, Vec<PEImport>, Vec<PEExport>),
+                Some(ModuleInfo::ELF(
+                    isa,
+                    elf.header,
+                    vec![],
+                    elf.entry,
+                    vec![],
+                    imports,
+                    vec![],
+                    //elf.exports.iter().map(|x| x.into()).collect()
+                    syms
                 ))
             }
             _ => {
@@ -341,8 +486,66 @@ pub struct ModuleData {
 impl ModuleData {
     pub fn load_from(data: &[u8]) -> Option<ModuleData> {
         match Object::parse(data) {
-            Ok(Object::Elf(elf)) => {
-                None
+            Ok(obj @ Object::Elf(_)) => {
+                let mut module = ModuleData {
+                    segments: vec![],
+                    module_info: ModuleInfo::from_goblin(&obj, data).unwrap(),
+                    name: "anon_module".to_string()
+                };
+
+                let elf = match obj {
+                    Object::Elf(elf) => elf,
+                    _ => panic!()
+                };
+/*
+                println!("Parsed ELF: {:?}", elf);
+
+                for sym in elf.dynsyms.iter() {
+                    println!("dynsym: {:?}", sym);
+                    println!("Name: {}", elf.dynstrtab.get(sym.st_name).unwrap().unwrap());
+                }
+                for sym in elf.syms.iter() {
+                    println!("sym: {:?}", sym);
+                    println!("Name: {}", elf.strtab.get(sym.st_name).unwrap().unwrap());
+                }
+*/
+                for (i, section) in elf.program_headers.iter().enumerate() {
+                    // TODO: look into cow handles into the actual data
+                    // TODO: actually respect ELF loader behavior w.r.t overlays
+                    // TODO: does this do stuff with alignment or what
+                    let mut section_data = vec![0; section.p_memsz as usize];
+                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
+                    println!("{:?}", section);
+                    let mut physical_copy_end = (section.p_paddr as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
+                    let copy_size = if physical_copy_end > data.len() {
+                        if (section.p_paddr as usize) < data.len() {
+                            data.len() - section.p_paddr as usize
+                        } else {
+                            0
+                        }
+                    } else {
+                        std::cmp::min(section.p_filesz as usize, section.p_memsz as usize)
+                    };
+
+                    println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_paddr);
+                    println!("virtual size is {:#x}", section_data.len());
+                    for i in 0..copy_size {
+                        section_data[i] = data[(section.p_paddr as usize) + i];
+                    }
+
+                    let new_section = Segment {
+                        start: section.p_vaddr as usize,
+                        data: section_data,
+                        name: "TODO".to_owned()  //std::str::from_utf8(&section.name[..]).unwrap().to_string()
+                    };
+                    println!("mapped section {} to [{}, {})",
+                        i,
+                        new_section.start.stringy(),
+                        (new_section.start as u64 + new_section.data.len() as u64).stringy()
+                    );
+                    module.segments.push(new_section);
+                }
+                Some(module)
             },
             Ok(obj @ Object::PE(_)) => {
                 let mut module = ModuleData {
@@ -394,7 +597,7 @@ impl ModuleData {
                     module.segments.push(new_section);
                 }
                 match &module.module_info {
-                    ModuleInfo::PE(_, _, _, _, _, ref imports, ref exports) => {
+                    ModuleInfo::PE(_, _, _, _, _, ref imports, ref exports, _) => {
                         for i in imports.iter() {
                             println!("import: {:?}", i);
                         }

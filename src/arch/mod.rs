@@ -39,7 +39,8 @@ impl Function {
 #[derive(Debug)]
 pub enum Library {
     Name(String),
-    This
+    This,
+    Unknown
 }
 
 #[derive(Debug)]
@@ -67,6 +68,9 @@ impl Display for Symbol {
             },
             Library::This => {
                 write!(f, "{}", self.1)
+            },
+            Library::Unknown => {
+                write!(f, "<unknown>!{}", self.1)
             }
         }
     }

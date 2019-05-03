@@ -143,7 +143,7 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 self.xrefs.delete_from_code(tpe, action, address, dest);
             }
             BaseUpdate::DefineSymbol(sym) => {
-                println!("address of {:?} recorded at {}", sym, address.stringy());
+                //println!("address of {:?} recorded at {}", sym, address.stringy());
                 match Symbol::to_function(&sym) {
                     Some(f) => {
                         self.functions.insert(address, f);
