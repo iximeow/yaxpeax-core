@@ -2,6 +2,8 @@ use arch::pic17::PartialInstructionContext;
 use arch::pic17::SFRS;
 use yaxpeax_pic17::{Instruction, Opcode, Operand};
 
+use serde::{Serialize, Deserialize};
+
 pub fn updates_of<T>(instr: &Instruction, ctx: &T) -> Vec<Update> where T: PartialInstructionContext {
     fn register_updates<T>(op: Operand, ctx: &T) -> Vec<Update> where T: PartialInstructionContext {
         use arch::pic17::cpu::try_debank;
@@ -316,7 +318,7 @@ pub fn dependencies_of<T: PartialInstructionContext>(instr: &Instruction, ctx: &
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Serialize, Deserialize)]
 pub enum Dependence {
     W, // aka the WREG SFR, knowing this should imply knowing that memory and vice versa
     Memory(u16), // just as the CPU, linear memory. may be SFR or data.

@@ -9,7 +9,7 @@ use std::fs::OpenOptions;
 use std::path::Path;
 use serde_json;
 use serde;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use num_traits::Zero;
 
@@ -24,6 +24,7 @@ use analyses::control_flow;
 use analyses::static_single_assignment::cytron::SSA;
 use analyses::xrefs;
 
+// #[derive(Serialize)]
 pub struct MSP430Data {
     pub preferred_addr: <MSP430 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -177,6 +178,7 @@ impl PartialInstructionContext for PartialContext {
     }
 }
 
+#[derive(Serialize)]
 pub struct ComputedContext {
     pub address: Option<u16>,
     pub comment: Option<String>
@@ -202,6 +204,7 @@ pub struct MergedContext {
     pub computed: Option<Rc<ComputedContext>>
 }
 
+// #[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<MSP430 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>,
@@ -271,7 +274,7 @@ impl PartialInstructionContext for MergedContext {
     }
 }
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(u8), // one of r0-r15
     RegisterB(u8), // one of r0-r15

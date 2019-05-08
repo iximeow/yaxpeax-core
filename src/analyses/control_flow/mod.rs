@@ -65,7 +65,8 @@ pub trait Determinant<T, Addr> {
     fn control_flow(&self, Option<&T>) -> Effect<Addr>;
 }
 
-#[derive(Debug, Copy, Clone)]
+use serde::{Serialize, Deserialize};
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct BasicBlock<Addr> where Addr: Copy + Clone {
     pub start: Addr,
     pub end: Addr // inclusive!!
@@ -83,6 +84,12 @@ impl <Addr> BasicBlock<Addr> where Addr: Copy + Clone {
 pub struct ControlFlowGraph<A> where A: Address {
     pub blocks: Vec<BasicBlock<A>>,
     pub graph: GraphMap<A, (), petgraph::Directed>
+}
+
+impl <A: Address> Serialize for ControlFlowGraph<A> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        panic!("lol");
+    }
 }
 
 #[test]

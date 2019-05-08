@@ -17,8 +17,11 @@ use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::hash::{Hash, Hasher};
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
     Memory(u64, u8),
@@ -151,7 +154,7 @@ impl AliasInfo for Location {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub enum SymbolicExpression {
     PointerTo(Box<SymbolicExpression>),
     StringLiteral(String),
@@ -165,6 +168,25 @@ pub enum Data {
     Concrete(u64),
     Symbol(SymbolicExpression),
     Alias(Rc<RefCell<Value<x86_64>>>)
+}
+
+impl Hash for Data {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Data::Concrete(ref value) => {
+                state.write_u8(1);
+                value.hash(state);
+            }
+            Data::Symbol(ref expr) => {
+                state.write_u8(2);
+                expr.hash(state);
+            }
+            Data::Alias(ref value) => {
+                state.write_u8(3);
+                value.borrow().hash(state);
+            }
+        }
+    }
 }
 
 impl SSAValues for x86_64 {

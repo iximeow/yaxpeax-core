@@ -7,12 +7,18 @@ use petgraph::visit::Bfs;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::cell::Ref;
+use std::cell::Cell;
 
 use std::fmt::Debug;
 
 use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
+
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
+use std::borrow::Borrow;
 
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
@@ -22,7 +28,146 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     pub phi: HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut phi_map = serializer.serialize_map(Some(self.inner.len()))?;
+        for (addr, phis) in self.inner.iter() {
+            phi_map.serialize_entry(addr, &MemoizingSerializer::new(unsafe { *self.memos.as_ptr() }, phis))?;
+        }
+        phi_map.end()
+    }
+}
+
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>, HashedValue<Rc<RefCell<Value<A>>>>> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut location_phis_map = serializer.serialize_map(Some(self.inner.len()))?;
+        for (loc, phispec) in self.inner.iter() {
+            let new_phiargs: Vec<u32> = phispec.1.iter().map(|v| {
+                self.id_of(HashedValue { value: Rc::clone(v) })
+            }).collect();
+            let newvalue = (self.id_of(HashedValue { value: Rc::clone(&phispec.0) }), new_phiargs);
+            location_phis_map.serialize_entry(loc, &newvalue)?;
+        }
+        location_phis_map.end()
+    }
+}
+
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut version_maps = serializer.serialize_map(Some(self.inner.len()))?;
+        for (k, m) in self.inner.iter() {
+            version_maps.serialize_entry(k, &MemoizingSerializer::new(unsafe { *self.memos.as_ptr() }, m))?;
+        }
+        version_maps.end()
+    }
+}
+
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut version_map = serializer.serialize_map(Some(self.inner.len()))?;
+        self.inner.iter().map(|(k, v)| {
+            version_map.serialize_entry(k, &self.id_of(HashedValue { value: Rc::clone(v) })).unwrap();
+        });
+        version_map.end()
+    }
+}
+
+pub trait Memoable: Sized {
+    type Out: Sized + Serialize;
+
+    fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out;
+}
+
+struct Memos<T: Hash + PartialEq + Eq> {
+    node_ids: HashMap<T, u32>,
+}
+
+impl <T: Hash + PartialEq + Eq> Memos<T> {
+    pub fn new() -> Memos<T> {
+        Memos {
+            node_ids: HashMap::new(),
+        }
+    }
+
+    pub fn id_of(&mut self, t: T) -> u32 {
+        let next = self.node_ids.len();
+        *self.node_ids.entry(t).or_insert_with(|| {
+            next as u32 // TODO: error on overflow
+        })
+    }
+}
+
+impl <A: Arch + SSAValues> Serialize for Memos<HashedValue<Rc<RefCell<Value<A>>>>> where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(Some(self.node_ids.len()))?;
+        for i in 0..self.node_ids.len() {
+            for (k, v) in self.node_ids.iter() {
+                if (i as u32) == *v {
+//                    let v: Ref<Value<A>> = (&*k.value).borrow();
+//                    seq.serialize_element((&*v).memoize(self.node_ids))?;
+                    seq.serialize_element(&k.memoize(&self.node_ids))?;
+                }
+            }
+        }
+        seq.end()
+    }
+}
+
+/*
+trait ToMemo {
+    type Out: Debug + Hash + PartialEq + Eq;
+
+    fn memoize(&self, ctx: MemoizingSerialize<Self>) -> Self::Out;
+}
+*/
+
+struct MemoizingSerializer<'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> {
+    memos: Cell<&'a mut Memos<M>>,
+    inner: &'b T,
+}
+
+impl <'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> MemoizingSerializer<'a, 'b, T, M> {
+    pub fn new(memos: &'a mut Memos<M>, inner: &'b T) -> Self {
+        MemoizingSerializer { memos: Cell::new(memos), inner }
+    }
+
+    pub fn memos(&self) -> &'a mut Memos<M> {
+        unsafe {
+            *self.memos.as_ptr()
+        }
+    }
+
+    pub fn id_of(&self, memo: M) -> u32 {
+        unsafe {
+            (*self.memos.as_ptr()).id_of(memo)
+        }
+    }
+}
+
+impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut memoizer: Memos<HashedValue<Rc<RefCell<Value<A>>>>> = Memos::new();
+
+        let mut ssa_serializer = serializer.serialize_struct("SSA", 3)?;
+
+        {
+            let values = MemoizingSerializer::new(&mut memoizer, &self.values);
+            ssa_serializer.serialize_field("values", &values)?;
+        }
+
+        {
+            let phis = MemoizingSerializer::new(&mut memoizer, &self.phi);
+            ssa_serializer.serialize_field("phis", &phis)?;
+        }
+
+        ssa_serializer.serialize_field("values", &memoizer)?;
+
+        ssa_serializer.end()
+
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum Direction {
     Read,
     Write
@@ -36,6 +181,43 @@ pub struct Value<A: SSAValues> {
     version: u32,
     data: Option<A::Data>
 }
+
+impl <A: SSAValues> Hash for Value<A> where A::Location: Hash, A::Data: Hash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.location.hash(state);
+        self.version.hash(state);
+        self.data.hash(state);
+    }
+}
+
+#[derive(Debug)]
+pub struct HashedValue<A> {
+    pub value: A
+}
+
+use std::hash::Hasher;
+impl <A: SSAValues> Hash for HashedValue<Rc<RefCell<Value<A>>>> where Value<A>: Hash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let v: &RefCell<Value<A>> = &*self.value;
+        let v2 = v.borrow();
+        (v.borrow()).hash(state);
+    }
+}
+
+impl <A: SSAValues> Eq for HashedValue<Rc<RefCell<Value<A>>>> { }
+
+impl <A: SSAValues> PartialEq for HashedValue<Rc<RefCell<Value<A>>>> {
+    fn eq(&self, other: &HashedValue<Rc<RefCell<Value<A>>>>) -> bool {
+        Rc::ptr_eq(&self.value, &other.value)
+    }
+}
+
+impl <A: SSAValues> PartialEq for Value<A> {
+    fn eq(&self, rhs: &Value<A>) -> bool {
+        self as *const Value<A> == rhs as *const Value<A>
+    }
+}
+impl <A: SSAValues> Eq for Value<A> {}
 
 impl <A> Value<A> where A: SSAValues {
     pub fn version(&self) -> u32 {
@@ -66,8 +248,8 @@ pub trait AliasInfo where Self: Sized {
 }
 
 pub trait SSAValues where Self: Arch {
-    type Location: Debug + AliasInfo;
-    type Data: Debug;
+    type Location: Debug + AliasInfo + Hash + Eq + Serialize;
+    type Data: Debug + Hash;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }

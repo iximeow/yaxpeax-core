@@ -19,7 +19,7 @@ use memory::{MemoryRange, MemoryRepr};
 
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Function {
     name: String,
     arguments: Vec<String>,
@@ -36,14 +36,14 @@ impl Function {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Library {
     Name(String),
     This,
     Unknown
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Symbol(pub Library, pub String);
 
 impl Symbol {
