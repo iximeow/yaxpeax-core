@@ -20,15 +20,19 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
 use std::borrow::Borrow;
 
+type DFGRef<A> = Rc<RefCell<Value<A>>>;
+type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
+type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
+
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
     // TODO: Fairly sure these Rc<RefCell<...>> could all just be raw pointers
     // these aren't individually freed so Rc shouldn't be necessary?
-    pub values: HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>>,
-    pub phi: HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>
+    pub values: HashMap<A::Address, RWMap<A>>,
+    pub phi: HashMap<A::Address, PhiLocations<A>>
 }
 
-impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, PhiLocations<A>>, HashedValue<DFGRef<A>>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut phi_map = serializer.serialize_map(Some(self.inner.len()))?;
         for (addr, phis) in self.inner.iter() {
@@ -38,7 +42,7 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Has
     }
 }
 
-impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>, HashedValue<Rc<RefCell<Value<A>>>>> {
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, PhiLocations<A>, HashedValue<DFGRef<A>>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut location_phis_map = serializer.serialize_map(Some(self.inner.len()))?;
         for (loc, phispec) in self.inner.iter() {
@@ -46,13 +50,13 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Has
                 self.id_of(HashedValue { value: Rc::clone(v) })
             }).collect();
             let newvalue = (self.id_of(HashedValue { value: Rc::clone(&phispec.0) }), new_phiargs);
-            location_phis_map.serialize_entry(loc, &newvalue)?;
+            location_phis_map.serialize_entry(&format!("{:?}", loc), &newvalue)?;
         }
         location_phis_map.end()
     }
 }
 
-impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<A::Address, RWMap<A>>, HashedValue<DFGRef<A>>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut version_maps = serializer.serialize_map(Some(self.inner.len()))?;
         for (k, m) in self.inner.iter() {
@@ -62,12 +66,13 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Has
     }
 }
 
-impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>, HashedValue<Rc<RefCell<Value<A>>>>> {
+impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, RWMap<A>, HashedValue<DFGRef<A>>> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut version_map = serializer.serialize_map(Some(self.inner.len()))?;
-        self.inner.iter().map(|(k, v)| {
-            version_map.serialize_entry(k, &self.id_of(HashedValue { value: Rc::clone(v) })).unwrap();
-        });
+        for ((loc, dir), v) in self.inner.iter() {
+            let s = format!("loc={:?}:dir={:?}", loc, dir);
+            version_map.serialize_entry(&s, &self.id_of(HashedValue { value: Rc::clone(v) })).unwrap();
+        };
         version_map.end()
     }
 }
@@ -97,7 +102,7 @@ impl <T: Hash + PartialEq + Eq> Memos<T> {
     }
 }
 
-impl <A: Arch + SSAValues> Serialize for Memos<HashedValue<Rc<RefCell<Value<A>>>>> where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
+impl <A: Arch + SSAValues> Serialize for Memos<HashedValue<DFGRef<A>>> where HashedValue<DFGRef<A>>: Memoable {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.node_ids.len()))?;
         for i in 0..self.node_ids.len() {
@@ -144,9 +149,9 @@ impl <'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> MemoizingSerializer<'a, 'b, T
     }
 }
 
-impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
+impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<DFGRef<A>>: Memoable {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut memoizer: Memos<HashedValue<Rc<RefCell<Value<A>>>>> = Memos::new();
+        let mut memoizer: Memos<HashedValue<DFGRef<A>>> = Memos::new();
 
         let mut ssa_serializer = serializer.serialize_struct("SSA", 3)?;
 
@@ -177,9 +182,9 @@ pub enum Direction {
 pub struct Value<A: SSAValues> {
     // TODO: this should be removable...
     // mapped pretty directly to a location both with values and phi
-    location: A::Location,
-    version: u32,
-    data: Option<A::Data>
+    pub location: A::Location,
+    pub version: u32,
+    pub data: Option<A::Data>
 }
 
 impl <A: SSAValues> Hash for Value<A> where A::Location: Hash, A::Data: Hash {
@@ -196,7 +201,7 @@ pub struct HashedValue<A> {
 }
 
 use std::hash::Hasher;
-impl <A: SSAValues> Hash for HashedValue<Rc<RefCell<Value<A>>>> where Value<A>: Hash {
+impl <A: SSAValues> Hash for HashedValue<DFGRef<A>> where Value<A>: Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let v: &RefCell<Value<A>> = &*self.value;
         let v2 = v.borrow();
@@ -204,10 +209,10 @@ impl <A: SSAValues> Hash for HashedValue<Rc<RefCell<Value<A>>>> where Value<A>: 
     }
 }
 
-impl <A: SSAValues> Eq for HashedValue<Rc<RefCell<Value<A>>>> { }
+impl <A: SSAValues> Eq for HashedValue<DFGRef<A>> { }
 
-impl <A: SSAValues> PartialEq for HashedValue<Rc<RefCell<Value<A>>>> {
-    fn eq(&self, other: &HashedValue<Rc<RefCell<Value<A>>>>) -> bool {
+impl <A: SSAValues> PartialEq for HashedValue<DFGRef<A>> {
+    fn eq(&self, other: &HashedValue<DFGRef<A>>) -> bool {
         Rc::ptr_eq(&self.value, &other.value)
     }
 }
@@ -255,22 +260,16 @@ pub trait SSAValues where Self: Arch {
 }
 
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
-    fn written_value(&self, addr: A::Address, loc: A::Location) -> Option<Rc<RefCell<Value<A>>>> {
-        let addr_values = self.values.get(&addr);
-        let value: Option<&Rc<RefCell<Value<A>>>> = addr_values.and_then(|addr_values| addr_values.get(&(loc, Direction::Write)));
-        value.map(|x| Rc::clone(x)) //map(|x| *x.borrow()).as_ref()
+    fn get_value(&self, addr: A::Address, loc: A::Location, dir: Direction) -> Option<DFGRef<A>> {
+        self.values.get(&addr)
+            .and_then(|addr_values| addr_values.get(&(loc, dir)))
+            .map(|x| Rc::clone(x))
     }
-    //fn written_value_mut(&self, addr: A::Address, loc: A::Location) -> Option<&mut Value<A>> {
-    //    self.values[&addr].get_mut(&(loc, Direction::Write)).map(|x| *x.borrow_mut()).as_mut()
-    //}
-    fn read_value(&self, addr: A::Address, loc: A::Location) -> Option<Rc<RefCell<Value<A>>>> {
-    //    self.values[&addr].get(&(loc, Direction::Read)).map(|x| *x.borrow()).as_ref()
-    //}
-    //fn read_value_mut(&mut self, addr: A::Address, loc: A::Location) -> Option<Rc<RefCell<Value<A>>>> {
-        let addr_values = self.values.get(&addr);
-        let value: Option<&Rc<RefCell<Value<A>>>> = addr_values.and_then(|addr_values| addr_values.get(&(loc, Direction::Read)));
-        value.map(|x| Rc::clone(x))
-        // value.map(|x| &mut *x.borrow_mut())
+    pub fn written_value(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
+        self.get_value(addr, loc, Direction::Write)
+    }
+    pub fn read_value(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
+        self.get_value(addr, loc, Direction::Read)
     }
 }
 
@@ -408,8 +407,8 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
 
     // TODO: some nice abstraction to look up by (Address, Location) but also
     // find all Location for an Address
-    let mut values: HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>> = HashMap::new();
-    let mut phi: HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>> = HashMap::new();
+    let mut values: HashMap<A::Address, RWMap<A>> = HashMap::new();
+    let mut phi: HashMap<A::Address, PhiLocations<A>> = HashMap::new();
 
     let mut iter_count = 0;
 
@@ -468,14 +467,14 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
     fn search<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         data: &M,
         block: &BasicBlock<A::Address>,
-        values: &mut HashMap<A::Address, HashMap<(A::Location, Direction), Rc<RefCell<Value<A>>>>>,
-        phi: &mut HashMap<A::Address, HashMap<A::Location, (Rc<RefCell<Value<A>>>, Vec<Rc<RefCell<Value<A>>>>)>>,
+        values: &mut HashMap<A::Address, RWMap<A>>,
+        phi: &mut HashMap<A::Address, PhiLocations<A>>,
         basic_blocks: &ControlFlowGraph<A::Address>,
         cfg: &GraphMap<A::Address, (), petgraph::Directed>,
         dominance_frontiers: &HashMap<A::Address, Vec<A::Address>>,
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         C: &mut HashMap<A::Location, u32>,
-        S: &mut HashMap<A::Location, Vec<Rc<RefCell<Value<A>>>>>
+        S: &mut HashMap<A::Location, Vec<DFGRef<A>>>
     ) where <A as SSAValues>::Location: Copy + Hash + Eq, <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address>, <A as SSAValues>::Location: AliasInfo {
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {
@@ -577,7 +576,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
     #[allow(non_snake_case)]
     let mut C: HashMap<A::Location, u32> = HashMap::new();
     #[allow(non_snake_case)]
-    let mut S: HashMap<A::Location, Vec<Rc<RefCell<Value<A>>>>> = HashMap::new();
+    let mut S: HashMap<A::Location, Vec<DFGRef<A>>> = HashMap::new();
 
     // all_locations should be the widest aliases ONLY
 //    for each variable in vars {

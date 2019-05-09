@@ -154,7 +154,7 @@ impl AliasInfo for Location {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
 pub enum SymbolicExpression {
     PointerTo(Box<SymbolicExpression>),
     StringLiteral(String),
@@ -168,6 +168,41 @@ pub enum Data {
     Concrete(u64),
     Symbol(SymbolicExpression),
     Alias(Rc<RefCell<Value<x86_64>>>)
+}
+
+#[derive(Debug, Serialize)]
+pub enum DataMemo {
+    Concrete(u64),
+    Symbol(SymbolicExpression),
+    Alias(u32)
+}
+
+#[derive(Debug, Serialize)]
+pub struct ValueMemo {
+    pub location: Location,
+    pub version: u32,
+    pub data: Option<DataMemo>
+}
+
+use std::collections::HashMap;
+use analyses::static_single_assignment::cytron::{HashedValue, Memoable};
+impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
+    type Out = ValueMemo;
+
+    fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
+        let selfref: &Value<x86_64> = &*(&*self.value.borrow());
+        let newdata = selfref.data.as_ref().map(|data| match data {
+            Data::Concrete(v) => DataMemo::Concrete(*v),
+            Data::Symbol(expr) => DataMemo::Symbol(expr.to_owned()),
+            Data::Alias(ptr) => DataMemo::Alias(memos[&HashedValue { value: Rc::clone(ptr) }])
+        });
+
+        ValueMemo {
+            location: selfref.location,
+            version: selfref.version,
+            data: newdata
+        }
+    }
 }
 
 impl Hash for Data {

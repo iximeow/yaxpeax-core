@@ -15,6 +15,7 @@ use yaxpeax_arch::AddressDisplay;
 
 use memory::MemoryRange;
 
+use serde::ser::SerializeStruct;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Effect<Addr> {
     stop_after: bool,
