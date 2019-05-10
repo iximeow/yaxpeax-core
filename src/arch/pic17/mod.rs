@@ -23,7 +23,7 @@ pub mod display;
 pub mod syntaxed_render;
 pub mod analyses;
 
-
+#[derive(Serialize)]
 pub struct PIC17Data {
     pub preferred_addr: <PIC17 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -379,6 +379,7 @@ pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext)
     result
 }
 
+#[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<PIC17 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: Vec<Option<Rc<ComputedContext>>>
@@ -407,11 +408,6 @@ impl <'a, T: PartialInstructionContext + Default> ContextTable<'a, &'a T> for Ha
 }
 */
 
-/*
- * TODO: I would LOVE to not have to copy contexts all the time, but I
- * just don't know how to spell this satisfactorily to rustc. It is
- * undoubtedly going to be a source of performance issues, needlessly.
- */
 impl ContextRead<PIC17, MergedContext> for MergedContextTable {
     fn at(&self, address: &<PIC17 as Arch>::Address) -> MergedContext {
         MergedContext {
@@ -496,7 +492,7 @@ pub struct PartialContext {
 }
 
 // for PIC17, W is just a memory location
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ComputedContext {
     pub memory: HashMap<u16, u8>, // map: Address <-> value. This is hilariously insufficient.
     pub bsr_sfr: Option<u8>,

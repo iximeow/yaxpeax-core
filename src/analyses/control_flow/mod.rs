@@ -15,6 +15,8 @@ use yaxpeax_arch::AddressDisplay;
 
 use memory::MemoryRange;
 
+use serialize::GraphSerializer;
+
 use serde::ser::SerializeStruct;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Effect<Addr> {
@@ -87,9 +89,12 @@ pub struct ControlFlowGraph<A> where A: Address {
     pub graph: GraphMap<A, (), petgraph::Directed>
 }
 
-impl <A: Address> Serialize for ControlFlowGraph<A> {
+impl <A: Address + Hash> Serialize for ControlFlowGraph<A> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        panic!("lol");
+        let mut struc = serializer.serialize_struct("CFG<A>", 2)?;
+        struc.serialize_field("blocks", &self.blocks)?;
+        struc.serialize_field("graph", &GraphSerializer::from(&self.graph))?;
+        struc.end()
     }
 }
 

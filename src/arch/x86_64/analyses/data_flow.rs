@@ -21,6 +21,10 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Serialize, Deserialize};
 
+use std::collections::HashMap;
+use analyses::static_single_assignment::cytron::HashedValue;
+use serialize::Memoable;
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
@@ -184,8 +188,6 @@ pub struct ValueMemo {
     pub data: Option<DataMemo>
 }
 
-use std::collections::HashMap;
-use analyses::static_single_assignment::cytron::{HashedValue, Memoable};
 impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
     type Out = ValueMemo;
 

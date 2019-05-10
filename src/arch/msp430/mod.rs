@@ -10,6 +10,7 @@ use std::path::Path;
 use serde_json;
 use serde;
 use serde::{Deserialize, Serialize};
+use serialize::Memoable;
 
 use num_traits::Zero;
 
@@ -22,9 +23,10 @@ use arch::{Function, Symbol};
 
 use analyses::control_flow;
 use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::cytron::{DFGRef, HashedValue};
 use analyses::xrefs;
 
-// #[derive(Serialize)]
+#[derive(Serialize)]
 pub struct MSP430Data {
     pub preferred_addr: <MSP430 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -199,12 +201,13 @@ impl PartialInstructionContext for ComputedContext {
     }
 }
 
+#[derive(Serialize)]
 pub struct MergedContext {
     pub user: Option<Rc<PartialContext>>,
     pub computed: Option<Rc<ComputedContext>>
 }
 
-// #[derive(Serialize)]
+#[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<MSP430 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>,
@@ -319,6 +322,14 @@ impl AliasInfo for Location {
                 Location::Register(*r)
             }
         }
+    }
+}
+
+impl Memoable for HashedValue<DFGRef<MSP430>> {
+    type Out = u32;
+
+    fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
+        memos[self]
     }
 }
 

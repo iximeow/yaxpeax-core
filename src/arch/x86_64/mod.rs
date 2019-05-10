@@ -31,6 +31,7 @@ pub mod analyses;
 pub mod cpu;
 pub mod display;
 
+#[derive(Serialize)]
 pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -49,6 +50,7 @@ impl Default for x86_64Data {
     }
 }
 
+#[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
@@ -61,8 +63,6 @@ pub struct MergedContextTable {
         (control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>)
     >
 }
-
-
 
 #[derive(Debug)]
 pub struct MergedContext {

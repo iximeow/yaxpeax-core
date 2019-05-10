@@ -20,7 +20,7 @@ goblin = { path = "/toy/rust/goblin" }
 "num-traits" = "0.2"
 "termios" = "0.2.2"
 "termion" = "1.4.0"
-"serde" = "*"
+"serde" = { version = "*", features = ["rc"] }
 "serde_json" = "*"
 "serde_derive" = "*"
 "petgraph" = "*"

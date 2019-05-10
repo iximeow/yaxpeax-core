@@ -20,9 +20,11 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
 use std::borrow::Borrow;
 
-type DFGRef<A> = Rc<RefCell<Value<A>>>;
-type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
-type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
+use serialize::{Memoable, Memos, MemoizingSerializer};
+
+pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
+pub type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
+pub type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
 
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
@@ -77,75 +79,17 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, RWM
     }
 }
 
-pub trait Memoable: Sized {
-    type Out: Sized + Serialize;
-
-    fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out;
-}
-
-struct Memos<T: Hash + PartialEq + Eq> {
-    node_ids: HashMap<T, u32>,
-}
-
-impl <T: Hash + PartialEq + Eq> Memos<T> {
-    pub fn new() -> Memos<T> {
-        Memos {
-            node_ids: HashMap::new(),
-        }
-    }
-
-    pub fn id_of(&mut self, t: T) -> u32 {
-        let next = self.node_ids.len();
-        *self.node_ids.entry(t).or_insert_with(|| {
-            next as u32 // TODO: error on overflow
-        })
-    }
-}
-
 impl <A: Arch + SSAValues> Serialize for Memos<HashedValue<DFGRef<A>>> where HashedValue<DFGRef<A>>: Memoable {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut seq = serializer.serialize_seq(Some(self.node_ids.len()))?;
         for i in 0..self.node_ids.len() {
             for (k, v) in self.node_ids.iter() {
                 if (i as u32) == *v {
-//                    let v: Ref<Value<A>> = (&*k.value).borrow();
-//                    seq.serialize_element((&*v).memoize(self.node_ids))?;
                     seq.serialize_element(&k.memoize(&self.node_ids))?;
                 }
             }
         }
         seq.end()
-    }
-}
-
-/*
-trait ToMemo {
-    type Out: Debug + Hash + PartialEq + Eq;
-
-    fn memoize(&self, ctx: MemoizingSerialize<Self>) -> Self::Out;
-}
-*/
-
-struct MemoizingSerializer<'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> {
-    memos: Cell<&'a mut Memos<M>>,
-    inner: &'b T,
-}
-
-impl <'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> MemoizingSerializer<'a, 'b, T, M> {
-    pub fn new(memos: &'a mut Memos<M>, inner: &'b T) -> Self {
-        MemoizingSerializer { memos: Cell::new(memos), inner }
-    }
-
-    pub fn memos(&self) -> &'a mut Memos<M> {
-        unsafe {
-            *self.memos.as_ptr()
-        }
-    }
-
-    pub fn id_of(&self, memo: M) -> u32 {
-        unsafe {
-            (*self.memos.as_ptr()).id_of(memo)
-        }
     }
 }
 

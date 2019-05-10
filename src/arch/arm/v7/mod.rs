@@ -16,6 +16,7 @@ mod display;
 #[derive(Serialize, Deserialize)]
 pub struct Function { }
 
+#[derive(Serialize)]
 pub struct ARMv7Data {
     pub preferred_addr: <ARMv7 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -276,6 +277,7 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
     }
 }
 
+#[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<ComputedContext>>
@@ -321,7 +323,7 @@ impl PartialInstructionContext for MergedContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct ComputedContext {
 
 }

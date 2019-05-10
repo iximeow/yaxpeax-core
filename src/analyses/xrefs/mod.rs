@@ -3,6 +3,8 @@ use yaxpeax_arch::{Arch, Address};
 use petgraph;
 use petgraph::graphmap::{GraphMap, NodeTrait};
 
+use serialize::GraphSerializer;
+
 /*
  * If we can construct a global CFG, including call graphs,
  * it might be workable to identify happens-before relationships between
@@ -16,13 +18,13 @@ use petgraph::graphmap::{GraphMap, NodeTrait};
  * be there?"
  */
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RefType {
     Code,
     Data
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RefAction {
     Read,
     Write,
@@ -31,6 +33,15 @@ pub enum RefAction {
 
 pub struct XRefCollection<A: Address> {
     xrefs: GraphMap<(A, RefType, RefAction), (), petgraph::Directed>
+}
+
+use serde::ser::SerializeStruct;
+impl <A: Address + NodeTrait> serde::Serialize for XRefCollection<A> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut struc = serializer.serialize_struct("XRefCollection", 1)?;
+        struc.serialize_field("xrefs", &GraphSerializer::from(&self.xrefs))?;
+        struc.end()
+    }
 }
 
 impl <A: Address + NodeTrait> XRefCollection<A> {

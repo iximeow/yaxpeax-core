@@ -24,6 +24,7 @@ pub mod debug;
 pub mod memory;
 pub mod parts;
 pub mod comment;
+pub mod serialize;
 
 use yaxpeax_arch::{Arch, ColorSettings};
 
