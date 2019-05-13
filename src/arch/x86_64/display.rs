@@ -570,6 +570,12 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::UD2 |
             Opcode::HLT |
             Opcode::WAIT |
+            Opcode::CLC |
+            Opcode::STC |
+            Opcode::CLI |
+            Opcode::STI |
+            Opcode::CLD |
+            Opcode::STD |
             Opcode::Invalid => {
                 Ok(())
             }

@@ -502,6 +502,24 @@ impl SSAValues for x86_64 {
                 locs.append(&mut decompose_readwrite(&instr.operands[0]));
                 locs
             }
+            Opcode::STI |
+            Opcode::CLI => {
+                vec![
+                    (Some(Location::IF), Direction::Write)
+                ]
+            }
+            Opcode::STD |
+            Opcode::CLD => {
+                vec![
+                    (Some(Location::DF), Direction::Write)
+                ]
+            }
+            Opcode::STC |
+            Opcode::CLC => {
+                vec![
+                    (Some(Location::CF), Direction::Write)
+                ]
+            }
             Opcode::SAR |
             Opcode::SAL |
             Opcode::SHR |

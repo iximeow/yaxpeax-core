@@ -577,6 +577,12 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::WRMSR |
             Opcode::RDTSC |
             Opcode::RDPMC |
+            Opcode::CLI |
+            Opcode::STI |
+            Opcode::CLC |
+            Opcode::STC |
+            Opcode::CLD |
+            Opcode::STD |
             Opcode::CMPXCHG => {
                 control_flow::Effect::cont()
             },

@@ -94,6 +94,12 @@ pub fn find_xrefs(
         Opcode::OUTS |
         Opcode::LAHF |
         Opcode::SAHF |
+        Opcode::CLC |
+        Opcode::STC |
+        Opcode::CLI |
+        Opcode::STI |
+        Opcode::CLD |
+        Opcode::STD |
         Opcode::NOP => { vec! [] }
 
         // Control flow operations are special
