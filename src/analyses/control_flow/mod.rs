@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 
 use petgraph;
-use petgraph::graphmap::GraphMap;
+use petgraph::graphmap::{GraphMap, Nodes};
 
 use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
 
@@ -197,6 +197,10 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         };
         cfg.graph.add_node(A::min_value());
         cfg
+    }
+
+    pub fn blocks(&self) -> Nodes<A> {
+        self.graph.nodes()
     }
 
     pub fn destinations(&self, block: A) -> Vec<A> {
