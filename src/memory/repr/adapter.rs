@@ -37,6 +37,7 @@ impl <'a, 'b, M: MemoryRepr<usize>> MemoryRepr<u16> for MemoryReprAdapter<'a, us
         // this really messes up stuff...
     }
     fn name(&self) -> &str { self.repr.name() }
+    fn size(&self) -> Option<u64> { self.repr.size() }
 }
 
 fn f_u32_to_usize(u: u32) -> usize { u as usize }
@@ -62,6 +63,7 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u32> for MemoryReprAdapter<'a, usize,
         // self.repr.module_for((self.f)(addr))
     }
     fn name(&self) -> &str { self.repr.name() }
+    fn size(&self) -> Option<u64> { self.repr.size() }
 }
 
 fn f_u64_to_usize(u: u64) -> usize { u as usize }
@@ -87,6 +89,7 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u64> for MemoryReprAdapter<'a, usize,
         // self.repr.module_for((self.f)(addr))
     }
     fn name(&self) -> &str { self.repr.name() }
+    fn size(&self) -> Option<u64> { self.repr.size() }
 }
 
 impl <'a, A: Address, B: Address, M: MemoryRepr<A> + MemoryRange<A>> MemoryRange<B> for MemoryReprAdapter<'a, A, B, M> where Self: MemoryRepr<B> {

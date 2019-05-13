@@ -32,6 +32,7 @@ pub trait MemoryRepr<A: Address> {
     fn to_flat(self) -> Option<FlatMemoryRepr>;
     fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>>;
     fn name(&self) -> &str;
+    fn size(&self) -> Option<u64>;
 }
 
 pub trait PatchyMemoryRepr<A: Address> {

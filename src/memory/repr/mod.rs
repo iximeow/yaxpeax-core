@@ -34,6 +34,9 @@ impl <A: Address> MemoryRepr<A> for Vec<u8> {
     fn name(&self) -> &str {
         "anonymous_vec"
     }
+    fn size(&self) -> Option<u64> {
+        Some(self.len() as u64)
+    }
 }
 
 /*

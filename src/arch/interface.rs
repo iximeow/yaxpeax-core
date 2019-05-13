@@ -45,6 +45,7 @@ trait SSAAnalyses<A: Arch + SSAValues> {
 
 use yaxpeax_arch::Arch;
 use arch;
+use arch::Symbol;
 use analyses::control_flow::BasicBlock;
 
 use serde::{Deserialize, Serialize};
@@ -54,6 +55,9 @@ pub enum Summary<A: Arch> {
     ListBlocks,
     ListFunctions,
     ListFunctionBlocks(A::Address),
+    HowMuchCode,
+    ProgramInfo,
+    SymbolInfo(Option<String>, String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,7 +78,14 @@ pub enum Operation<A: Arch, T> {
     Analysis(Analysis<A>),
     Debug(Debug),
     Summary(Summary<A>),
+    Data(Data<A>),
     Specific(T)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Data<A: Arch> {
+    DefineSymbol(A::Address, Symbol),
+    CodeComment(A::Address, String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

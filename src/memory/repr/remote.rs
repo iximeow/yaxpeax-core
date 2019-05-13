@@ -47,5 +47,8 @@ impl <A: Address, T: Peek + Debug> MemoryRepr<A> for RemoteMemoryRepr<T> {
 //        self.target.name
         "remote target"
     }
+    fn size(&self) -> Option<u64> {
+        None
+    }
 }
 

@@ -45,6 +45,9 @@ impl <A: Address> MemoryRepr<A> for FlatMemoryRepr {
     fn name(&self) -> &str {
         &self.name
     }
+    fn size(&self) -> Option<u64> {
+        Some(self.data.len() as u64)
+    }
 }
 
 impl <A: Address> PatchyMemoryRepr<A> for FlatMemoryRepr {

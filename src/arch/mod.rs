@@ -260,12 +260,16 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> Instruc
                 Some(next) => {
                     if next <= self.end {
                         self.current = next;
-                        let decode_result = instr.decode_into(self.data.range_from(self.current).unwrap());
-                        match decode_result {
-                            Some(_) => {
-                                Some((self.current, instr))
-                            },
-                            None => None
+                        if let Some(range) = self.data.range_from(self.current) {
+                            match instr.decode_into(range) {
+                                Some(_) => {
+                                    Some((self.current, instr))
+                                },
+                                None => None
+                            }
+                        } else {
+                            println!("BUG: No data available for {}", self.current.stringy());
+                            None
                         }
                     } else {
                         None
@@ -275,12 +279,17 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> Instruc
             }
         } else {
             if self.current <= self.end {
-                self.elem = Instr::decode(self.data.range_from(self.current).unwrap());
-                match self.elem {
-                    Some(ref instr) => {
-                        Some((self.current, &instr))
-                    },
-                    None => None
+                if let Some(range) = self.data.range_from(self.current) {
+                    self.elem = Instr::decode(range);
+                    match self.elem {
+                        Some(ref instr) => {
+                            Some((self.current, &instr))
+                        },
+                        None => None
+                    }
+                } else {
+                    println!("BUG: No data available for {}", self.current.stringy());
+                    None
                 }
             } else {
                 None

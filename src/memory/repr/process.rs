@@ -158,6 +158,9 @@ impl <A: Address> MemoryRepr<A> for Segment {
     fn name(&self) -> &str {
         &self.name
     }
+    fn size(&self) -> Option<u64> {
+        Some(self.data.len() as u64)
+    }
 }
 
 #[derive(Debug)]
@@ -654,6 +657,13 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
     fn name(&self) -> &str {
         &self.name
     }
+    fn size(&self) -> Option<u64> {
+        let mut total_size = 0u64;
+        for s in self.segments.iter() {
+            total_size += <Segment as MemoryRepr<A>>::size(s).unwrap();
+        }
+        Some(total_size)
+    }
 }
 
 impl <A: Address> MemoryRange<A> for ModuleData {
@@ -703,6 +713,9 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
     }
     fn name(&self) -> &str {
         "process"
+    }
+    fn size(&self) -> Option<u64> {
+        Some(self.modules.iter().map(|m| <ModuleData as MemoryRepr<A>>::size(m).unwrap()).sum())
     }
 }
 
