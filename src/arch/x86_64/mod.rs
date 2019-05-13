@@ -56,6 +56,8 @@ pub struct MergedContextTable {
     pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub xrefs: xrefs::XRefCollection<<x86_64 as Arch>::Address>,
     pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
+    #[serde(skip)]
+    pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
     pub functions: HashMap<<x86_64 as Arch>::Address, Function>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
     pub ssa: HashMap<
@@ -85,6 +87,7 @@ impl MergedContextTable {
             functions: HashMap::new(),
             function_hints: Vec::new(),
             symbols: HashMap::new(),
+            reverse_symbols: HashMap::new(),
             ssa: HashMap::new()
         }
     }
@@ -131,7 +134,7 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
         match update {
             BaseUpdate::Specialized(x86Update::FunctionHint) => {
                 if !self.function_hints.contains(&address) && !self.functions.contains_key(&address) {
-                    println!("Function hint: {}", address.stringy());
+//                    println!("Function hint: {}", address.stringy());
                     self.function_hints.push(address)
                 }
             },
@@ -150,11 +153,13 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                     }
                     None => { }
                 }
-                self.symbols.insert(address, sym);
+                self.symbols.insert(address, sym.clone());
+                self.reverse_symbols.insert(sym, address);
             }
             BaseUpdate::DefineFunction(f) => {
                 self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
-                self.functions.insert(address, f);
+                self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
+                self.functions.insert(address, f.clone());
             }
             _ => { /* todo: the rest */ }
         }
