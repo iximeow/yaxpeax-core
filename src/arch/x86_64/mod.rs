@@ -22,7 +22,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use num_traits::Zero;
 
-use arch::{BaseUpdate, Function, Symbol, Library};
+use arch::{BaseUpdate, Function, Symbol, SymbolQuery, Library};
 
 use ContextRead;
 use ContextWrite;
@@ -37,6 +37,21 @@ pub struct x86_64Data {
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
     pub functions: HashMap<<x86_64 as Arch>::Address, Function>
+}
+
+impl SymbolQuery<<x86_64 as Arch>::Address> for x86_64Data {
+    fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
+        self.contexts.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<x86_64 as Arch>::Address> {
+        for (k, v) in self.contexts.symbols.iter() {
+            if v == sym {
+                return Some(*k);
+            }
+        }
+
+        None
+    }
 }
 
 impl Default for x86_64Data {

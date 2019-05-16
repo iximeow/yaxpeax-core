@@ -19,7 +19,7 @@ use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
 use ContextRead;
 use ContextWrite;
 
-use arch::{Function, Symbol};
+use arch::{Function, Symbol, SymbolQuery};
 
 use analyses::control_flow;
 use analyses::static_single_assignment::cytron::SSA;
@@ -32,6 +32,21 @@ pub struct MSP430Data {
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>,
     pub functions: HashMap<<MSP430 as Arch>::Address, ()>
+}
+
+impl SymbolQuery<<MSP430 as Arch>::Address> for MSP430Data {
+    fn symbol_for(&self, addr: <MSP430 as Arch>::Address) -> Option<&Symbol> {
+        self.contexts.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<MSP430 as Arch>::Address> {
+        for (k, v) in self.contexts.symbols.iter() {
+            if v == sym {
+                return Some(*k);
+            }
+        }
+
+        None
+    }
 }
 
 impl Default for MSP430Data {

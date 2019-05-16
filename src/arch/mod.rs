@@ -19,6 +19,11 @@ use memory::{MemoryRange, MemoryRepr};
 
 use serde::{Serialize, Deserialize};
 
+pub trait SymbolQuery<A: Address> {
+    fn symbol_for(&self, addr: A) -> Option<&Symbol>;
+    fn symbol_addr(&self, sym: &Symbol) -> Option<A>;
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Function {
     name: String,

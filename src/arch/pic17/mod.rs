@@ -7,6 +7,8 @@ use arch::pic17::deps::{updates_of, dependencies_of};
 
 use analyses::control_flow;
 
+use arch::{Symbol, SymbolQuery};
+
 use std::collections::HashMap;
 
 use petgraph;
@@ -29,6 +31,15 @@ pub struct PIC17Data {
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<PIC17 as Arch>::Address>,
     pub functions: HashMap<<PIC17 as Arch>::Address, Function>
+}
+
+impl SymbolQuery<<PIC17 as Arch>::Address> for PIC17Data {
+    fn symbol_for(&self, addr: <PIC17 as Arch>::Address) -> Option<&Symbol> {
+        None
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<PIC17 as Arch>::Address> {
+        None
+    }
 }
 
 impl Default for PIC17Data {

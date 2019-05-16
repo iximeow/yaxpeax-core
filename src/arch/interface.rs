@@ -50,7 +50,7 @@ use analyses::control_flow::BasicBlock;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Summary<A: Arch> {
     ListBlocks,
     ListFunctions,
@@ -60,7 +60,7 @@ pub enum Summary<A: Arch> {
     SymbolInfo(Option<String>, String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Display<A: Arch> {
     RenderInstruction(A::Address),
     RenderBlock(A::Address),
@@ -71,7 +71,7 @@ pub enum Display<A: Arch> {
     RenderFunctionSSA(A::Address)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Operation<A: Arch, T> {
     /* base ops */
     Display(Display<A>),
@@ -82,13 +82,13 @@ pub enum Operation<A: Arch, T> {
     Specific(T)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Data<A: Arch> {
     DefineSymbol(A::Address, Symbol),
     CodeComment(A::Address, String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Debug {
     ShowMaps,
     ShowModules,
@@ -96,7 +96,7 @@ pub enum Debug {
     ShowInfo
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Analysis<A: Arch> {
     ComputeSSAForm(A::Address),
     ControlFlowLinear(A::Address, A::Address),

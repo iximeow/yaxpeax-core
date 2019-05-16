@@ -1,6 +1,8 @@
 use yaxpeax_arch::{Arch, LengthedInstruction};
 use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operands, ConditionCode};
 
+use arch::{Symbol, SymbolQuery};
+
 use analyses::control_flow;
 
 use std::collections::HashMap;
@@ -22,6 +24,15 @@ pub struct ARMv7Data {
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<ARMv7 as Arch>::Address>,
     pub functions: HashMap<<ARMv7 as Arch>::Address, Function>
+}
+
+impl SymbolQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
+    fn symbol_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
+        None
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
+        None
+    }
 }
 
 impl Default for ARMv7Data {
