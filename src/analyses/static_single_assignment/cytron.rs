@@ -26,6 +26,11 @@ pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
 pub type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
 pub type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
 
+// Look. Just rewrite this as a graph (one day). Vertices are DFGRef, edges are data
+// dependences. Secondary graph with vertices (DFGRef | Address) where edges are Address -> DFGRef
+// (define) -> Address (use of DFGRef)
+//
+// in the mean time, DFGRef are growing an (Address, Location) field lol
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
     // TODO: Fairly sure these Rc<RefCell<...>> could all just be raw pointers
@@ -124,8 +129,7 @@ pub enum Direction {
 
 #[derive(Debug)]
 pub struct Value<A: SSAValues> {
-    // TODO: this should be removable...
-    // mapped pretty directly to a location both with values and phi
+    // Temporarily necessary to map from some use back to a def site
     pub location: A::Location,
     pub version: u32,
     pub data: Option<A::Data>

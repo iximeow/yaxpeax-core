@@ -9,6 +9,7 @@ use ContextRead;
 use ContextWrite;
 
 pub mod data_flow;
+pub mod evaluators;
 
 pub fn all_instruction_analyses(
     instr: &<x86_64Arch as Arch>::Instruction,
