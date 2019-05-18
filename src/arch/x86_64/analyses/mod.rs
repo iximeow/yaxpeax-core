@@ -5,8 +5,6 @@ use arch::x86_64::{Update, x86Update};
 use arch::x86_64;
 use arch::BaseUpdate;
 use analyses::xrefs::{RefType, RefAction};
-use ContextRead;
-use ContextWrite;
 
 pub mod data_flow;
 pub mod evaluators;
@@ -25,10 +23,10 @@ pub fn all_instruction_analyses(
 }
 
 pub fn compute_next_state(
-    instr: &<x86_64Arch as Arch>::Instruction,
-    address: <x86_64Arch as Arch>::Address,
+    _instr: &<x86_64Arch as Arch>::Instruction,
+    _address: <x86_64Arch as Arch>::Address,
     effect: &Effect<<x86_64Arch as Arch>::Address>,
-    ctxs: &x86_64::MergedContextTable
+    _ctxs: &x86_64::MergedContextTable
 ) -> Vec<(<x86_64Arch as Arch>::Address, Update)> {
     if !effect.is_stop() {
 //        let mut ctx = x86_64::compute_state(&instr, &ctxs.at(&address));
@@ -42,8 +40,8 @@ pub fn compute_next_state(
 pub fn find_function_hints(
     instr: &<x86_64Arch as Arch>::Instruction,
     address: <x86_64Arch as Arch>::Address,
-    effect: &Effect<<x86_64Arch as Arch>::Address>,
-    ctxs: &x86_64::MergedContextTable
+    _effect: &Effect<<x86_64Arch as Arch>::Address>,
+    _ctxs: &x86_64::MergedContextTable
 ) -> Vec<(<x86_64Arch as Arch>::Address, Update)> {
     if instr.opcode == Opcode::CALL {
         match instr.operands[0] {
@@ -66,8 +64,8 @@ pub fn find_function_hints(
 pub fn find_xrefs(
     instr: &<x86_64Arch as Arch>::Instruction,
     address: <x86_64Arch as Arch>::Address,
-    effect: &Effect<<x86_64Arch as Arch>::Address>,
-    ctxs: &x86_64::MergedContextTable
+    _effect: &Effect<<x86_64Arch as Arch>::Address>,
+    _ctxs: &x86_64::MergedContextTable
 ) -> Vec<(<x86_64Arch as Arch>::Address, Update)> {
     // TODO: how to deal with peephole-rewritten code?
     // instruction reordering or replacement, where there's a user or

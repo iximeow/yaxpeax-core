@@ -46,9 +46,6 @@ trait SSAAnalyses<A: Arch + SSAValues> {
 use yaxpeax_arch::Arch;
 use arch;
 use arch::Symbol;
-use analyses::control_flow::BasicBlock;
-
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Summary<A: Arch> {

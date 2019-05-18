@@ -1,11 +1,8 @@
 use std::hash::Hash;
 use std::rc::Rc;
-use std::fmt::Display;
 
 use termion::color;
 
-use ContextRead;
-use SyntaxedRender;
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual};
 use arch;
@@ -15,18 +12,18 @@ use arch::msp430;
 use arch::msp430::syntaxed_render;
 use arch::msp430::{PartialInstructionContext};
 use yaxpeax_msp430_mc::{Instruction, Opcode, Operand, Width, MSP430};
-use analyses::control_flow::{BasicBlock, ControlFlowGraph};
+use analyses::control_flow::ControlFlowGraph;
 use analyses::static_single_assignment::cytron::SSA;
 use std::collections::HashMap;
-use memory::{MemoryRepr, MemoryRange};
+use memory::MemoryRange;
 
 impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
     fn render_with_ssa_values(
         &self,
         address: <MSP430 as Arch>::Address,
-        colors: Option<&ColorSettings>,
+        _colors: Option<&ColorSettings>,
         context: Option<&T>,
-        function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
+        _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
         ssa: &SSA<MSP430>) -> String {
 
         use analyses::static_single_assignment::cytron::Direction;
@@ -51,7 +48,7 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
                 }
             }
 
-            fn numbered_register_name<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, reg: u8, context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
+            fn numbered_register_name<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, reg: u8, _context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
                 format!("{}_{}",
                     register_name(reg),
                     match ssa.values.get(&address).and_then(|addr_values| addr_values.get(&(msp430::Location::Register(reg), direction))) {
@@ -147,7 +144,7 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
                 let start_color = syntaxed_render::opcode_color(Opcode::JMP);
                 format!("{}{}{} {}", start_color, "br", color::Fg(color::Reset), render_operand(address, &src, context, ssa, Direction::Read))
             }
-            x @ _ => {
+            _ => {
                 let start_color = syntaxed_render::opcode_color(self.opcode);
                 let mut result = format!("{}{}{}{}", start_color, self.opcode, match self.op_width {
                     Width::W => "",
@@ -206,15 +203,15 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
 }
 
 impl <T: std::fmt::Write> ShowContextual<u16, msp430::MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: <MSP430 as Arch>::Address, context: Option<&msp430::MergedContextTable>, out: &mut T) -> std::fmt::Result {
-        let mut ctxs: [Option<String>; 3] = [None, None, None];
+    fn contextualize(&self, colors: Option<&ColorSettings>, address: <MSP430 as Arch>::Address, _context: Option<&msp430::MergedContextTable>, out: &mut T) -> std::fmt::Result {
+        let ctxs: [Option<String>; 3] = [None, None, None];
         self.contextualize(colors, address, Some(&ctxs[..]), out)
     }
 }
 impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContext {
     fn render_frame<Data: Iterator<Item=u8>>(
         addr: u16,
-        instr: &<MSP430 as Arch>::Instruction,
+        _instr: &<MSP430 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
         function_table: &HashMap<u16, ()>
@@ -227,7 +224,7 @@ impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContex
                 color::Fg(&color::Reset as &color::Color)
             );
         }
-        if let Some(fn_dec) = function_table.get(&addr) {
+        if let Some(_fn_dec) = function_table.get(&addr) {
             println!("      {}{}{}",
                 color::Fg(&color::LightYellow as &color::Color),
                 "___",
@@ -304,10 +301,10 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
 }
 
 pub fn show_functions<M: MemoryRange<<MSP430 as Arch>::Address>>(
-    data: &[u8],
-    user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
-    cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
-    addr: <MSP430 as Arch>::Address) {
+    _data: &[u8],
+    _user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
+    _cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
+    _addr: <MSP430 as Arch>::Address) {
 
 }
 

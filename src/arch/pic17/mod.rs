@@ -11,9 +11,6 @@ use arch::{Symbol, SymbolQuery};
 
 use std::collections::HashMap;
 
-use petgraph;
-use petgraph::graphmap::GraphMap;
-
 use num_traits::Zero;
 
 use ContextRead;
@@ -34,10 +31,10 @@ pub struct PIC17Data {
 }
 
 impl SymbolQuery<<PIC17 as Arch>::Address> for PIC17Data {
-    fn symbol_for(&self, addr: <PIC17 as Arch>::Address) -> Option<&Symbol> {
+    fn symbol_for(&self, _addr: <PIC17 as Arch>::Address) -> Option<&Symbol> {
         None
     }
-    fn symbol_addr(&self, sym: &Symbol) -> Option<<PIC17 as Arch>::Address> {
+    fn symbol_addr(&self, _sym: &Symbol) -> Option<<PIC17 as Arch>::Address> {
         None
     }
 }
@@ -431,7 +428,7 @@ impl ContextRead<PIC17, MergedContext> for MergedContextTable {
 }
 
 impl ContextWrite<PIC17, StateUpdate> for MergedContextTable {
-    fn put(&mut self, address: <PIC17 as Arch>::Address, update: StateUpdate) { }
+    fn put(&mut self, _address: <PIC17 as Arch>::Address, _update: StateUpdate) { }
 }
 
 #[derive(Debug)]
@@ -577,7 +574,7 @@ impl Function {
 }
 
 impl PartialInstructionContext for PartialContext {
-    fn memory(&self, addr: u16) -> Option<u8> { None }
+    fn memory(&self, _addr: u16) -> Option<u8> { None }
     fn bsr_sfr(&self) -> Option<u8> { self.bsr_sfr }
     fn bsr_gpr(&self) -> Option<u8> { self.bsr_gpr }
     fn pclath(&self) -> Option<u8> { self.pclath }

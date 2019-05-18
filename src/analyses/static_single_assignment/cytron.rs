@@ -7,8 +7,6 @@ use petgraph::visit::Bfs;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::cell::Ref;
-use std::cell::Cell;
 
 use std::fmt::Debug;
 
@@ -16,9 +14,8 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
-use std::borrow::Borrow;
 
 use serialize::{Memoable, Memos, MemoizingSerializer};
 
@@ -152,7 +149,6 @@ use std::hash::Hasher;
 impl <A: SSAValues> Hash for HashedValue<DFGRef<A>> where Value<A>: Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let v: &RefCell<Value<A>> = &*self.value;
-        let v2 = v.borrow();
         (v.borrow()).hash(state);
     }
 }
@@ -287,7 +283,7 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
             for pred in preds {
                 let mut v = pred;
                 match idom.immediate_dominator(v) {
-                    Some(value) => (),
+                    Some(_value) => (),
                     None => continue // this predecessor is not reachable from start
                 };
                 while v != u_idom {
@@ -428,7 +424,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         // for each statement in block {
         // also check phis at start of the block...
         if let Some(phis) = phi.get(&block.start) {
-            for (loc, data) in phis {
+            for (loc, _data) in phis {
                 // these are very clear reads vs assignments:
                 let widening = loc.maximal_alias_of();
                 let i = C[&widening];
@@ -485,7 +481,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
 //            for each phi in Y {
             if let Some(block_phis) = phi.get_mut(&Y) {
 //                for loc in phi.get(Y)
-                for (loc, (dest, args)) in block_phis.iter_mut() {
+                for (loc, (_dest, args)) in block_phis.iter_mut() {
                     let widening = loc.maximal_alias_of();
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough

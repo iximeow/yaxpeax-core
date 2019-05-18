@@ -5,7 +5,6 @@ use arch::pic17::cpu::try_debank;
 use arch::pic17::StateUpdate;
 use arch::pic17;
 use ContextRead;
-use ContextWrite;
 
 pub fn all_instruction_analyses(
     instr: &<PIC17 as Arch>::Instruction,
@@ -38,7 +37,7 @@ pub fn compute_next_state(
         ctx_table.computed_contexts.insert(address + instr.len(), ctx);
     }
     */
-    let mut ctx = pic17::compute_state(&instr, &ctxs.at(&address));
+    let ctx = pic17::compute_state(&instr, &ctxs.at(&address));
 
     if !effect.is_stop() {
         vec![(address + instr.len(), pic17::StateUpdate::FullContext(ctx))]
@@ -48,11 +47,12 @@ pub fn compute_next_state(
     }
 }
 
+// TODO: unbreak this
 pub fn collect_function_hint(
-    instr: &<PIC17 as Arch>::Instruction,
-    address: <PIC17 as Arch>::Address,
-    effect: &Effect<<PIC17 as Arch>::Address>,
-    ctxs: &pic17::MergedContextTable
+    _instr: &<PIC17 as Arch>::Instruction,
+    _address: <PIC17 as Arch>::Address,
+    _effect: &Effect<<PIC17 as Arch>::Address>,
+    _ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     vec![]
     /*
@@ -89,7 +89,7 @@ pub fn collect_function_hint(
 pub fn compute_bit_name(
     instr: &<PIC17 as Arch>::Instruction,
     address: <PIC17 as Arch>::Address,
-    effect: &Effect<<PIC17 as Arch>::Address>,
+    _effect: &Effect<<PIC17 as Arch>::Address>,
     ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
     let comment = match instr.opcode {

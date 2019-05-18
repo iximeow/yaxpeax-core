@@ -9,15 +9,11 @@ pub mod x86_64;
 pub mod display;
 pub mod interface;
 
-use std::collections::VecDeque;
-
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
-
-use serde::{Serialize, Deserialize};
 
 pub trait SymbolQuery<A: Address> {
     fn symbol_for(&self, addr: A) -> Option<&Symbol>;
@@ -100,6 +96,7 @@ pub trait OperandDefinitions<C> {
 }
 
 #[derive(Debug)]
+#[allow(non_camel_case_types)]
 pub enum Device {
     PIC24(pic24::CPU),
     PIC18(pic18::cpu::CPU),
@@ -125,6 +122,7 @@ impl From<Device> for ISA {
 }
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
+#[allow(non_camel_case_types)]
 pub enum ISA {
     PIC17,
     PIC18,

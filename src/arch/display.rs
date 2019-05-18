@@ -1,11 +1,10 @@
-use yaxpeax_arch::{Arch, Address, AddressDisplay, ColorSettings, Decodable, LengthedInstruction, ShowContextual};
+use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decodable, LengthedInstruction, ShowContextual};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
 use ContextRead;
 use arch::InstructionSpan;
 use memory::{MemoryRepr, MemoryRange};
 use num_traits::Zero;
-use std::fmt::Display;
 
 pub trait BaseDisplay<F, U> where
     Self: Arch,

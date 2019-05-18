@@ -1,5 +1,5 @@
 use yaxpeax_arch::Arch;
-use analyses::static_single_assignment::cytron::{SSA, SSAValues, Value};
+use analyses::static_single_assignment::cytron::{SSA, SSAValues};
 
 pub trait Domain {
     type Value;

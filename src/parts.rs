@@ -8,6 +8,7 @@ use arch::pic24;
 use arch::msp430;
 use arch::x86_64;
 
+#[allow(dead_code)]
 pub struct PartConfig {
     pub isa: ISA,
     program_size: u32,

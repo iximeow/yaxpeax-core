@@ -7,7 +7,7 @@ use debug;
 use debug::DebugTarget;
 use arch::pic18;
 use yaxpeax_pic18::consts::SFRS;
-use yaxpeax_pic18::{PIC18, Instruction, Operand, Opcode};
+use yaxpeax_pic18::{PIC18, Operand, Opcode};
 
 pub struct PIC18DebugTarget<'a> {
     pub target: &'a mut pic18::cpu::CPU,
@@ -596,7 +596,7 @@ impl CPU {
         };
 
         match config {
-            Some(config) => {
+            Some(_config) => {
                 println!("WARN: ignoring config");
             },
             None => {

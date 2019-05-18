@@ -1,19 +1,14 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::fmt::Display;
-use std::rc::Rc;
 
 use termion::color;
 
 use num_traits::Zero;
 
-use SyntaxedRender;
-use SyntaxedSSARender;
 use memory::MemoryRepr;
 use yaxpeax_arch::{ColorSettings, Colorize, Colored};
-use yaxpeax_arch::{AddressDisplay, Arch, Decodable, LengthedInstruction, ShowContextual, YaxColors};
+use yaxpeax_arch::{AddressDisplay, Arch, Decodable, LengthedInstruction, YaxColors};
 use yaxpeax_arch::display::*;
-use arch;
 use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::x86_64;
@@ -22,8 +17,7 @@ use arch::x86_64::analyses::data_flow::Location;
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
-use analyses::control_flow;
-use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
+use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::cytron::{Direction, SSA};
 
 use memory::MemoryRange;
@@ -35,7 +29,7 @@ impl <T> BaseDisplay<x86_64::Function, T> for x86_64Arch {
         addr: <x86_64Arch as Arch>::Address,
         instr: &<x86_64Arch as Arch>::Instruction,
         bytes: &mut Data,
-        ctx: Option<&T>,
+        _ctx: Option<&T>,
         function_table: &HashMap<<x86_64Arch as Arch>::Address, x86_64::Function>
     ) {
         /*
@@ -48,7 +42,7 @@ impl <T> BaseDisplay<x86_64::Function, T> for x86_64Arch {
             );
         }
         */
-        if let Some(fn_dec) = function_table.get(&addr) {
+        if let Some(_fn_dec) = function_table.get(&addr) {
             println!("      {}{}{}",
                 color::Fg(&color::LightYellow as &color::Color),
                 "<function>",
@@ -338,28 +332,28 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 match &self.instr.operands[0] {
                     Operand::ImmediateI8(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
+                        let text = self.contexts.and_then(|_context| {
                             render_function(addr, self)
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI16(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
+                        let text = self.contexts.and_then(|_context| {
                             render_function(addr, self)
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI32(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
+                        let text = self.contexts.and_then(|_context| {
                             render_function(addr, self)
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI64(i) => {
                         let addr = (*i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
+                        let text = self.contexts.and_then(|_context| {
                             render_function(addr, self)
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
@@ -479,8 +473,8 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::RETURN => {
                 match &self.instr.operands[0] {
                     Operand::Nothing => { return Ok(()); },
-                    op @ _ => {
-                        write!(fmt, " ");
+                    _ => {
+                        write!(fmt, " ")?;
                         contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)
                    }
                 }
@@ -744,7 +738,7 @@ pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<
             }
         }
         let next: Vec<<x86_64Arch as Arch>::Address> = cfg.destinations(*blockaddr);
-        for n in next {
+        for _n in next {
 //            println!("  -> {}", n.stringy());
         }
 //        println!("  ------------");

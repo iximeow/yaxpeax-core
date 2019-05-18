@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
 
 use memory::repr::FlatMemoryRepr;
 use memory::PatchyMemoryRepr;
@@ -22,7 +21,6 @@ fn read_byte<'a, T: Iterator<Item=&'a u8>>(data: T) -> Result<u8, String> {
 }
 
 pub fn from_hex(data: &Vec<u8>) -> Result<HashMap<u8, FlatMemoryRepr>, String> {
-    let result: HashMap<u8, FlatMemoryRepr> = HashMap::new();
     let lines = data.split(|x| *x == ('\n' as u8));
     let parsed_lines: Result<Vec<(u8, u16, Vec<u8>)>, String> = lines.enumerate().filter(|(_, line)| line.len() != 0).map(|(idx, line)| {
         if line.len() < 3 {

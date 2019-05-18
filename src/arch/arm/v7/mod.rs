@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use num_traits::Zero;
-use serde::{Deserialize, Serialize};
 use ContextRead;
 use ContextWrite;
 
@@ -27,10 +26,10 @@ pub struct ARMv7Data {
 }
 
 impl SymbolQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
-    fn symbol_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
+    fn symbol_for(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
         None
     }
-    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
+    fn symbol_addr(&self, _sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
         None
     }
 }
@@ -46,10 +45,11 @@ impl Default for ARMv7Data {
     }
 }
 
+#[allow(non_snake_case)]
 impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
     where T: PartialInstructionContext {
 
-    fn control_flow(&self, ctx: Option<&T>) -> control_flow::Effect<<ARMv7 as Arch>::Address> {
+    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<ARMv7 as Arch>::Address> {
         let conditional = self.condition == ConditionCode::AL;
         match self.opcode {
             Opcode::B |
@@ -170,7 +170,7 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
             Opcode::LDRBT(_) => {
                 let stop = match self.operands {
                     // TODO: verify
-                    Operands::ThreeOperandWithShift(Rn, Rd, _, _) => {
+                    Operands::ThreeOperandWithShift(_Rn, Rd, _, _) => {
                         Rd == 15
                     },
                     _ => { unreachable!(); }
@@ -193,7 +193,7 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
             Opcode::SWP |
             Opcode::SWPB => {
                 let stop = match self.operands {
-                    Operands::ThreeOperand(Rn, Rd, Offset) => {
+                    Operands::ThreeOperand(Rn, _Rd, _Offset) => {
                         Rn == 15
                     },
                     _ => { unreachable!() }
@@ -313,12 +313,12 @@ impl ContextRead<ARMv7, MergedContext> for MergedContextTable {
 }
 
 impl ContextWrite<ARMv7, /* Update */ ()> for MergedContextTable {
-    fn put(&mut self, address: <ARMv7 as Arch>::Address, update: ()) {
+    fn put(&mut self, _address: <ARMv7 as Arch>::Address, _update: ()) {
         // do nothing
     }
 }
 
-trait PartialInstructionContext {
+pub trait PartialInstructionContext {
     fn indicator_tag(&self) -> &'static str;
 }
 

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color> {
     match opcode {
-        Opcode::Invalid(u16) => { &color::Fg(&color::Red) }
+        Opcode::Invalid(_) => { &color::Fg(&color::Red) }
         Opcode::CALL |
         Opcode::RETI => { &color::Fg(&color::LightGreen) }
         Opcode::JNE |
@@ -37,7 +37,7 @@ pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color>
 
 use arch::msp430::PartialInstructionContext;
 impl <T> ::SyntaxedRender<u16, T, ()> for Instruction where T: PartialInstructionContext {
-    fn render(&self, context: Option<&T>, function_table: &HashMap<u16, ()>) -> String {
+    fn render(&self, context: Option<&T>, _function_table: &HashMap<u16, ()>) -> String {
         fn render_operand<T: PartialInstructionContext>(operand: &Operand, context: Option<&T>) -> String {
             fn signed_hex(num: i16) -> String {
                 if num >= 0 {
@@ -158,7 +158,7 @@ impl <T> ::SyntaxedRender<u16, T, ()> for Instruction where T: PartialInstructio
                 let start_color = opcode_color(Opcode::JMP);
                 format!("{}{}{} {}", start_color, "br", color::Fg(color::Reset), render_operand(&src, context))
             }
-            x @ _ => {
+            _ => {
                 let start_color = opcode_color(self.opcode);
                 let mut result = format!("{}{}{}{}", start_color, self.opcode, match self.op_width {
                     Width::W => "",

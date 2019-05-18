@@ -17,6 +17,8 @@ use memory::MemoryRange;
 
 use serialize::GraphSerializer;
 
+use serde::Serialize;
+
 use serde::ser::SerializeStruct;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Effect<Addr> {
@@ -68,7 +70,6 @@ pub trait Determinant<T, Addr> {
     fn control_flow(&self, Option<&T>) -> Effect<Addr>;
 }
 
-use serde::{Serialize, Deserialize};
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct BasicBlock<Addr> where Addr: Copy + Clone {
     pub start: Addr,
@@ -322,7 +323,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             // the basic block.
             if effect.dest.is_some() {
                 let dest_addr = next;
-                if (add_split(self, dest_addr, true)) { // TODO: t.len());
+                if add_split(self, dest_addr, true) { // TODO: t.len());
                 }
                     result.push(dest_addr);
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
@@ -492,7 +493,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
 
 //                                        v-- (Addr, T). this probably will have to go in favor of Vec<u8> and T:
 //                                        Decodable?
-pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A::Instruction)>, contexts: &'a UTable, start: u16) -> ControlFlowGraph<A::Address>
+pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A::Instruction)>, contexts: &'a UTable, _start: u16) -> ControlFlowGraph<A::Address>
     where
         A::Instruction: Determinant<U, A::Address> + LengthedInstruction<Unit=A::Address>,
         A::Address: petgraph::graphmap::NodeTrait,

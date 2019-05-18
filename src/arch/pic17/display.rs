@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::fmt::Display;
 
 use termion::color;
 
-use SyntaxedRender;
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction};
 use arch;
@@ -12,18 +10,19 @@ use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::pic17;
 use arch::pic17::{ContextRead, PartialInstructionContext};
-use yaxpeax_pic17::{Instruction, Opcode, Operand, PIC17};
+use yaxpeax_pic17::{Opcode, Operand, PIC17};
 use analyses::control_flow;
-use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
+use analyses::control_flow::{ControlFlowGraph, Determinant};
 use memory::MemoryRange;
 
 use analyses::static_single_assignment::cytron::SSA;
 
+// TODO: should this whole thing be deleted lol
 impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruction where T: pic17::PartialInstructionContext {
     fn render_with_ssa_values(
         &self,
         address: <PIC17 as Arch>::Address,
-        colors: Option<&ColorSettings>,
+        _colors: Option<&ColorSettings>,
         context: Option<&T>,
         function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
         ssa: &SSA<PIC17>) -> String {
@@ -42,30 +41,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
         }
 
         use analyses::static_single_assignment::cytron::Direction;
-        fn render_operand<T: PartialInstructionContext>(address: <PIC17 as Arch>::Address, operand: &Operand, context: Option<&T>, ssa: &SSA<PIC17>, direction: Direction) -> String {
-            fn signed_hex(num: i16) -> String {
-                if num >= 0 {
-                    format!("+{:#x}", num)
-                } else {
-                    format!("-{:#x}", -num)
-                }
-            }
-            fn register_name(num: u8) -> String {
-                format!("{}", num)
-            }
-
-            fn numbered_register_name<T: PartialInstructionContext>(address: <PIC17 as Arch>::Address, reg: u8, context: Option<&T>, ssa: &SSA<PIC17>, direction: Direction) -> String {
-                format!("{}_ERR_UNIMPLEMENTED", //{}",
-                    register_name(reg)
-                    /*
-                    match ssa.values.get(&address).and_then(|addr_values| addr_values.get(&(pic17::Location::Register(reg), direction))) {
-                        Some(data) => format!("{}", data.borrow().version()),
-                        None => format!("ERR_{:?}", direction)
-                    }
-                    */
-                )
-            }
-
+        fn render_operand<T: PartialInstructionContext>(_address: <PIC17 as Arch>::Address, operand: &Operand, context: Option<&T>, _ssa: &SSA<PIC17>, _direction: Direction) -> String {
             match operand {
                 Operand::ImmediateU8(i) => {
                     format!("#{:02x}", i)
@@ -165,7 +141,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
 impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstructionContext {
     fn render_frame<Data: Iterator<Item=u8>>(
         addr: u16,
-        instr: &<PIC17 as Arch>::Instruction,
+        _instr: &<PIC17 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
         function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
@@ -247,10 +223,10 @@ pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
 }
 
 pub fn show_functions(
-    data: &[u8],
-    ctx: &pic17::MergedContextTable,
-    cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
-    addr: <PIC17 as Arch>::Address) {
+    _data: &[u8],
+    _ctx: &pic17::MergedContextTable,
+    _cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
+    _addr: <PIC17 as Arch>::Address) {
 
 }
 
@@ -287,7 +263,6 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
-            let mut computed = pic17::ComputedContext::new();
             PIC17::render_frame(
                 address,
                 instr,

@@ -2,8 +2,6 @@ use arch::pic17::PartialInstructionContext;
 use arch::pic17::SFRS;
 use yaxpeax_pic17::{Instruction, Opcode, Operand};
 
-use serde::{Serialize, Deserialize};
-
 pub fn updates_of<T>(instr: &Instruction, ctx: &T) -> Vec<Update> where T: PartialInstructionContext {
     fn register_updates<T>(op: Operand, ctx: &T) -> Vec<Update> where T: PartialInstructionContext {
         use arch::pic17::cpu::try_debank;

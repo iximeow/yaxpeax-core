@@ -7,7 +7,6 @@ use std::ops::Range;
 use yaxpeax_arch::{Address, AddressDisplay};
 use memory::repr::{FlatMemoryRepr, ReadCursor, UnboundedCursor};
 use memory::{LayoutError, MemoryRange, MemoryRepr, PatchyMemoryRepr};
-use debug::Peek;
 use arch::ISA;
 
 #[derive(Debug)]
@@ -252,10 +251,6 @@ fn map_elf_machine(machine: u16) -> ISAHint {
             ISAHint::Hint(ISA::MIPS)
         },
         */
-        62 => {
-            // IMAGE_FILE_MACHINE_AMD64
-            ISAHint::Hint(ISA::x86_64)
-        },
         183 => { // this is from osdev.org, because i can't find the actual header!
             ISAHint::Hint(ISA::AArch64)
         },
@@ -406,7 +401,7 @@ fn map_pe_machine(machine: u16) -> ISAHint {
 }
 
 impl ModuleInfo {
-    pub fn from_goblin(obj: &goblin::Object, data: &[u8]) -> Option<ModuleInfo> {
+    pub fn from_goblin(obj: &goblin::Object, _data: &[u8]) -> Option<ModuleInfo> {
         match obj {
             Object::PE(pe) => {
                 // From "winnt.h" .. kind of.
@@ -600,7 +595,7 @@ impl ModuleData {
                     module.segments.push(new_section);
                 }
                 match &module.module_info {
-                    ModuleInfo::PE(_, _, _, _, _, ref imports, ref exports, _) => {
+                    ModuleInfo::PE(_, _, _, _, _, ref imports, ref _exports, _) => {
                         for i in imports.iter() {
                             println!("import: {:?}", i);
                         }
@@ -609,10 +604,10 @@ impl ModuleData {
                 }
                 Some(module)
             },
-            Ok(Object::Mach(mach)) => {
+            Ok(Object::Mach(_mach)) => {
                 panic!("UHHHHH  IM SCARED");
             },
-            Ok(Object::Archive(archive)) => {
+            Ok(Object::Archive(_archive)) => {
                 panic!("u hhh h h hh h  H H H H H");
             },
             Ok(Object::Unknown(magic)) => {
@@ -626,7 +621,6 @@ impl ModuleData {
         }
     }
     fn segment_for<A: Address>(&self, addr: A) -> Option<&Segment> {
-        let linear = addr.to_linear();
         for segment in self.segments.iter() {
             if segment.contains(addr) {
                 return Some(segment);
@@ -634,7 +628,8 @@ impl ModuleData {
         }
         None
     }
-    fn segment_after(&self, segment: &Segment) -> Option<&Segment> {
+    #[allow(dead_code)]
+    fn segment_after(&self, _segment: &Segment) -> Option<&Segment> {
         unreachable!()
     }
 }
@@ -679,7 +674,7 @@ impl <A: Address> MemoryRange<A> for ModuleData {
         })
     }
     fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
-        self.segment_for(start).map(|segment| UnboundedCursor::from(self, start))
+        self.segment_for(start).map(|_segment| UnboundedCursor::from(self, start))
     }
 }
 
@@ -720,13 +715,14 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
 }
 
 impl <A: Address> PatchyMemoryRepr<A> for ProcessMemoryRepr {
-    fn add(&mut self, data: Vec<u8>, addr: A) -> Result<(), LayoutError> {
+    fn add(&mut self, _data: Vec<u8>, _addr: A) -> Result<(), LayoutError> {
         Err(LayoutError::Unsupported)
     }
 }
 
 impl <A: Address> MemoryRange<A> for ProcessMemoryRepr {
-    fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
+    // TODO:
+    fn range<'a>(&'a self, _range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
         None
         /*
         if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
@@ -740,7 +736,8 @@ impl <A: Address> MemoryRange<A> for ProcessMemoryRepr {
         }
         */
     }
-    fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
+    // TODO:
+    fn range_from<'a>(&'a self, _start: A) -> Option<UnboundedCursor<'a, A, Self>> {
         None
         /*
         if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {

@@ -31,7 +31,7 @@ impl <'a, 'b, M: MemoryRepr<usize>> MemoryRepr<u16> for MemoryReprAdapter<'a, us
     }
     fn to_flat(self) -> Option<FlatMemoryRepr> { None }
     fn module_info(&self) -> Option<&ModuleInfo> { self.repr.module_info() }
-    fn module_for(&self, addr: u16) -> Option<&MemoryRepr<u16>> {
+    fn module_for(&self, _addr: u16) -> Option<&MemoryRepr<u16>> {
         None
         // TODO: figure out if it's possible to write this?
         // this really messes up stuff...
@@ -57,7 +57,7 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u32> for MemoryReprAdapter<'a, usize,
     }
     fn to_flat(self) -> Option<FlatMemoryRepr> { None }
     fn module_info(&self) -> Option<&ModuleInfo> { self.repr.module_info() }
-    fn module_for(&self, addr: u32) -> Option<&MemoryRepr<u32>> {
+    fn module_for(&self, _addr: u32) -> Option<&MemoryRepr<u32>> {
         None
         // TODO: figure out if it's possible to write this?
         // self.repr.module_for((self.f)(addr))
@@ -83,7 +83,7 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u64> for MemoryReprAdapter<'a, usize,
     }
     fn to_flat(self) -> Option<FlatMemoryRepr> { None }
     fn module_info(&self) -> Option<&ModuleInfo> { self.repr.module_info() }
-    fn module_for(&self, addr: u64) -> Option<&MemoryRepr<u64>> {
+    fn module_for(&self, _addr: u64) -> Option<&MemoryRepr<u64>> {
         None
         // TODO: figure out if it's possible to write this?
         // self.repr.module_for((self.f)(addr))

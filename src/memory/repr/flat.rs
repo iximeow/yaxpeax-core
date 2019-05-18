@@ -39,7 +39,7 @@ impl <A: Address> MemoryRepr<A> for FlatMemoryRepr {
         Some(self)
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, _addr: A) -> Option<&MemoryRepr<A>> {
         Some(self)
     }
     fn name(&self) -> &str {

@@ -5,11 +5,6 @@ pub mod syntaxed_render;
 
 use std::rc::Rc;
 use std::collections::HashMap;
-use std::fs::OpenOptions;
-use std::path::Path;
-use serde_json;
-use serde;
-use serde::{Deserialize, Serialize};
 use serialize::Memoable;
 
 use num_traits::Zero;
@@ -257,7 +252,7 @@ impl MergedContextTable {
 }
 
 impl ContextWrite<MSP430, StateUpdate> for MergedContextTable {
-    fn put(&mut self, address: <MSP430 as Arch>::Address, update: StateUpdate) {
+    fn put(&mut self, address: <MSP430 as Arch>::Address, _update: StateUpdate) {
         self.user_contexts.remove(&address);
     }
 }
@@ -307,14 +302,15 @@ pub enum Location {
 const PC: Location = Location::Register(0);
 const SP: Location = Location::Register(1);
 const SR: Location = Location::Register(2);
+#[allow(dead_code)]
 const CG: Location = Location::Register(3);
-const WriteAllFlags: [(Option<Location>, Direction); 4] = [
+const WRITE_ALL_FLAGS: [(Option<Location>, Direction); 4] = [
     (Some(Location::FlagZ), Direction::Write),
     (Some(Location::FlagN), Direction::Write),
     (Some(Location::FlagC), Direction::Write),
     (Some(Location::FlagV), Direction::Write)
 ];
-const ReadAllFlags: [(Option<Location>, Direction); 4] = [
+const READ_ALL_FLAGS: [(Option<Location>, Direction); 4] = [
     (Some(Location::FlagZ), Direction::Read),
     (Some(Location::FlagN), Direction::Read),
     (Some(Location::FlagC), Direction::Read),
@@ -354,12 +350,6 @@ impl SSAValues for MSP430 {
     type Data = u8;
 
     fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
-        use arch::msp430::MergedContext;
-        let ctx = MergedContext {
-            computed: None,
-            user: None
-        };
-
         use yaxpeax_msp430_mc::Width;
         fn decompose_operand(op: Operand, width: Width, direction: Direction) -> Vec<(Option<Location>, Direction)> {
             match op {
@@ -377,7 +367,7 @@ impl SSAValues for MSP430 {
                             vec![(Some(Location::RegisterB(x)), direction)],
                     }
                 },
-                Operand::Indexed(reg, offset) => {
+                Operand::Indexed(reg, _) => {
                     vec![(Some(Location::Register(reg)), Direction::Read), (Some(Location::MemoryAny), direction)]
                 },
                 Operand::RegisterIndirect(reg) => {
@@ -390,13 +380,13 @@ impl SSAValues for MSP430 {
                         (Some(Location::MemoryAny), direction)
                     ]
                 },
-                Operand::Symbolic(offset) => {
+                Operand::Symbolic(_) => {
                     vec![(Some(PC), Direction::Read), (Some(Location::MemoryAny), direction)]
                 },
-                Operand::Absolute(addr) => {
+                Operand::Absolute(_addr) => {
                     vec![(Some(Location::MemoryAny), direction)]
                 },
-                Operand::Offset(offset) => {
+                Operand::Offset(_offset) => {
                     // Offset itself has no reads/writes
                     // it only is used in jmp which writes to PC
                     // but that's handled elsewhere.
@@ -405,7 +395,6 @@ impl SSAValues for MSP430 {
             }
         }
 
-        let mut result: Vec<(Option<Self::Location>, Direction)> = Vec::new();
         match instr.opcode {
             Opcode::Invalid(_) => {
                 vec![]
@@ -431,7 +420,7 @@ impl SSAValues for MSP430 {
             Opcode::SXT => {
                 let mut result = decompose_operand(instr.operands[0], instr.op_width, Direction::Read);
                 result.append(&mut decompose_operand(instr.operands[0], instr.op_width, Direction::Write));
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             },
             Opcode::PUSH => {
@@ -456,7 +445,7 @@ impl SSAValues for MSP430 {
                 result.push((Some(PC), Direction::Write));
                 result.push((Some(SP), Direction::Read));
                 result.push((Some(SP), Direction::Write));
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             },
             Opcode::JNE | Opcode::JEQ => {
@@ -498,7 +487,7 @@ impl SSAValues for MSP430 {
                 let mut result = decompose_operand(instr.operands[0], instr.op_width, Direction::Read);
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Read));
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Write));
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             },
             Opcode::ADDC |
@@ -506,8 +495,8 @@ impl SSAValues for MSP430 {
                 let mut result = decompose_operand(instr.operands[0], instr.op_width, Direction::Read);
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Read));
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Write));
-                result.extend(ReadAllFlags.iter().cloned());
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(READ_ALL_FLAGS.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             }
             Opcode::MOV => {
@@ -519,7 +508,7 @@ impl SSAValues for MSP430 {
                 let mut result = decompose_operand(instr.operands[0], instr.op_width, Direction::Read);
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Read));
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Write));
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             }
             Opcode::BIC |
@@ -532,7 +521,7 @@ impl SSAValues for MSP430 {
             Opcode::CMP => {
                 let mut result = decompose_operand(instr.operands[0], instr.op_width, Direction::Read);
                 result.append(&mut decompose_operand(instr.operands[1], instr.op_width, Direction::Read));
-                result.extend(WriteAllFlags.iter().cloned());
+                result.extend(WRITE_ALL_FLAGS.iter().cloned());
                 result
             }
         }

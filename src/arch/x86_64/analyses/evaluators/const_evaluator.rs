@@ -2,7 +2,7 @@ use yaxpeax_arch::Arch;
 use yaxpeax_x86::{x86_64, Operand, Opcode};
 use arch::x86_64::x86_64Data;
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
-use analyses::static_single_assignment::cytron::{SSA, SSAValues, Value};
+use analyses::static_single_assignment::cytron::SSA;
 
 struct ConcreteDomain;
 
@@ -19,7 +19,7 @@ impl Domain for ConcreteDomain {
 }
 
 impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
-    fn evaluate(instr: <x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: x86_64Data) {
+    fn evaluate(instr: <x86_64 as Arch>::Instruction, _addr: <x86_64 as Arch>::Address, _dfg: &SSA<x86_64>, _contexts: x86_64Data) {
         match instr.opcode {
             Opcode::XOR => {
                 match instr.operands {

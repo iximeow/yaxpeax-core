@@ -1,9 +1,10 @@
 use nix::sys::ptrace;
 use nix::libc::c_void;
+// Need to ptrace directly because nix doesn't have nice wrappers for some bits i want
+#[allow(deprecated)]
 use nix::sys::ptrace::ptrace;
 use nix::sys::ptrace::Request;
 use nix::sys::wait::WaitStatus;
-use nix::sys::signal::Signal;
 use proc_maps::{get_process_maps, MapRange};
 use debug::{DebugTarget, RunResult, Peek};
 
@@ -11,7 +12,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::io;
 
-use yaxpeax_arch::{Arch, AddressDisplay};
+use yaxpeax_arch::Arch;
 use analyses::control_flow;
 use analyses::static_single_assignment::cytron::SSA;
 use analyses::xrefs;
@@ -32,6 +33,7 @@ pub mod cpu;
 pub mod display;
 
 #[derive(Serialize)]
+#[allow(non_camel_case_types)]
 pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -128,6 +130,7 @@ trait PartialInstructionContext {
 pub type Update = BaseUpdate<x86Update>;
 
 #[derive(Debug)]
+#[allow(non_camel_case_types)]
 pub enum x86Update {
     AddXRef(xrefs::RefType, xrefs::RefAction, <x86_64 as Arch>::Address),
     RemoveXRef(xrefs::RefType, xrefs::RefAction, <x86_64 as Arch>::Address),
@@ -317,7 +320,7 @@ impl ProcessMemory {
     pub fn get_bytes(&mut self, at: u64, size: u64) -> Vec<u8> {
         self.mem_handle.seek(
             SeekFrom::Start(at)
-        );
+        ).unwrap();
 
         let mut data = vec![0; size as usize];
 
@@ -378,6 +381,8 @@ impl DebugeeX86_64 {
     pub fn regs(&mut self) -> Result<Regs, String> {
         unsafe {
             let mut regs: Regs = std::mem::uninitialized();
+            // should just submit a PR to wrap PTRACE_GETREGS, really
+            #[allow(deprecated)]
             match ptrace(
                 Request::PTRACE_GETREGS,
                 self.pid,
@@ -397,18 +402,16 @@ impl DebugeeX86_64 {
     }
 
     pub fn bytes_at_rip(&mut self) -> [u8; 16] {
-        unsafe {
-            let rip = self.regs().unwrap().rip;
-            let low: u64 = ptrace::read(self.pid, rip as *mut c_void).unwrap() as u64;
-            let high: u64 = ptrace::read(self.pid, (rip + 8) as *mut c_void).unwrap() as u64;
+        let rip = self.regs().unwrap().rip;
+        let low: u64 = ptrace::read(self.pid, rip as *mut c_void).unwrap() as u64;
+        let high: u64 = ptrace::read(self.pid, (rip + 8) as *mut c_void).unwrap() as u64;
 
-            [
-                (low & 0xff) as u8, ((low >> 8) & 0xff) as u8, ((low >> 16) & 0xff) as u8, ((low >> 24) & 0xff) as u8,
-                ((low >> 32) & 0xff) as u8, ((low >> 40) & 0xff) as u8, ((low >> 48) & 0xff) as u8, ((low >> 56) & 0xff) as u8,
-                (high & 0xff) as u8, ((high >> 8) & 0xff) as u8, ((high >> 16) & 0xff) as u8, ((high >> 24) & 0xff) as u8,
-                ((high >> 32) & 0xff) as u8, ((high >> 40) & 0xff) as u8, ((high >> 48) & 0xff) as u8, ((high >> 56) & 0xff) as u8
-            ]
-        }
+        [
+            (low & 0xff) as u8, ((low >> 8) & 0xff) as u8, ((low >> 16) & 0xff) as u8, ((low >> 24) & 0xff) as u8,
+            ((low >> 32) & 0xff) as u8, ((low >> 40) & 0xff) as u8, ((low >> 48) & 0xff) as u8, ((low >> 56) & 0xff) as u8,
+            (high & 0xff) as u8, ((high >> 8) & 0xff) as u8, ((high >> 16) & 0xff) as u8, ((high >> 24) & 0xff) as u8,
+            ((high >> 32) & 0xff) as u8, ((high >> 40) & 0xff) as u8, ((high >> 48) & 0xff) as u8, ((high >> 56) & 0xff) as u8
+        ]
     }
 //}
 //
@@ -419,7 +422,7 @@ impl DebugeeX86_64 {
 
     fn wait(&mut self) -> Result<(), String> {
         match nix::sys::wait::waitpid(self.pid, None) {
-            Ok(WaitStatus::Signaled(_, signal, core_dumped)) => {
+            Ok(WaitStatus::Signaled(_, signal, _core_dumped)) => {
                 panic!("The thing stopped. :(\n{:?}", signal);
             },
             Ok(WaitStatus::Stopped(_, signal)) => {
@@ -499,11 +502,11 @@ impl <'a> DebugTarget<'a, ProcessX86_64> for DebugeeX86_64 {
         }
     }
 
-    fn add_watch(&mut self, target: Self::WatchTarget) -> Result<(), String> {
+    fn add_watch(&mut self, _target: Self::WatchTarget) -> Result<(), String> {
         panic!("uhhh");
     }
 
-    fn add_break_condition(&mut self, target: Self::BreakCondition) -> Result<(), String> {
+    fn add_break_condition(&mut self, _target: Self::BreakCondition) -> Result<(), String> {
         panic!("UHHH");
     }
 }
@@ -512,7 +515,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
     // TODO: this assumes that instructions won't fault
     // we really don't know that, but also no T provided here gives
     // context such that we can make that determination
-    fn control_flow(&self, ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
+    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
         match self.opcode {
             Opcode::MOVZX_b |
             Opcode::MOVZX_w |
@@ -637,7 +640,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
                 };
 
                 match dest {
-                    Some(dest) => {
+                    Some(_dest) => {
                     //    control_flow::Effect::cont_and(dest)
                         control_flow::Effect::cont()
                     },

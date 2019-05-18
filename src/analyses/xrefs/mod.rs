@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, Address};
+use yaxpeax_arch::Address;
 
 use petgraph;
 use petgraph::graphmap::{GraphMap, NodeTrait};

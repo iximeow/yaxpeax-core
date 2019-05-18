@@ -22,7 +22,7 @@ impl <'a> MSP430DebugTarget<'a> {
                 BreakCondition::Other(f) => {
                     if f(&self.target) { return true; }
                 },
-                BreakCondition::MemoryAccess(dest) => {
+                BreakCondition::MemoryAccess(_dest) => {
                     panic!("Memory access breakpoints not yet supported for MSP430");
                 },
                 BreakCondition::IO => {
@@ -41,22 +41,24 @@ impl <'a> MSP430DebugTarget<'a> {
 
 impl WatchTarget {
     /// Builds a pointer from the target of the watch.
-    fn pointee(&self, cpu: &msp430::cpu::CPU) -> Option<u16> {
+    #[allow(dead_code)]
+    fn pointee(&self, _cpu: &msp430::cpu::CPU) -> Option<u16> {
         match self {
-            WatchTarget::Pointee(target) => {
+            WatchTarget::Pointee(_target) => {
                 panic!("MSP430 watches not yet supported");
             },
-            WatchTarget::MemoryLocation(addr) => {
+            WatchTarget::MemoryLocation(_addr) => {
                 panic!("MSP430 watches not yet supported");
             }
         }
     }
-    fn reify(&self, cpu: &msp430::cpu::CPU) -> String {
+    #[allow(dead_code)]
+    fn reify(&self, _cpu: &msp430::cpu::CPU) -> String {
         match self {
-            WatchTarget::Pointee(target) => {
+            WatchTarget::Pointee(_target) => {
                 panic!("MSP430 watches not yet supported");
             }
-            WatchTarget::MemoryLocation(addr) => {
+            WatchTarget::MemoryLocation(_addr) => {
                 panic!("MSP430 watches not yet supported");
             },
         }
@@ -78,7 +80,7 @@ impl <T> Contextual<T> for yaxpeax_msp430_mc::Instruction
     where T: InstructionContext
 {
     fn contextualize(&self, ctx: &T) -> String {
-        fn contextualize_op<T: InstructionContext>(op: yaxpeax_msp430_mc::Operand, ctx: &T) -> String {
+        fn contextualize_op<T: InstructionContext>(_op: yaxpeax_msp430_mc::Operand, _ctx: &T) -> String {
             panic!("unimplemented");
         }
 
@@ -155,6 +157,7 @@ impl <'a> DebugTarget<'a, msp430::cpu::CPU> for MSP430DebugTarget<'a> {
     }
 }
 
+#[allow(dead_code)]
 enum IOCause {
     UART,
     PORT
@@ -170,13 +173,11 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> Self {
-        let mut cpu = CPU {
+        CPU {
             registers: [0u16; 16],
             memory: vec![0; 0x10000],
             disable: false
-        };
-
-        cpu
+        }
     }
     pub fn ip(&self) -> u16 {
         self.registers[0]
@@ -184,9 +185,11 @@ impl CPU {
     pub fn set_ip(&mut self, newval: u16) {
         self.registers[0] = newval;
     }
-    fn push(&mut self, value: u32) -> Result<(), String> {
+    #[allow(dead_code)]
+    fn push(&mut self, _value: u32) -> Result<(), String> {
         panic!("push??? you think we can push????");
     }
+    #[allow(dead_code)]
     fn pop(&mut self) -> Result<u32, String> {
         panic!("pop??? you think we can pop????");
     }
@@ -199,10 +202,10 @@ impl CPU {
     pub fn get_byte(&mut self, addr: u16) -> Result<u8, String> {
         self.get_byte_noupdate(addr)
     }
-    pub fn get_byte_noupdate(&self, addr: u16) -> Result<u8, String> {
+    pub fn get_byte_noupdate(&self, _addr: u16) -> Result<u8, String> {
         panic!("MSP430 memory not emulated yet");
     }
-    pub fn set_byte_noupdate(&mut self, addr: u16, what: u8) -> Result<(), String> {
+    pub fn set_byte_noupdate(&mut self, _addr: u16, _what: u8) -> Result<(), String> {
         panic!("MSP430 memory not emulated yet");
     }
     pub fn set_byte(&mut self, addr: u16, what: u8) -> Result<(), String> {
@@ -258,7 +261,7 @@ impl MCU for CPU {
         }
 
         match self.decode() {
-            Ok(instr) => {
+            Ok(_instr) => {
                 panic!("MSP430 emulation not yet supported");
             },
             Err(msg) => { panic!(msg); }

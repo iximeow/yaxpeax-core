@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 
-use memory::repr::{FlatMemoryRepr, ProcessMemoryRepr};
+use memory::repr::FlatMemoryRepr;
 use memory::repr::process::ModuleData;
 
 pub mod hex;

@@ -1,10 +1,4 @@
-use std::io::Read;
-use std::fs::File;
-use std::collections::HashMap;
-use std::ops::{Range, RangeFrom};
-use std::fmt::Debug;
-
-use debug::Peek;
+use std::ops::Range;
 
 use yaxpeax_arch::Address;
 

@@ -1,7 +1,7 @@
 use yaxpeax_arch::Address;
 use memory::repr::flat::FlatMemoryRepr;
 use memory::repr::process::ModuleInfo;
-use memory::{MemoryRange, MemoryRepr};
+use memory::MemoryRepr;
 
 use std::ops::Range;
 

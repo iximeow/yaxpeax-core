@@ -2,7 +2,6 @@ extern crate goblin;
 #[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
-use serde_json::error::Category;
 extern crate termion;
 extern crate petgraph;
 extern crate num_traits;
@@ -28,7 +27,6 @@ pub mod serialize;
 
 use yaxpeax_arch::{Arch, ColorSettings};
 
-use std::fmt::Display;
 use std::hash::Hash;
 use std::collections::HashMap;
 

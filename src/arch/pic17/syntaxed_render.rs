@@ -4,8 +4,7 @@ use yaxpeax_arch::ColorSettings;
 use yaxpeax_arch::ShowContextual;
 use yaxpeax_pic17::PIC17;
 use yaxpeax_pic17::{Opcode, Operand, Instruction};
-use arch::pic17::{Function, PartialInstructionContext, MergedContextTable};
-use std::collections::HashMap;
+use arch::pic17::MergedContextTable;
 
 use ContextRead;
 

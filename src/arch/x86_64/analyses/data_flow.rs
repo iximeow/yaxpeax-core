@@ -19,8 +19,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
-use serde::{Serialize, Deserialize};
-
 use std::collections::HashMap;
 use analyses::static_single_assignment::cytron::HashedValue;
 use serialize::Memoable;
@@ -61,38 +59,38 @@ impl AliasInfo for Location {
             Location::Register(RegSpec { bank: RegisterBank::Q, num: _ }) => {
                 vec![self.clone()]
             },
-            Location::Register(RegSpec { bank: RegisterBank::D, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::D, num }) => {
                 vec![Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })]
             }
-            Location::Register(RegSpec { bank: RegisterBank::W, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::W, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::D, num: *num })
                 ]
             }
-            Location::Register(RegSpec { bank: RegisterBank::B, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::W, num: *num })
                 ]
             }
-            Location::Register(RegSpec { bank: RegisterBank::rB, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3 }),
                     Location::Register(RegSpec { bank: RegisterBank::D, num: *num & 0x3 }),
                     Location::Register(RegSpec { bank: RegisterBank::W, num: *num & 0x3 })
                 ]
             }
-            Location::Register(RegSpec { bank: RegisterBank::MM, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
                 vec![Location::Register(RegSpec { bank: RegisterBank::ST, num: *num })]
             }
-            Location::Register(RegSpec { bank: RegisterBank::Y, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::Y, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Z, num: *num })
                 ]
             }
-            Location::Register(RegSpec { bank: RegisterBank::X, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::X, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Z, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::Y, num: *num })
@@ -132,19 +130,19 @@ impl AliasInfo for Location {
             Location::Register(RegSpec { bank: RegisterBank::Q, num: _ }) => {
                 self.clone()
             },
-            Location::Register(RegSpec { bank: RegisterBank::D, num: num }) |
-            Location::Register(RegSpec { bank: RegisterBank::W, num: num }) |
-            Location::Register(RegSpec { bank: RegisterBank::B, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::D, num }) |
+            Location::Register(RegSpec { bank: RegisterBank::W, num }) |
+            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })
             }
-            Location::Register(RegSpec { bank: RegisterBank::rB, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3 })
             }
-            Location::Register(RegSpec { bank: RegisterBank::MM, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::ST, num: *num })
             }
-            Location::Register(RegSpec { bank: RegisterBank::Y, num: num }) |
-            Location::Register(RegSpec { bank: RegisterBank::X, num: num }) => {
+            Location::Register(RegSpec { bank: RegisterBank::Y, num }) |
+            Location::Register(RegSpec { bank: RegisterBank::X, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::Z, num: *num })
             }
             Location::Register(RegSpec { bank: RegisterBank::EIP, num: _ }) => {
@@ -713,31 +711,31 @@ impl SSAValues for x86_64 {
             }
             Opcode::CMPXCHG => {
                 let mut locs = match &instr.operands[1] {
-                    Operand::Register(RegSpec { bank: RegisterBank::Q, num: num }) => {
+                    Operand::Register(RegSpec { bank: RegisterBank::Q, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })), Direction::Read),
                             (Some(Location::Register(RegSpec::rax())), Direction::Read)
                         ]
                     },
-                    Operand::Register(RegSpec { bank: RegisterBank::D, num: num }) => {
+                    Operand::Register(RegSpec { bank: RegisterBank::D, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::D, num: *num })), Direction::Read),
                             (Some(Location::Register(RegSpec::eax())), Direction::Read)
                         ]
                     },
-                    Operand::Register(RegSpec { bank: RegisterBank::W, num: num }) => {
+                    Operand::Register(RegSpec { bank: RegisterBank::W, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::W, num: *num })), Direction::Read),
                             (Some(Location::Register(RegSpec::ax())), Direction::Read)
                         ]
                     },
-                    Operand::Register(RegSpec { bank: RegisterBank::B, num: num }) => {
+                    Operand::Register(RegSpec { bank: RegisterBank::B, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::B, num: *num })), Direction::Read),
                             (Some(Location::Register(RegSpec::al())), Direction::Read)
                         ]
                     },
-                    Operand::Register(RegSpec { bank: RegisterBank::rB, num: num }) => {
+                    Operand::Register(RegSpec { bank: RegisterBank::rB, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::B, num: *num })), Direction::Read),
                             (Some(Location::Register(RegSpec::al())), Direction::Read)
@@ -1027,7 +1025,7 @@ impl SSAValues for x86_64 {
             }
             Opcode::CMOVS => {
                 let mut locs = decompose_write(&instr.operands[0]);
-                locs.append((&mut decompose_read(&instr.operands[1])));
+                locs.append(&mut decompose_read(&instr.operands[1]));
                 locs.push((Some(Location::SF), Direction::Read));
                 locs
             }

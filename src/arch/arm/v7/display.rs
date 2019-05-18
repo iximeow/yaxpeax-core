@@ -1,5 +1,5 @@
 use yaxpeax_arm::armv7::{ARMv7, Instruction};
-use yaxpeax_arch::{AddressDisplay, Arch, ColorSettings, ShowContextual};
+use yaxpeax_arch::{Arch, ColorSettings, ShowContextual};
 
 use arch::display::BaseDisplay;
 use arch::arm;
@@ -12,7 +12,7 @@ use termion::color;
 impl <T: arm::v7::PartialInstructionContext> BaseDisplay<arm::v7::Function, T> for ARMv7 {
     fn render_frame<Data: Iterator<Item=u8>>(
         addr: <ARMv7 as Arch>::Address,
-        instr: &<ARMv7 as Arch>::Instruction,
+        _instr: &<ARMv7 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
         function_table: &HashMap<<ARMv7 as Arch>::Address, arm::v7::Function>
@@ -20,7 +20,8 @@ impl <T: arm::v7::PartialInstructionContext> BaseDisplay<arm::v7::Function, T> f
         /*
          * if there's a comment, show that
          */
-        if let Some(fn_dec) = function_table.get(&addr) {
+        // TODO: totally replace this?
+        if let Some(_fn_dec) = function_table.get(&addr) {
             println!("      {}{}{}",
                 color::Fg(&color::LightYellow as &color::Color),
                 "___",
@@ -40,7 +41,7 @@ impl <T: arm::v7::PartialInstructionContext> BaseDisplay<arm::v7::Function, T> f
 }
 
 impl <T: std::fmt::Write> ShowContextual<u32, MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: u32, context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
+    fn contextualize(&self, colors: Option<&ColorSettings>, address: u32, _context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
         let ctxs: Vec<Option<String>> = vec![];
         self.contextualize(colors, address, Some(&ctxs[..]), out)
     }

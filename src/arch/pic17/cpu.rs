@@ -5,8 +5,6 @@ use yaxpeax_arch::Arch;
 use yaxpeax_arch::ShowContextual;
 use memory::{MemoryRepr, MemoryRange};
 use memory::repr::FlatMemoryRepr;
-use std::collections::HashMap;
-use SyntaxedRender;
 use debug;
 use debug::DebugTarget;
 use arch::pic17;
@@ -453,7 +451,7 @@ impl CPU {
         println!("ip=0x{:x}, W=0x{:x}, stkptr=0x{:x}", self.ip, self.W, self.stkptr);
         match self.decode() {
             Ok(instr) => {
-                let ctx: Option<&pic17::cpu::CPU> = Some(self);
+                let _ctx: Option<&pic17::cpu::CPU> = Some(self);
                 let mut s = String::new();
                 let ctx: Option<&MergedContextTable> = None;
                 instr.contextualize(None, self.ip, /* TODO: ctx */ ctx, &mut s).unwrap();
@@ -493,7 +491,7 @@ impl CPU {
 
         // TODO: where do config bits show up in pic17?
         match config {
-            Some(config) => {
+            Some(_config) => {
                 println!("WARN: ignoring config");
             },
             None => {

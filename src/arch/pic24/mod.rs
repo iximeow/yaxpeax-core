@@ -1,5 +1,4 @@
-use arch;
-use yaxpeax_pic24::{Instruction, Opcode};
+use yaxpeax_pic24::Opcode;
 use arch::MCU;
 
 #[allow(non_snake_case)]
