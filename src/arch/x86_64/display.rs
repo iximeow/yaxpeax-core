@@ -13,12 +13,12 @@ use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::x86_64;
 use arch::x86_64::{ContextRead, MergedContextTable};
-use arch::x86_64::analyses::data_flow::Location;
+use arch::x86_64::analyses::data_flow::{Data, Location};
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::cytron::{Direction, SSA};
+use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA};
 
 use memory::MemoryRange;
 
@@ -164,6 +164,48 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
         }
 
         fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
+            fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
+                match value {
+                    Some(value) => {
+                        write!(
+                            fmt,
+                            "{}",
+                            ctx.colors.register(
+                                format!(
+                                    "{}_{}",
+                                    reg,
+                                    value.borrow().version()
+                                        .map(|ver| ver.to_string())
+                                        .unwrap_or_else(|| "input".to_string())
+                                )
+                            )
+                        )?;
+                        if let Some(data) = value.borrow().data.as_ref() {
+                            match data {
+                                Data::Alias(alias) => {
+                                    if let Location::Register(alias_reg) = alias.borrow().location.1 {
+                                        write!(fmt, " (= ")?;
+                                        use std::rc::Rc;
+                                        write_location_value(fmt, alias_reg, ctx, Some(Rc::clone(alias)))?;
+                                        write!(fmt, ")")?;
+                                    } else {
+                                        panic!("Register alias must be another register");
+                                    }
+                                },
+                                Data::Symbol(_) => { unimplemented!("symbolic expr"); },
+                                Data::Concrete(v) => {
+                                    write!(fmt, " (= {})", v)?;
+                                }
+                            }
+                        }
+                        Ok(())
+                    },
+                    None => {
+                        write!(fmt, "{}", reg)
+                    }
+                }
+            }
+
             fn numbered_register_name<'a, 'b, 'c, 'd>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd>, direction: Direction) -> Colored<String> {
                 let text = context.ssa.map(|ssa| {
                     let num = ssa.values.get(&address)
@@ -171,7 +213,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                         .map(|data| data.borrow().version());
                     format!("{}_{}",
                         reg,
-                        num.map(|n| n.to_string()).unwrap_or_else(|| {
+                        num.map(|n| n.map(|v| v.to_string()).unwrap_or("input".to_string())).unwrap_or_else(|| {
                             format!("ERR_{:?}", direction)
                         })
                     )
@@ -208,24 +250,16 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 Operand::Register(spec) => {
                     match usage {
                         Use::Read => {
-                            write!(fmt, "{}",
-                                numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read)
-                            )
+                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))
                         },
                         Use::Write => {
-                            write!(fmt, "{}",
-                                numbered_register_name(ctx.addr, *spec, &ctx, Direction::Write)
-                            )
+                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()))
                         },
                         Use::ReadWrite => {
-                            if ctx.ssa.is_some() {
-                                write!(fmt, "{} (-> {})",
-                                    numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
-                                    numbered_register_name(ctx.addr, *spec, &ctx, Direction::Write)
-                                )
-                            } else {
-                                write!(fmt, "{}", numbered_register_name(ctx.addr, *spec, &ctx, Direction::Write))
-                            }
+                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
+                            write!(fmt, " (-> ")?;
+                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()))?;
+                            write!(fmt, ")")
                         }
                     }
                 },
@@ -236,9 +270,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     write!(fmt, "[{}]", ctx.colors.address((*disp as u64).stringy()))
                 },
                 Operand::RegDeref(spec) => {
-                    write!(fmt, "[{}]",
-                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read)
-                    )
+                    write!(fmt, "[")?;
+                    write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
+                    write!(fmt, "]")
                 }
                 Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                     let addr = ctx.addr.wrapping_add(*disp as i64 as u64).wrapping_add(ctx.instr.len());
@@ -403,7 +437,13 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::SUB |
             Opcode::AND |
             Opcode::XOR |
-            Opcode::OR |
+            Opcode::OR => {
+                write!(fmt, " ")?;
+                contextualize_operand(&self.instr.operands[0], self, Use::ReadWrite, fmt)?;
+                write!(fmt, ", ")?;
+                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+            }
+
             Opcode::CMOVA |
             Opcode::CMOVB |
             Opcode::CMOVG |
@@ -421,7 +461,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::CMOVS |
             Opcode::CMOVZ => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
             }
@@ -467,7 +507,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::SETLE |
             Opcode::SETG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)
             }
             Opcode::NOP |
             Opcode::RETURN => {

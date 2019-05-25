@@ -52,7 +52,7 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
                 format!("{}_{}",
                     register_name(reg),
                     match ssa.values.get(&address).and_then(|addr_values| addr_values.get(&(msp430::Location::Register(reg), direction))) {
-                        Some(data) => format!("{}", data.borrow().version()),
+                        Some(data) => data.borrow().version().map(|v| v.to_string()).unwrap_or("input".to_string()),
                         None => format!("ERR_{:?}", direction)
                     }
                 )

@@ -81,6 +81,7 @@ pub enum Operation<A: Arch, T> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Data<A: Arch> {
+    AddFunctionHint(A::Address),
     DefineSymbol(A::Address, Symbol),
     CodeComment(A::Address, String),
 }

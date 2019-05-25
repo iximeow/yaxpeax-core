@@ -8,5 +8,5 @@ pub trait Domain {
 }
 
 pub trait ConstEvaluator<A: Arch + SSAValues, Ctxs, D: Domain> {
-    fn evaluate(instr: A::Instruction, addr: A::Address, dfg: &SSA<A>, contexts: Ctxs);
+    fn evaluate(instr: &A::Instruction, addr: A::Address, dfg: &SSA<A>, contexts: &Ctxs);
 }

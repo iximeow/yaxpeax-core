@@ -8,13 +8,13 @@ repository = ""
 description = "program analysis for machine code"
 
 [dependencies]
-yaxpeax-arch = { path = "../yaxpeax-arch" }
-yaxpeax-arm = { path = "../arch/arm" }
-yaxpeax-x86 = { path = "../arch/x86" }
-yaxpeax-msp430-mc = { path = "../arch/msp430" }
-yaxpeax-pic17 = { path = "../arch/pic17" }
-yaxpeax-pic18 = { path = "../arch/pic18" }
-yaxpeax-pic24 = { path = "../arch/pic24" }
+yaxpeax-arch = { path = "../yaxpeax-arch", features = ["use-serde"] }
+yaxpeax-arm = { path = "../arch/arm", features = ["use-serde"] }
+yaxpeax-x86 = { path = "../arch/x86", features = ["use-serde"] }
+yaxpeax-msp430-mc = { path = "../arch/msp430", features = ["use-serde"] }
+yaxpeax-pic17 = { path = "../arch/pic17", features = ["use-serde"] }
+yaxpeax-pic18 = { path = "../arch/pic18", features = ["use-serde"] }
+yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }
 # "goblin" = "0.0.20"
 goblin = { path = "/toy/rust/goblin" }
 "num-traits" = "0.2"

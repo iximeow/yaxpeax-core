@@ -165,7 +165,7 @@ pub enum SymbolicExpression {
     CopOut(String)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Data {
     Concrete(u64),
     Symbol(SymbolicExpression),
@@ -181,8 +181,8 @@ pub enum DataMemo {
 
 #[derive(Debug, Serialize)]
 pub struct ValueMemo {
-    pub location: Location,
-    pub version: u32,
+    pub location: (u64, Location),
+    pub version: Option<u32>,
     pub data: Option<DataMemo>
 }
 

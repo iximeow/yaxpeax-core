@@ -19,6 +19,8 @@ use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
 
 use serialize::{Memoable, Memos, MemoizingSerializer};
 
+use num_traits::Zero;
+
 pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
 pub type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
 pub type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
@@ -127,8 +129,10 @@ pub enum Direction {
 #[derive(Debug)]
 pub struct Value<A: SSAValues> {
     // Temporarily necessary to map from some use back to a def site
-    pub location: A::Location,
-    pub version: u32,
+    pub location: (A::Address, A::Location),
+    // None indicates "not written anywhere in this dfg", which indicates this value can
+    // be considered an input from some enclosing control flow
+    pub version: Option<u32>,
     pub data: Option<A::Data>
 }
 
@@ -137,6 +141,22 @@ impl <A: SSAValues> Hash for Value<A> where A::Location: Hash, A::Data: Hash {
         self.location.hash(state);
         self.version.hash(state);
         self.data.hash(state);
+    }
+}
+
+pub struct DFGLValue<A: SSAValues> {
+    pub value: DFGRef<A>
+}
+
+impl <A: SSAValues> DFGLValue<A> {
+    pub fn update(&self, new_data: A::Data) {
+        self.value.borrow_mut().data.replace(new_data);
+    }
+    pub fn get_data(&self) -> Option<A::Data> {
+        self.value.borrow().data.clone()
+    }
+    pub fn as_rc(self) -> DFGRef<A> {
+        self.value
     }
 }
 
@@ -169,15 +189,15 @@ impl <A: SSAValues> PartialEq for Value<A> {
 impl <A: SSAValues> Eq for Value<A> {}
 
 impl <A> Value<A> where A: SSAValues {
-    pub fn version(&self) -> u32 {
+    pub fn version(&self) -> Option<u32> {
         self.version
     }
 }
 
-impl <A: SSAValues> Value<A> {
-    fn new(location: A::Location, version: u32) -> Value<A> {
+impl <A: SSAValues + Arch> Value<A> {
+    fn new(addr: A::Address, location: A::Location, version: Option<u32>) -> Value<A> {
         Value {
-            location: location,
+            location: (addr, location),
             version: version,
             data: None
         }
@@ -198,7 +218,7 @@ pub trait AliasInfo where Self: Sized {
 
 pub trait SSAValues where Self: Arch {
     type Location: Debug + AliasInfo + Hash + Eq + Serialize;
-    type Data: Debug + Hash;
+    type Data: Debug + Hash + Clone;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }
@@ -209,11 +229,21 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
             .and_then(|addr_values| addr_values.get(&(loc, dir)))
             .map(|x| Rc::clone(x))
     }
-    pub fn written_value(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
+    pub fn try_get_def(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
         self.get_value(addr, loc, Direction::Write)
     }
-    pub fn read_value(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
+    pub fn try_get_use(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
         self.get_value(addr, loc, Direction::Read)
+    }
+    // TODO: These should have a #[cfg()] flag to use after heavy fuzzing that does
+    // unreachable_unchecked!() for the None case here.
+    //
+    // that flag should also remove the try_get_* variants
+    pub fn get_def(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
+        DFGLValue { value: self.get_value(addr, loc, Direction::Write).unwrap() }
+    }
+    pub fn get_use(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
+        DFGLValue { value: self.get_value(addr, loc, Direction::Read).unwrap() }
     }
 }
 
@@ -381,7 +411,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                         // versioned at 0xffffffff to indicate a specialness to them.
                         // These should never be present after search().
                         phi.entry(*Y).or_insert_with(|| HashMap::new())
-                            .insert(*loc, (Rc::new(RefCell::new(Value::new(*loc, 0xffffffff))), vec![]));
+                            .insert(*loc, (Rc::new(RefCell::new(Value::new(*Y, *loc, Some(0xffffffff)))), vec![]));
                         // TODO: phi nodes are assignments too! this is definitely a bug.
                         has_already.insert(*Y, iter_count);
                         if work[Y] < iter_count {
@@ -429,7 +459,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                 let widening = loc.maximal_alias_of();
                 let i = C[&widening];
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].0);
-                phi_dest.replace(Value::new(*loc, i));
+                phi_dest.replace(Value::new(block.start, *loc, Some(i)));
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 C.entry(widening).and_modify(|x| *x += 1);
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
@@ -455,7 +485,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                     (Some(loc), Direction::Write) => {
                         let widening = loc.maximal_alias_of();
                         let i = C[&widening];
-                        let new_value = Rc::new(RefCell::new(Value::new(loc, i)));
+                        let new_value = Rc::new(RefCell::new(Value::new(address, loc, Some(i))));
                         let at_address = values.entry(address).or_insert_with(||
                             HashMap::new()
                         );
@@ -526,7 +556,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
 //    for each variable in vars {
     for loc in all_locations {
         C.insert(loc, 0);
-        S.insert(loc, vec![Rc::new(RefCell::new(Value::new(loc, 0)))]);
+        S.insert(loc, vec![Rc::new(RefCell::new(Value::new(A::Address::zero(), loc, None)))]);
     }
 
     search(
