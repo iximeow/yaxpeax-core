@@ -163,7 +163,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 .map(|name| { ctx.colors.function(name) })
         }
 
-        fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
             fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
                 match value {
                     Some(value) => {
@@ -264,17 +264,29 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     }
                 },
                 Operand::DisplacementU32(disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{}]", ctx.colors.address((*disp as u64).stringy()))
                 },
                 Operand::DisplacementU64(disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{}]", ctx.colors.address((*disp as u64).stringy()))
                 },
                 Operand::RegDeref(spec) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[")?;
                     write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
                     write!(fmt, "]")
                 }
                 Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     let addr = ctx.addr.wrapping_add(*disp as i64 as u64).wrapping_add(ctx.instr.len());
                     let text = ctx.contexts
                         .and_then(|ctx| ctx.symbols.get(&addr))
@@ -283,18 +295,27 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     write!(fmt, "[{}]", text)
                 }
                 Operand::RegDisp(spec, disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} {}]",
                         numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
                         format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                     )
                 },
                 Operand::RegScale(spec, scale) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} * {}]",
                         numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
                         scale
                     )
                 },
                 Operand::RegScaleDisp(spec, scale, disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} * {} {}]",
                         numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
                         scale,
@@ -302,12 +323,18 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     )
                 },
                 Operand::RegIndexBase(base, index) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} + {}]",
                         numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
                         numbered_register_name(ctx.addr, *index, &ctx, Direction::Read)
                     )
                 },
                 Operand::RegIndexBaseDisp(base, index, disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} + {} {}]",
                         numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
                         numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
@@ -315,6 +342,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     )
                 }
                 Operand::RegIndexBaseScale(base, index, scale) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} + {} * {}]",
                         numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
                         numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
@@ -322,6 +352,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     )
                 }
                 Operand::RegIndexBaseScaleDisp(base, index, scale, disp) => {
+                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
+                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    }
                     write!(fmt, "[{} + {} * {} {}]",
                         numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
                         numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
@@ -403,7 +436,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     }
                     op @ _ => {
                         write!(fmt, " ")?;
-                        return contextualize_operand(op, self, Use::Read, fmt);
+                        return contextualize_operand(op, 0, self, Use::Read, fmt);
                     }
                 }
             },
@@ -413,15 +446,15 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::MOVSX |
             Opcode::MOV => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
             Opcode::XCHG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
             }
             Opcode::SAR |
             Opcode::SAL |
@@ -439,9 +472,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::XOR |
             Opcode::OR => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
 
             Opcode::CMOVA |
@@ -461,34 +494,34 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::CMOVS |
             Opcode::CMOVZ => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
             Opcode::CMP |
             Opcode::TEST => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
             Opcode::CMPXCHG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
             }
             Opcode::LSL => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Write, fmt)
             }
             Opcode::LAR => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
             Opcode::SETO |
             Opcode::SETNO |
@@ -507,7 +540,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::SETLE |
             Opcode::SETG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
             }
             Opcode::NOP |
             Opcode::RETURN => {
@@ -515,7 +548,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     Operand::Nothing => { return Ok(()); },
                     _ => {
                         write!(fmt, " ")?;
-                        contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)
+                        contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
                    }
                 }
             }
@@ -524,17 +557,17 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::NEG |
             Opcode::NOT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)
             }
             Opcode::CALLF | // TODO: this is wrong.
             Opcode::JMPF | // TODO: this is wrong.
             Opcode::PUSH => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
             }
             Opcode::POP => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
             }
             Opcode::RETF | // TODO: this is wrong.
             Opcode::CMPS |
@@ -561,7 +594,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::SGDT |
             Opcode::SIDT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
             }
             Opcode::VERR |
             Opcode::VERW |
@@ -572,7 +605,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::LGDT |
             Opcode::LIDT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
             }
             Opcode::RDMSR |
             Opcode::WRMSR |
