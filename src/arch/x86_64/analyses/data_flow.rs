@@ -178,6 +178,38 @@ pub enum SymbolicExpression {
 }
 
 impl SymbolicExpression {
+    pub fn show(&self, type_atlas: &TypeAtlas) -> String {
+        // inner expression first, if applicable..
+        match self {
+            SymbolicExpression::Opaque(spec) => {
+                format!("<{}>", type_atlas.name_of(spec))
+            },
+            SymbolicExpression::Add(expr, offset) => {
+                // inner part first:
+                let inner_ty = expr.type_of(type_atlas);
+                let inner_expr = expr.show(type_atlas);
+                let (this_ty, this_name) = if let Some(this_field) = type_atlas.get_field(&inner_ty, *offset as u32) {
+                    (this_field.ty.as_ref(), this_field.name.as_ref())
+                } else {
+                    (None, None)
+                };
+
+                if let Some(field_name) = this_name {
+                    format!("{}.{}", inner_expr, field_name)
+                } else {
+                    format!("({} + {:#x})", inner_expr, offset)
+                }
+            }
+            SymbolicExpression::Deref(expr) => {
+                let inner_ty = expr.type_of(type_atlas);
+                let inner_expr = expr.show(type_atlas);
+
+                format!("*{}", inner_expr)
+            },
+            _ => { panic!("aaaadsfasfa"); }
+        }
+    }
+
     pub fn offset(self, offset: u64) -> SymbolicExpression {
         match self {
             SymbolicExpression::Opaque(ty) => SymbolicExpression::Add(Box::new(

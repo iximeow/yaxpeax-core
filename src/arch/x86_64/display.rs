@@ -199,14 +199,14 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                                 Data::Expression(expr) => {
                                     let real_ty = expr.type_of(&type_atlas);
                                     if real_ty != TypeSpec::Unknown {
-                                        write!(fmt, " (= {:?}: {:?})", expr, real_ty)?;
+                                        write!(fmt, " (= {})", expr.show(&type_atlas))?;
                                     } else {
-                                        write!(fmt, " (= {:?})", expr)?;
+                                        write!(fmt, " (= {})", expr.show(&type_atlas))?;
                                     }
                                 },
                                 Data::Concrete(v, ty) => {
                                     if let Some(real_ty) = ty {
-                                        write!(fmt, " (= {}: {:?})", v, real_ty)?;
+                                        write!(fmt, " (= {})", v)?;
                                     } else {
                                         write!(fmt, " (= {})", v)?;
                                     }
@@ -313,8 +313,10 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    write!(fmt, "[{} {}]",
-                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
+                    write!(fmt, "[")?;
+                    write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
+                    write!(fmt, " {}]",
+//                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
                         format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                     )
                 },

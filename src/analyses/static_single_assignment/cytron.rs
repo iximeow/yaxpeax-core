@@ -231,15 +231,16 @@ impl Field {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeLayout {
+    pub name: String,
     fields: Vec<Field>,
     size: u32
 }
 
 impl TypeLayout {
-    pub fn new(fields: Vec<Field>) -> Self {
+    pub fn new(name: String, fields: Vec<Field>) -> Self {
         let size = fields.iter().map(|f| f.size).sum();
 
-        TypeLayout { fields, size }
+        TypeLayout { name, fields, size }
     }
 
     pub fn size(&self) -> u32 {
@@ -251,7 +252,7 @@ impl TypeLayout {
             if offset == 0 {
                 return Some(f);
             } else {
-                if f.size < offset {
+                if f.size > offset {
                     return None;
                 } else {
                     offset -= f.size;
@@ -273,6 +274,7 @@ pub const ULONG64: usize = 1;
 impl TypeAtlas {
     pub fn new() -> TypeAtlas {
         let KPCR_Layout = TypeLayout::new(
+            "KPCR".to_string(),
             vec![
                 // 0x0000
                 Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("GdtBase".to_string()) },
@@ -296,6 +298,7 @@ impl TypeAtlas {
         );
 
         let ULONG64_Layout = TypeLayout::new(
+            "ULONG64".to_string(),
             vec![
                 Field { size: 8, ty: None, name: None }
             ]
@@ -304,6 +307,16 @@ impl TypeAtlas {
         let types = vec![KPCR_Layout, ULONG64_Layout];
 
         TypeAtlas { types }
+    }
+
+    pub fn name_of(&self, type_spec: &TypeSpec) -> String {
+        match type_spec {
+            TypeSpec::Top => "[any]".to_string(),
+            TypeSpec::LayoutId(id) => { self.types[*id].name.to_string() },
+            TypeSpec::PointerTo(spec) => { format!("{}*", self.name_of(spec)) },
+            TypeSpec::Unknown => "[unknown]".to_string(),
+            TypeSpec::Bottom => "[!]".to_string(),
+        }
     }
 
     pub fn layout_of(&self, type_id: usize) -> &TypeLayout {
