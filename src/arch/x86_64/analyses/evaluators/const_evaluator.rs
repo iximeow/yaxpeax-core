@@ -28,7 +28,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
         }
         Operand::RegDeref(reg) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {
-                Some(Data::Concrete(v)) => {
+                Some(Data::Concrete(v, _)) => {
                     Some(v)
                 },
                 _ => None
@@ -36,7 +36,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
         },
         Operand::RegDisp(reg, disp) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {
-                Some(Data::Concrete(v)) => {
+                Some(Data::Concrete(v, _)) => {
                     Some(v.wrapping_add(*disp as i64 as u64))
                 },
                 _ => None
@@ -44,7 +44,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
         },
         Operand::RegScale(reg, scale) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {
-                Some(Data::Concrete(v)) => {
+                Some(Data::Concrete(v, _)) => {
                     Some(v.wrapping_mul(*scale as u64))
                 },
                 _ => None
@@ -55,7 +55,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
                 dfg.get_use(addr, Location::Register(*base)).get_data(),
                 dfg.get_use(addr, Location::Register(*index)).get_data()
             ) {
-                (Some(Data::Concrete(base)), Some(Data::Concrete(index))) => {
+                (Some(Data::Concrete(base, _)), Some(Data::Concrete(index, _))) => {
                     Some(base.wrapping_add(index))
                 },
                 _ => None
@@ -66,7 +66,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
                 dfg.get_use(addr, Location::Register(*base)).get_data(),
                 dfg.get_use(addr, Location::Register(*index)).get_data()
             ) {
-                (Some(Data::Concrete(base)), Some(Data::Concrete(index))) => {
+                (Some(Data::Concrete(base, _)), Some(Data::Concrete(index, _))) => {
                     Some(base.wrapping_add(index).wrapping_add(*disp as i64 as u64))
                 },
                 _ => None
@@ -74,7 +74,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
         }
         Operand::RegScaleDisp(base, scale, disp) => {
             match dfg.get_use(addr, Location::Register(*base)).get_data() {
-                Some(Data::Concrete(base)) => {
+                Some(Data::Concrete(base, _)) => {
                     Some(base.wrapping_add((*disp as i64 as u64).wrapping_mul(*scale as i64 as u64)))
                 },
                 _ => None
@@ -85,7 +85,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
                 dfg.get_use(addr, Location::Register(*base)).get_data(),
                 dfg.get_use(addr, Location::Register(*index)).get_data()
             ) {
-                (Some(Data::Concrete(base)), Some(Data::Concrete(index))) => {
+                (Some(Data::Concrete(base, _)), Some(Data::Concrete(index, _))) => {
                     Some(index.wrapping_mul(*scale as u64).wrapping_add(base))
                 },
                 _ => None
@@ -96,7 +96,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
                 dfg.get_use(addr, Location::Register(*base)).get_data(),
                 dfg.get_use(addr, Location::Register(*index)).get_data()
             ) {
-                (Some(Data::Concrete(base)), Some(Data::Concrete(index))) => {
+                (Some(Data::Concrete(base, _)), Some(Data::Concrete(index, _))) => {
                     Some(index.wrapping_mul(*scale as u64).wrapping_add(base).wrapping_add(*disp as i64 as u64))
                 },
                 _ => None
@@ -112,12 +112,12 @@ impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
         match instr {
             Instruction { opcode: Opcode::XOR, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
                 if l == r {
-                    dfg.get_def(addr, Location::Register(*r)).update(Data::Concrete(0));
+                    dfg.get_def(addr, Location::Register(*r)).update(Data::Concrete(0, None));
                 }
             }
             Instruction { opcode: Opcode::SUB, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
                 if l == r {
-                    dfg.get_def(addr, Location::Register(*r)).update(Data::Concrete(0));
+                    dfg.get_def(addr, Location::Register(*r)).update(Data::Concrete(0, None));
                 }
             }
             Instruction { opcode: Opcode::MOV, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
@@ -126,10 +126,8 @@ impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
                 );
             }
             Instruction { opcode: Opcode::LEA, operands: [Operand::Register(l), mem_op], .. } => {
-                println!("Working on lea: {}", instr);
                 effective_address(instr, mem_op, addr, dfg, _contexts).map(|ea| {
-                    println!("Updating with value: {:016x}", ea);
-                    dfg.get_def(addr, Location::Register(*l)).update(Data::Concrete(ea));
+                    dfg.get_def(addr, Location::Register(*l)).update(Data::Concrete(ea, None));
                 });
             },
             _ => { }

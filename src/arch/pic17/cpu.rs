@@ -506,6 +506,13 @@ impl CPU {
 use analyses::static_single_assignment::cytron::NoAliasing;
 impl NoAliasing for Dependence { }
 
+use analyses::static_single_assignment::cytron::{Typed, TypeAtlas, TypeSpec};
+impl Typed for u8 {
+    fn type_of(&self, _: &TypeAtlas) -> TypeSpec {
+        TypeSpec::Unknown
+    }
+}
+
 use analyses::static_single_assignment::cytron::{Direction, SSAValues};
 use arch::pic17::{Dependence, Update};
 impl SSAValues for PIC17 {

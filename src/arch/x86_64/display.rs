@@ -165,6 +165,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
 
         fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
             fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
+                use analyses::static_single_assignment::cytron::Typed;
+                use analyses::static_single_assignment::cytron::{TypeAtlas, TypeSpec};
+                let type_atlas = TypeAtlas::new();
                 match value {
                     Some(value) => {
                         write!(
@@ -192,9 +195,21 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                                         panic!("Register alias must be another register");
                                     }
                                 },
-                                Data::Symbol(_) => { unimplemented!("symbolic expr"); },
-                                Data::Concrete(v) => {
-                                    write!(fmt, " (= {})", v)?;
+                                Data::Str(string) => { write!(fmt, " (= \"{}\")", string)?; }
+                                Data::Expression(expr) => {
+                                    let real_ty = expr.type_of(&type_atlas);
+                                    if real_ty != TypeSpec::Unknown {
+                                        write!(fmt, " (= {:?}: {:?})", expr, real_ty)?;
+                                    } else {
+                                        write!(fmt, " (= {:?})", expr)?;
+                                    }
+                                },
+                                Data::Concrete(v, ty) => {
+                                    if let Some(real_ty) = ty {
+                                        write!(fmt, " (= {}: {:?})", v, real_ty)?;
+                                    } else {
+                                        write!(fmt, " (= {})", v)?;
+                                    }
                                 }
                             }
                         }

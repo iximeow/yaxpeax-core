@@ -61,6 +61,10 @@ pub fn find_function_hints(
     }
 }
 
+// TODO: This does not distinguish between addresses in different segments!
+// so ds:[0x8] is the same as gs:[0x8]
+//
+// worse, linear address of teb + 0x8 is not the same as gs:[0x8] in user code, f.ex!
 pub fn find_xrefs(
     instr: &<x86_64Arch as Arch>::Instruction,
     address: <x86_64Arch as Arch>::Address,
@@ -71,9 +75,9 @@ pub fn find_xrefs(
     // instruction reordering or replacement, where there's a user or
     // computed context taking precedence over the instruction?
     //
-    // alright, let's start by splitting this up by number of 
-    // memory accesses this does NOT necessarily match the number 
-    // of operands! for example, push and pop are one operand, but 
+    // alright, let's start by splitting this up by number of
+    // memory accesses this does NOT necessarily match the number
+    // of operands! for example, push and pop are one operand, but
     // may access two memory locations
     match instr.opcode {
         // zero memory accesses

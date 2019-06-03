@@ -13,6 +13,7 @@
 use arch::Symbol;
 use arch::Function;
 use analyses::static_single_assignment::cytron::{AliasInfo, Direction, SSAValues, Value};
+use analyses::static_single_assignment::cytron::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
 use std::rc::Rc;
@@ -156,26 +157,94 @@ impl AliasInfo for Location {
     }
 }
 
+// TODO: how does this interact with struct/type inference?
+// SymbolicExpression::Deref(
+//   SymbolicExpression::Add(rdi_input, 0x8)
+// ) => HANDLE ?
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
 pub enum SymbolicExpression {
-    PointerTo(Box<SymbolicExpression>),
-    StringLiteral(String),
+    // Used to declare that a value has some type, but no additional information about it
+    // For example, declaring the type of a global struct. This might be written as:
+    // contexts.set_data(
+    //   (Segment::GS, 0),
+    //   SymbolicExpression::PointerTo(SymbolicExpression::Opaque(KPCR))
+    // )
+    Opaque(TypeSpec),
+    // TODO: smaller offset? u64 is the worst case but probably necessary.. :(
+    Add(Box<SymbolicExpression>, u64),
+    Deref(Box<SymbolicExpression>),
     Symbol(Symbol),
-    Function((Symbol, Function)),
     CopOut(String)
 }
 
+impl SymbolicExpression {
+    pub fn offset(self, offset: u64) -> SymbolicExpression {
+        match self {
+            SymbolicExpression::Opaque(ty) => SymbolicExpression::Add(Box::new(
+                SymbolicExpression::Opaque(ty)), offset
+            ),
+            SymbolicExpression::Add(ty, curr) => SymbolicExpression::Add(ty, curr.wrapping_add(offset)),
+            x @ _ => SymbolicExpression::Add(Box::new(x), offset)
+        }
+    }
+}
+
+impl Typed for SymbolicExpression {
+    fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec {
+        match self {
+            SymbolicExpression::Opaque(spec) => spec.clone(),
+            SymbolicExpression::Add(expr, offset) => {
+                if let Some(field) = type_atlas.get_field(&expr.type_of(type_atlas), *offset as u32) {
+                    field.type_of()
+                } else {
+                    TypeSpec::Unknown
+                }
+            }
+            SymbolicExpression::Deref(expr) => {
+                if let TypeSpec::PointerTo(ty) = expr.type_of(type_atlas) {
+                    *ty.to_owned()
+                } else {
+                    TypeSpec::Unknown
+                }
+            }
+            _ => TypeSpec::Unknown
+        }
+    }
+}
+
+// So, for example, `mov rcx_0, gs:[0x38]`
+// => mov rcx_0, KPCR.field_7
+// rcx_0.set_value(SymbolicExpression::Deref(
+//   SymbolicExpression::Add(
+// and then `mov rdx_1, [rcx_0 + 0x48]`
+// => mov rdx_1, [KPCR.field_7 + 0x48]
+// => mov rdx_1, KPCR.field_7.field_9
+
 #[derive(Debug, Clone)]
 pub enum Data {
-    Concrete(u64),
-    Symbol(SymbolicExpression),
+    Concrete(u64, Option<TypeSpec>),
+    Str(String),
+    Expression(SymbolicExpression),
     Alias(Rc<RefCell<Value<x86_64>>>)
 }
 
+impl Typed for Data {
+    fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec {
+        match self {
+            Data::Concrete(_, ref t) => t.to_owned().unwrap_or(TypeSpec::Bottom),
+            Data::Str(_) => TypeSpec::Bottom,
+            Data::Expression(expr) => expr.type_of(type_atlas),
+            Data::Alias(ptr) => ptr.borrow().data.to_owned().map(|d| d.type_of(type_atlas)).unwrap_or(TypeSpec::Unknown)
+        }
+    }
+}
+
+// TODO: update memo
 #[derive(Debug, Serialize)]
 pub enum DataMemo {
-    Concrete(u64),
-    Symbol(SymbolicExpression),
+    Concrete(u64, Option<TypeSpec>),
+    Str(String),
+    Expression(SymbolicExpression),
     Alias(u32)
 }
 
@@ -192,8 +261,9 @@ impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
     fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
         let selfref: &Value<x86_64> = &*(&*self.value.borrow());
         let newdata = selfref.data.as_ref().map(|data| match data {
-            Data::Concrete(v) => DataMemo::Concrete(*v),
-            Data::Symbol(expr) => DataMemo::Symbol(expr.to_owned()),
+            Data::Concrete(v, ty) => DataMemo::Concrete(*v, ty.to_owned()),
+            Data::Str(string) => DataMemo::Str(string.to_owned()),
+            Data::Expression(expr) => DataMemo::Expression(expr.to_owned()),
             Data::Alias(ptr) => DataMemo::Alias(memos[&HashedValue { value: Rc::clone(ptr) }])
         });
 
@@ -208,13 +278,17 @@ impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
 impl Hash for Data {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Data::Concrete(ref value) => {
+            Data::Concrete(ref value, _) => {
                 state.write_u8(1);
                 value.hash(state);
             }
-            Data::Symbol(ref expr) => {
+            Data::Expression(ref expr) => {
                 state.write_u8(2);
                 expr.hash(state);
+            }
+            Data::Str(ref s) => {
+                state.write_u8(4);
+                s.hash(state);
             }
             Data::Alias(ref value) => {
                 state.write_u8(3);

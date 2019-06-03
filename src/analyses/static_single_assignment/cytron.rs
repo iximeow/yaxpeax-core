@@ -216,9 +216,128 @@ pub trait AliasInfo where Self: Sized {
     fn maximal_alias_of(&self) -> Self;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Field {
+    pub size: u32,
+    pub ty: Option<TypeSpec>,
+    pub name: Option<String>
+}
+
+impl Field {
+    pub fn type_of(&self) -> TypeSpec {
+        self.ty.to_owned().unwrap_or(TypeSpec::Unknown)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeLayout {
+    fields: Vec<Field>,
+    size: u32
+}
+
+impl TypeLayout {
+    pub fn new(fields: Vec<Field>) -> Self {
+        let size = fields.iter().map(|f| f.size).sum();
+
+        TypeLayout { fields, size }
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn field_for(&self, mut offset: u32) -> Option<&Field> {
+        for f in self.fields.iter() {
+            if offset == 0 {
+                return Some(f);
+            } else {
+                if f.size < offset {
+                    return None;
+                } else {
+                    offset -= f.size;
+                }
+            }
+        }
+
+        None
+    }
+}
+
+pub struct TypeAtlas {
+    types: Vec<TypeLayout>
+}
+
+pub const KPCR: usize = 0;
+pub const ULONG64: usize = 1;
+
+impl TypeAtlas {
+    pub fn new() -> TypeAtlas {
+        let KPCR_Layout = TypeLayout::new(
+            vec![
+                // 0x0000
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("GdtBase".to_string()) },
+                // 0x0008
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("TssBase".to_string()) },
+                // 0x0010
+                Field { size: 8, ty: Some(TypeSpec::LayoutId(ULONG64)), name: Some("UserRsp".to_string()) },
+                // 0x0018
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("Self".to_string()) },
+                // 0x0020
+                Field { size: 0x28, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                // 0x0048
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("unknown_kpcr_field_0x48".to_string()) },
+                // 0x0050
+                Field { size: 0x5fb0, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                // 0x6000
+                Field { size: 8, ty: None, name: Some("Unknown_KPCRB_field".to_string()) },
+                // 0x6008
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("Unknown_KPCRB_field".to_string()) }
+            ]
+        );
+
+        let ULONG64_Layout = TypeLayout::new(
+            vec![
+                Field { size: 8, ty: None, name: None }
+            ]
+        );
+
+        let types = vec![KPCR_Layout, ULONG64_Layout];
+
+        TypeAtlas { types }
+    }
+
+    pub fn layout_of(&self, type_id: usize) -> &TypeLayout {
+        &self.types[type_id]
+    }
+
+    pub fn get_field(&self, ty: &TypeSpec, offset: u32) -> Option<&Field> {
+        if let TypeSpec::PointerTo(inner) = ty {
+            if let TypeSpec::LayoutId(id) = **inner {
+                let inner_layout = self.layout_of(id);
+                return inner_layout.field_for(offset);
+            }
+        }
+
+        None
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TypeSpec {
+    Top,
+    LayoutId(usize),
+    PointerTo(Box<TypeSpec>),
+    Unknown,
+    Bottom,
+}
+
+pub trait Typed {
+    fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec;
+}
+
 pub trait SSAValues where Self: Arch {
     type Location: Debug + AliasInfo + Hash + Eq + Serialize;
-    type Data: Debug + Hash + Clone;
+    type Data: Debug + Hash + Clone + Typed;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }
