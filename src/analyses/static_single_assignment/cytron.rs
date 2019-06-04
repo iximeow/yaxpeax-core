@@ -269,7 +269,13 @@ pub struct TypeAtlas {
 }
 
 pub const KPCR: usize = 0;
-pub const ULONG64: usize = 1;
+pub const U64: usize = 1;
+pub const I64: usize = 2;
+pub const U32: usize = 3;
+pub const I32: usize = 4;
+pub const U16: usize = 5;
+pub const I16: usize = 6;
+pub const KTSS64: usize = 7;
 
 impl TypeAtlas {
     pub fn new() -> TypeAtlas {
@@ -279,9 +285,9 @@ impl TypeAtlas {
                 // 0x0000
                 Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("GdtBase".to_string()) },
                 // 0x0008
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("TssBase".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTSS64)))), name: Some("TssBase".to_string()) },
                 // 0x0010
-                Field { size: 8, ty: Some(TypeSpec::LayoutId(ULONG64)), name: Some("UserRsp".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("UserRsp".to_string()) },
                 // 0x0018
                 Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("Self".to_string()) },
                 // 0x0020
@@ -297,14 +303,80 @@ impl TypeAtlas {
             ]
         );
 
-        let ULONG64_Layout = TypeLayout::new(
-            "ULONG64".to_string(),
+        let U64_Layout = TypeLayout::new(
+            "U64".to_string(),
             vec![
                 Field { size: 8, ty: None, name: None }
             ]
         );
 
-        let types = vec![KPCR_Layout, ULONG64_Layout];
+        let I64_Layout = TypeLayout::new(
+            "I64".to_string(),
+            vec![
+                Field { size: 8, ty: None, name: None }
+            ]
+        );
+
+        let U32_Layout = TypeLayout::new(
+            "U32".to_string(),
+            vec![
+                Field { size: 4, ty: None, name: None }
+            ]
+        );
+
+        let I32_Layout = TypeLayout::new(
+            "I32".to_string(),
+            vec![
+                Field { size: 4, ty: None, name: None }
+            ]
+        );
+
+        let U16_Layout = TypeLayout::new(
+            "U16".to_string(),
+            vec![
+                Field { size: 2, ty: None, name: None }
+            ]
+        );
+
+        let I16_Layout = TypeLayout::new(
+            "I16".to_string(),
+            vec![
+                Field { size: 2, ty: None, name: None }
+            ]
+        );
+
+        // https://github.com/ntdiff/headers/blob/master/Win10_1507_TS1/x64/System32/hal.dll/Standalone/_KTSS64.h
+        let KTSS64_Layout = TypeLayout::new(
+            "KTSS64".to_string(),
+            vec![
+                // 0x0000
+                Field { size: 4, ty: Some(TypeSpec::LayoutId(U32)), name: Some("Reserved0".to_string()) },
+                // 0x0004
+                Field { size: 8, ty: Some(TypeSpec::LayoutId(I64)), name: Some("Rsp0".to_string()) },
+                // 0x000c
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp1".to_string()) },
+                // 0x0014
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp2".to_string()) },
+                // 0x001c
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[0]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[1]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[2]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[3]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[4]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[5]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[6]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[7]".to_string()) },
+                // 0x005c
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Reserved1".to_string()) },
+                // 0x0064
+                Field { size: 2, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I16)))), name: Some("Reserved2".to_string()) },
+                // 0x0066
+                Field { size: 2, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I16)))), name: Some("IoMapBase".to_string()) },
+
+            ]
+        );
+
+        let types = vec![KPCR_Layout, U64_Layout, I64_Layout, U32_Layout, I32_Layout, U16_Layout, I16_Layout, KTSS64_Layout];
 
         TypeAtlas { types }
     }

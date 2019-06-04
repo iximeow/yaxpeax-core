@@ -177,6 +177,32 @@ pub enum SymbolicExpression {
     CopOut(String)
 }
 
+#[test]
+fn test_expr_fields() {
+    use analyses::static_single_assignment::cytron::KPCR; 
+    let type_atlas = &TypeAtlas::new();
+    let expr = SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCR))))));
+    println!("expr: {}", expr.show(type_atlas));
+    println!("  ty: {:?}", expr.type_of(type_atlas));
+    let access = SymbolicExpression::Deref(Box::new(expr.clone()));
+    println!("access: {}", access.show(type_atlas));
+    println!("  ty: {:?}", access.show(type_atlas));
+    let field_ptr = access.offset(0x8);
+    println!("field_ptr: {}", field_ptr.show(type_atlas));
+    println!("field_ptr: {:?}", field_ptr);
+    println!("  ty: {:?}", field_ptr.type_of(type_atlas));
+    let field = SymbolicExpression::Deref(Box::new(field_ptr));
+    println!("field: {}", field.show(type_atlas));
+    println!("  ty: {:?}", field.type_of(type_atlas));
+    let field_ptr_2 = field.offset(0x4);
+    println!("field_ptr_2: {}", field_ptr_2.show(type_atlas));
+    println!("  ty: {:?}", field_ptr_2.type_of(type_atlas));
+    let field_2 = SymbolicExpression::Deref(Box::new(field_ptr_2));
+    println!("field_2: {}", field_2.show(type_atlas));
+    println!("  ty: {:?}", field_2.type_of(type_atlas));
+    assert!(false);
+}
+
 impl SymbolicExpression {
     pub fn show(&self, type_atlas: &TypeAtlas) -> String {
         // inner expression first, if applicable..
@@ -227,7 +253,7 @@ impl Typed for SymbolicExpression {
             SymbolicExpression::Opaque(spec) => spec.clone(),
             SymbolicExpression::Add(expr, offset) => {
                 if let Some(field) = type_atlas.get_field(&expr.type_of(type_atlas), *offset as u32) {
-                    field.type_of()
+                    TypeSpec::PointerTo(Box::new(field.type_of()))
                 } else {
                     TypeSpec::Unknown
                 }
