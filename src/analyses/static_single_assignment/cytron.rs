@@ -276,6 +276,8 @@ pub const I32: usize = 4;
 pub const U16: usize = 5;
 pub const I16: usize = 6;
 pub const KTSS64: usize = 7;
+pub const KTHREAD: usize = 8;
+pub const KPCRB: usize = 8;
 
 impl TypeAtlas {
     pub fn new() -> TypeAtlas {
@@ -289,13 +291,36 @@ impl TypeAtlas {
                 // 0x0010
                 Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("UserRsp".to_string()) },
                 // 0x0018
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("Self".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCR)))), name: Some("Self".to_string()) },
                 // 0x0020
-                Field { size: 0x28, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCRB)))), name: Some("CurrentPcrb".to_string()) },
+                // 0x0028
+                Field { size: 0x20, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
                 // 0x0048
                 Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("unknown_kpcr_field_0x48".to_string()) },
                 // 0x0050
-                Field { size: 0x5fb0, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                Field { size: 0x010, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                // 0x0060
+                Field { size: 2, ty: Some(TypeSpec::LayoutId(U16)), name: Some("MajorVersion".to_string()) },
+                Field { size: 2, ty: Some(TypeSpec::LayoutId(U16)), name: Some("MinorVersion".to_string()) },
+                // 0x0064
+                Field { size: 0x04, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                // 0x0068
+                Field { size: 0x118, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                // 0x0180
+                Field { size: 8, ty: None, name: Some("Unknown_KPCRB_field".to_string()) },
+                // 0x0188
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("CurrentThread".to_string()) },
+                // 0x0190
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("NextThread".to_string()) },
+                // 0x0198
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("IdleThread".to_string()) },
+                // 0x01a0
+                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("UserRsp".to_string()) },
+                // 0x01a8
+                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("RspBase".to_string()) },
+                // 0x01b0
+                Field { size: 0x5e50, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
                 // 0x6000
                 Field { size: 8, ty: None, name: Some("Unknown_KPCRB_field".to_string()) },
                 // 0x6008
@@ -376,7 +401,13 @@ impl TypeAtlas {
             ]
         );
 
-        let types = vec![KPCR_Layout, U64_Layout, I64_Layout, U32_Layout, I32_Layout, U16_Layout, I16_Layout, KTSS64_Layout];
+        let KTHREAD_Layout = TypeLayout::new(
+            "KTHREAD".to_string(),
+            vec![
+            ]
+        );
+
+        let types = vec![KPCR_Layout.clone(), U64_Layout, I64_Layout, U32_Layout, I32_Layout, U16_Layout, I16_Layout, KTSS64_Layout, KTHREAD_Layout, KPCR_Layout];
 
         TypeAtlas { types }
     }
