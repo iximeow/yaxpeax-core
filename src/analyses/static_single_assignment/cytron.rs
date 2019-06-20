@@ -224,6 +224,17 @@ pub struct Field {
 }
 
 impl Field {
+    pub fn size(size: u32) -> Field {
+        Field { size, ty: None, name: None }
+    }
+    pub fn with_ty(mut self, ty: TypeSpec) -> Self {
+        self.ty = Some(ty);
+        self
+    }
+    pub fn with_name<T: Into<String>>(mut self, name: T) -> Self {
+        self.name = Some(name.into());
+        self
+    }
     pub fn type_of(&self) -> TypeSpec {
         self.ty.to_owned().unwrap_or(TypeSpec::Unknown)
     }
@@ -285,89 +296,77 @@ impl TypeAtlas {
             "KPCR".to_string(),
             vec![
                 // 0x0000
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("GdtBase".to_string()) },
+                Field::size(8).with_ty((TypeSpec::Unknown.pointer_to())).with_name("GdtBase"),
                 // 0x0008
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTSS64)))), name: Some("TssBase".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KTSS64)).with_name("TssBase"),
                 // 0x0010
-                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("UserRsp".to_string()) },
+                Field::size(8).with_ty(TypeSpec::LayoutId(U64)).with_name("UserRsp"),
                 // 0x0018
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCR)))), name: Some("Self".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KPCR)).with_name("Self"),
                 // 0x0020
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCRB)))), name: Some("CurrentPcrb".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KPCRB)).with_name("CurrentPcrb"),
                 // 0x0028
-                Field { size: 0x20, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                Field::size(0x20).with_name("TODO:KPCRB_data"),
                 // 0x0048
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("unknown_kpcr_field_0x48".to_string()) },
+                Field::size(8).with_ty(TypeSpec::Unknown.pointer_to()).with_name("unknown_kpcr_field_0x48"),
                 // 0x0050
-                Field { size: 0x010, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                Field::size(0x10).with_name("TODO:KPCR_data"),
                 // 0x0060
-                Field { size: 2, ty: Some(TypeSpec::LayoutId(U16)), name: Some("MajorVersion".to_string()) },
-                Field { size: 2, ty: Some(TypeSpec::LayoutId(U16)), name: Some("MinorVersion".to_string()) },
+                Field::size(2).with_name("MajorVersion"),
+                Field::size(2).with_name("MinorVersion"),
                 // 0x0064
-                Field { size: 0x04, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                Field::size(4).with_name("TODO:KPCR_data"),
                 // 0x0068
-                Field { size: 0x118, ty: None, name: Some("TODO:KPCR_data".to_string()) },
+                Field::size(0x118).with_name("TODO:KPCR_data"),
                 // 0x0180
-                Field { size: 8, ty: None, name: Some("Unknown_KPCRB_field".to_string()) },
+                Field::size(8).with_name("Unknown_KPCRB_field"),
                 // 0x0188
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("CurrentThread".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KTHREAD)).with_name("CurrentThread"),
                 // 0x0190
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("NextThread".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KTHREAD)).with_name("NextThread"),
                 // 0x0198
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KTHREAD)))), name: Some("IdleThread".to_string()) },
+                Field::size(8).with_ty(TypeSpec::struct_pointer(KTHREAD)).with_name("IdleThread"),
                 // 0x01a0
-                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("UserRsp".to_string()) },
+                Field::size(8).with_ty(TypeSpec::LayoutId(U64)).with_name("UserRsp"),
                 // 0x01a8
-                Field { size: 8, ty: Some(TypeSpec::LayoutId(U64)), name: Some("RspBase".to_string()) },
+                Field::size(8).with_ty(TypeSpec::LayoutId(U64)).with_name("RspBase"),
                 // 0x01b0
-                Field { size: 0x5e50, ty: None, name: Some("TODO:KPCRB_data".to_string()) },
+                Field::size(0x5e50).with_name("TODO:KPCRB_data"),
                 // 0x6000
-                Field { size: 8, ty: None, name: Some("Unknown_KPCRB_field".to_string()) },
+                Field::size(8).with_name("Unknown_KPCRB_field"),
                 // 0x6008
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::Unknown))), name: Some("Unknown_KPCRB_field".to_string()) }
+                Field::size(8).with_ty(TypeSpec::Unknown.pointer_to()).with_name("Unknown_KPCRB_field"),
             ]
         );
 
         let U64_Layout = TypeLayout::new(
             "U64".to_string(),
-            vec![
-                Field { size: 8, ty: None, name: None }
-            ]
+            vec![Field::size(8)]
         );
 
         let I64_Layout = TypeLayout::new(
             "I64".to_string(),
-            vec![
-                Field { size: 8, ty: None, name: None }
-            ]
+            vec![Field::size(8)]
         );
 
         let U32_Layout = TypeLayout::new(
             "U32".to_string(),
-            vec![
-                Field { size: 4, ty: None, name: None }
-            ]
+            vec![Field::size(4)]
         );
 
         let I32_Layout = TypeLayout::new(
             "I32".to_string(),
-            vec![
-                Field { size: 4, ty: None, name: None }
-            ]
+            vec![Field::size(4)]
         );
 
         let U16_Layout = TypeLayout::new(
             "U16".to_string(),
-            vec![
-                Field { size: 2, ty: None, name: None }
-            ]
+            vec![Field::size(2)]
         );
 
         let I16_Layout = TypeLayout::new(
             "I16".to_string(),
-            vec![
-                Field { size: 2, ty: None, name: None }
-            ]
+            vec![Field::size(2)]
         );
 
         // https://github.com/ntdiff/headers/blob/master/Win10_1507_TS1/x64/System32/hal.dll/Standalone/_KTSS64.h
@@ -445,6 +444,15 @@ pub enum TypeSpec {
     PointerTo(Box<TypeSpec>),
     Unknown,
     Bottom,
+}
+
+impl TypeSpec {
+    fn struct_pointer(id: usize) -> Self {
+        TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(id)))
+    }
+    fn pointer_to(self) -> Self {
+        TypeSpec::PointerTo(Box::new(self))
+    }
 }
 
 pub trait Typed {
