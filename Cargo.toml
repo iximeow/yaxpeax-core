@@ -26,6 +26,7 @@ goblin = { path = "/toy/rust/goblin" }
 "petgraph" = "*"
 "nix" = "*"
 "proc-maps" = "*"
+"siphasher" = "0.3.0"
 
 # [[bin]]
 # name = "picanalyzer"
