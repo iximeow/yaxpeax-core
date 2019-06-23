@@ -110,7 +110,31 @@ pub enum OperationSuccess {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum ParseError {
+    Address(String),
+    Symbol(String),
+    Command(String),
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ParseError::Address(addr) => {
+                write!(fmt, "Invalid address: \"{}\"", addr)
+            },
+            ParseError::Symbol(sym) => {
+                write!(fmt, "Invalid symbol: \"{}\"", sym)
+            },
+            ParseError::Command(cmd) => {
+                write!(fmt, "Invalid command: \"{}\"", cmd)
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum OperationError {
+    ParseError(ParseError),
     Unknown(String),
     Unsupported(String),
     Misc(String)
