@@ -618,6 +618,14 @@ impl SSAValues for x86_64 {
             }
         }
         match instr.opcode {
+            Opcode::MOVSD |
+            Opcode::MOVSS |
+            Opcode::CVTSI2SS |
+            Opcode::CVTSI2SD |
+            Opcode::CVTTSD2SI |
+            Opcode::CVTSD2SI |
+            Opcode::CVTSD2SS |
+            Opcode::LDDQU |
             Opcode::LEA |
             Opcode::MOVZX_b |
             Opcode::MOVZX_w |
@@ -1265,6 +1273,21 @@ impl SSAValues for x86_64 {
                 let mut locs = decompose_write(&instr.operands[0]);
                 locs.append(&mut decompose_read(&instr.operands[1]));
                 locs.push((Some(Location::ZF), Direction::Read));
+                locs
+            }
+            Opcode::SQRTSD |
+            Opcode::ADDSD |
+            Opcode::SUBSD |
+            Opcode::MULSD |
+            Opcode::DIVSD |
+            Opcode::MINSD |
+            Opcode::MAXSD |
+            Opcode::MOVDDUP |
+            Opcode::HADDPS |
+            Opcode::HSUBPS |
+            Opcode::ADDSUBPS => {
+                let mut locs = decompose_readwrite(&instr.operands[0]);
+                locs.append(&mut decompose_read(&instr.operands[1]));
                 locs
             }
             Opcode::CPUID |

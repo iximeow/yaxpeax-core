@@ -169,6 +169,25 @@ pub fn find_xrefs(
         Opcode::DIV |
         Opcode::IDIV |
         Opcode::MUL |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::SQRTSD |
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::MOVDDUP |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
         Opcode::SETO |
         Opcode::SETNO |
         Opcode::SETB |
