@@ -517,8 +517,20 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
     // context such that we can make that determination
     fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
         match self.opcode {
-            Opcode::MOVSD |
             Opcode::MOVSS |
+            Opcode::SQRTSS |
+            Opcode::ADDSS |
+            Opcode::SUBSS |
+            Opcode::MULSS |
+            Opcode::DIVSS |
+            Opcode::MINSS |
+            Opcode::MAXSS |
+            Opcode::MOVSLDUP |
+            Opcode::CVTSI2SS |
+            Opcode::CVTTSS2SI |
+            Opcode::CVTSS2SI |
+            Opcode::CVTSS2SD |
+            Opcode::MOVSD |
             Opcode::SQRTSD |
             Opcode::ADDSD |
             Opcode::SUBSD |

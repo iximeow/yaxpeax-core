@@ -618,9 +618,16 @@ impl SSAValues for x86_64 {
             }
         }
         match instr.opcode {
+            Opcode::SQRTSD |
+            Opcode::SQRTSS |
+            Opcode::MOVDDUP |
+            Opcode::MOVSLDUP |
             Opcode::MOVSD |
             Opcode::MOVSS |
             Opcode::CVTSI2SS |
+            Opcode::CVTTSS2SI |
+            Opcode::CVTSS2SI |
+            Opcode::CVTSS2SD |
             Opcode::CVTSI2SD |
             Opcode::CVTTSD2SI |
             Opcode::CVTSD2SI |
@@ -1275,14 +1282,18 @@ impl SSAValues for x86_64 {
                 locs.push((Some(Location::ZF), Direction::Read));
                 locs
             }
-            Opcode::SQRTSD |
             Opcode::ADDSD |
             Opcode::SUBSD |
             Opcode::MULSD |
             Opcode::DIVSD |
             Opcode::MINSD |
             Opcode::MAXSD |
-            Opcode::MOVDDUP |
+            Opcode::ADDSS |
+            Opcode::SUBSS |
+            Opcode::MULSS |
+            Opcode::DIVSS |
+            Opcode::MINSS |
+            Opcode::MAXSS |
             Opcode::HADDPS |
             Opcode::HSUBPS |
             Opcode::ADDSUBPS => {

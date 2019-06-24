@@ -458,9 +458,14 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 }
             },
             Opcode::LEA |
+            Opcode::MOVDDUP |
+            Opcode::MOVSLDUP |
             Opcode::MOVSD |
             Opcode::MOVSS |
             Opcode::CVTSI2SS |
+            Opcode::CVTTSS2SI |
+            Opcode::CVTSS2SI |
+            Opcode::CVTSS2SD |
             Opcode::CVTSI2SD |
             Opcode::CVTTSD2SI |
             Opcode::CVTSD2SI |
@@ -481,14 +486,18 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
             }
-            Opcode::SQRTSD |
             Opcode::ADDSD |
             Opcode::SUBSD |
             Opcode::MULSD |
             Opcode::DIVSD |
             Opcode::MINSD |
             Opcode::MAXSD |
-            Opcode::MOVDDUP |
+            Opcode::ADDSS |
+            Opcode::SUBSS |
+            Opcode::MULSS |
+            Opcode::DIVSS |
+            Opcode::MINSS |
+            Opcode::MAXSS |
             Opcode::HADDPS |
             Opcode::HSUBPS |
             Opcode::ADDSUBPS |
@@ -513,6 +522,8 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
 
+            Opcode::SQRTSD |
+            Opcode::SQRTSS |
             Opcode::CMOVA |
             Opcode::CMOVB |
             Opcode::CMOVG |
