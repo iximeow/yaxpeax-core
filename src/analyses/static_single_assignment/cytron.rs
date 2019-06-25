@@ -288,7 +288,8 @@ pub const U16: usize = 5;
 pub const I16: usize = 6;
 pub const KTSS64: usize = 7;
 pub const KTHREAD: usize = 8;
-pub const KPCRB: usize = 8;
+pub const KPCRB: usize = 9;
+pub const AVFrame: usize = 10;
 
 impl TypeAtlas {
     pub fn new() -> TypeAtlas {
@@ -369,6 +370,79 @@ impl TypeAtlas {
             vec![Field::size(2)]
         );
 
+        let AVFrame_Layout = TypeLayout::new(
+            "AVFrame".to_string(),
+            vec![
+                Field::size(64).with_name("data"),
+                Field::size(4 * 8).with_name("linesize"),
+                // 0x60
+                Field::size(8).with_name("extended_data"),
+                Field::size(4).with_name("width"),
+                Field::size(4).with_name("height"),
+                // 0x70
+                Field::size(4).with_name("nb_samples"),
+                Field::size(4).with_name("format"),
+                Field::size(4).with_name("key_frame"),
+                Field::size(4).with_name("pict_type"),
+                // 0x80
+                Field::size(4).with_name("sample_aspect_ratio.num"),
+                Field::size(4).with_name("sample_aspect_ratio.den"),
+                Field::size(8).with_name("pts"),
+                Field::size(8).with_name("pkt_pts"),
+                Field::size(8).with_name("pkt_dts"),
+                // 0x98
+                Field::size(4).with_name("coded_picture_number"),
+                Field::size(4).with_name("display_picture_number"),
+                // 0xa0
+                Field::size(4).with_name("quality"),
+                Field::size(4).with_name("pad_0"),
+                Field::size(8).with_name("opaque"),
+                Field::size(8 * 8).with_name("error(deprecated)"),
+                Field::size(4).with_name("repeat_pict"),
+                // 0xf0
+                Field::size(4).with_name("interlaced_frame"),
+                Field::size(4).with_name("top_field_first"),
+                Field::size(4).with_name("palette_has_changed"),
+                Field::size(8).with_name("reordered_opaque"),
+                Field::size(4).with_name("sample_rate"),
+                Field::size(4).with_name("pad_1"),
+                Field::size(8).with_name("channel_layout"),
+                // 0x110
+                Field::size(8 * 8).with_name("buf"),
+                // 0x150
+                Field::size(8).with_name("extended_buf"),
+                Field::size(4).with_name("nb_extended_buf"),
+                Field::size(4).with_name("pad_2"),
+                Field::size(8).with_name("side_data"),
+                Field::size(4).with_name("nb_side_data"),
+                // 0x168
+                Field::size(4).with_name("flags"),
+                Field::size(4).with_name("color_range"),
+                // 0x170
+                Field::size(4).with_name("color_primaries"),
+                Field::size(4).with_name("color_trc"),
+                Field::size(4).with_name("colorspace"),
+                Field::size(4).with_name("chroma_location"),
+                // 0x180
+                Field::size(4).with_name("pad_3"),
+                Field::size(8).with_name("best_effort_timestamp"),
+                Field::size(8).with_name("pkt_pos"),
+                Field::size(8).with_name("pkt_duration"),
+                Field::size(8).with_name("metadata"),
+                // 0x1a0
+                Field::size(4).with_name("decode_error_flags"),
+                Field::size(4).with_name("channels"),
+                Field::size(4).with_name("pkt_size"),
+                Field::size(4).with_name("pad_4"),
+                Field::size(8).with_name("hw_frames_ctx"),
+                Field::size(8).with_name("opaque_ref"),
+                Field::size(8).with_name("crop_top"),
+                Field::size(8).with_name("crop_bottom"),
+                Field::size(8).with_name("crop_left"),
+                Field::size(8).with_name("crop_right"),
+            ]
+        );
+
         // https://github.com/ntdiff/headers/blob/master/Win10_1507_TS1/x64/System32/hal.dll/Standalone/_KTSS64.h
         let KTSS64_Layout = TypeLayout::new(
             "KTSS64".to_string(),
@@ -406,7 +480,7 @@ impl TypeAtlas {
             ]
         );
 
-        let types = vec![KPCR_Layout.clone(), U64_Layout, I64_Layout, U32_Layout, I32_Layout, U16_Layout, I16_Layout, KTSS64_Layout, KTHREAD_Layout, KPCR_Layout];
+        let types = vec![KPCR_Layout.clone(), U64_Layout, I64_Layout, U32_Layout, I32_Layout, U16_Layout, I16_Layout, KTSS64_Layout, KTHREAD_Layout, KPCR_Layout, AVFrame_Layout];
 
         TypeAtlas { types }
     }
@@ -447,10 +521,10 @@ pub enum TypeSpec {
 }
 
 impl TypeSpec {
-    fn struct_pointer(id: usize) -> Self {
+    pub fn struct_pointer(id: usize) -> Self {
         TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(id)))
     }
-    fn pointer_to(self) -> Self {
+    pub fn pointer_to(self) -> Self {
         TypeSpec::PointerTo(Box::new(self))
     }
 }
