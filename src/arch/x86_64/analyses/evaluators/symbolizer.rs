@@ -134,6 +134,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
 
 impl ConstEvaluator<x86_64, x86_64Data, SymbolicDomain> for x86_64 {
     fn evaluate(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
+        use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr {
             Instruction { opcode: Opcode::MOV, operands: [Operand::Register(l), op], .. } => {
@@ -147,6 +148,38 @@ impl ConstEvaluator<x86_64, x86_64Data, SymbolicDomain> for x86_64 {
                             )
                         }
                     }
+                }
+            }
+            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI64(i)], .. } => {
+                let use_val = dfg.get_use(addr, Location::Register(*l));
+                let def_val = dfg.get_def(addr, Location::Register(*l));
+                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
+                match use_val.get_data() {
+                    Some(Data::Expression(expr)) => {
+                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
+                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
+                    }
+                    _ => { }
+                }
+            }
+            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI32(i)], .. } => {
+                let use_val = dfg.get_use(addr, Location::Register(*l));
+                let def_val = dfg.get_def(addr, Location::Register(*l));
+                match use_val.get_data() {
+                    Some(Data::Expression(expr)) => {
+                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
+                    }
+                    _ => { }
+                }
+            }
+            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI8(i)], .. } => {
+                let use_val = dfg.get_use(addr, Location::Register(*l));
+                let def_val = dfg.get_def(addr, Location::Register(*l));
+                match use_val.get_data() {
+                    Some(Data::Expression(expr)) => {
+                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
+                    }
+                    _ => { }
                 }
             }
             _ => { }
