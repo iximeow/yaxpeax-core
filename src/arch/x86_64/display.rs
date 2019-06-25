@@ -13,12 +13,12 @@ use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::x86_64;
 use arch::x86_64::{ContextRead, MergedContextTable};
-use arch::x86_64::analyses::data_flow::{Data, Location};
+use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA};
+use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA, Typed};
 
 use memory::MemoryRange;
 
@@ -313,12 +313,40 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    write!(fmt, "[")?;
-                    write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
-                    write!(fmt, " {}]",
-//                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
-                        format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                    )
+                    // HACK: support writing memory operands like `reg.field` if possible:
+                    let mut drawn = false;
+                    if let Some(ssa) = ctx.ssa.as_ref() {
+                        let use_val = ssa.get_use(ctx.addr, Location::Register(*spec));
+                        match use_val.get_data() {
+                            Some(Data::Expression(expr)) => {
+                                use analyses::static_single_assignment::cytron::{TypeAtlas, TypeSpec};
+                                let type_atlas = TypeAtlas::new();
+                                if let SymbolicExpression::Add(base, offset) = expr.offset(*disp as i64 as u64) {
+                                    if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
+                                        drawn = true;
+                                        let val_rc = use_val.as_rc();
+                                        if let Some(name) = field.name.as_ref() {
+                                            write!(fmt, "[{}_{}.{}]", spec, val_rc.borrow().version().unwrap_or(0xffffffff), name)?;
+                                        } else {
+                                            write!(fmt, "[{}_{} + {:#x}]", spec, val_rc.borrow().version().unwrap_or(0xffffffff), offset)?;
+                                        }
+                                    }
+                                }
+                            }
+                            _ => { }
+                        }
+                    }
+
+                    if !drawn {
+                        write!(fmt, "[")?;
+                        write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
+                        write!(fmt, " {}]",
+    //                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
+                            format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
+                        );
+                    }
+
+                    Ok(())
                 },
                 Operand::RegScale(spec, scale) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
