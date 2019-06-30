@@ -506,7 +506,7 @@ impl CPU {
 use analyses::static_single_assignment::cytron::NoAliasing;
 impl NoAliasing for Dependence { }
 
-use analyses::static_single_assignment::cytron::{Typed, TypeAtlas, TypeSpec};
+use data::types::{Typed, TypeAtlas, TypeSpec};
 impl Typed for u8 {
     fn type_of(&self, _: &TypeAtlas) -> TypeSpec {
         TypeSpec::Unknown

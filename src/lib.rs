@@ -20,6 +20,7 @@ extern crate yaxpeax_pic24;
 
 pub mod arch;
 pub mod analyses;
+pub mod data;
 pub mod debug;
 pub mod memory;
 pub mod parts;

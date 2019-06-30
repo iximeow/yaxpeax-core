@@ -13,7 +13,7 @@
 use arch::Symbol;
 use arch::Function;
 use analyses::static_single_assignment::cytron::{AliasInfo, Direction, SSAValues, Value};
-use analyses::static_single_assignment::cytron::{Typed, TypeSpec, TypeAtlas};
+use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
 use std::rc::Rc;

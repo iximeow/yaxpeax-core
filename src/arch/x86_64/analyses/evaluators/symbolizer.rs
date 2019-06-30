@@ -4,7 +4,9 @@ use arch::x86_64::x86_64Data;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use analyses;
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
-use analyses::static_single_assignment::cytron::{SSA, TypeSpec};
+use analyses::static_single_assignment::cytron::SSA;
+use data;
+use data::types::TypeSpec;
 
 pub struct SymbolicDomain;
 
@@ -26,7 +28,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
                     Some(SymbolicExpression::Add(
-                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(analyses::static_single_assignment::cytron::KPCR))))),
+                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(data::types::KPCR))))),
                         *disp as u64
                     ))
                 } else {
@@ -42,7 +44,8 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
                     Some(SymbolicExpression::Add(
-                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(analyses::static_single_assignment::cytron::KPCR))))),
+                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(data::types::KPCR))))),
+                        *disp as u64
                         *disp
                     ))
                 } else {
@@ -61,7 +64,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                 // ... it's actually the linear address of the KPCR...
                 Some(SymbolicExpression::Opaque(
                     TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(
-                        TypeSpec::LayoutId(analyses::static_single_assignment::cytron::KPCR)
+                        TypeSpec::LayoutId(data::types::KPCR)
                     ))))
                 ))
             } else if addr == 0x1402a3148 {

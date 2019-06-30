@@ -18,7 +18,8 @@ use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA, Typed};
+use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA};
+use data::types::{Typed, TypeAtlas, TypeSpec};
 
 use memory::MemoryRange;
 
@@ -165,8 +166,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
 
         fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
             fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
-                use analyses::static_single_assignment::cytron::Typed;
-                use analyses::static_single_assignment::cytron::{TypeAtlas, TypeSpec};
+                use data::types::{Typed, TypeAtlas, TypeSpec};
                 let type_atlas = TypeAtlas::new();
                 match value {
                     Some(value) => {
@@ -319,7 +319,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                         let use_val = ssa.get_use(ctx.addr, Location::Register(*spec));
                         match use_val.get_data() {
                             Some(Data::Expression(expr)) => {
-                                use analyses::static_single_assignment::cytron::{TypeAtlas, TypeSpec};
+                                use data::types::{Typed, TypeAtlas, TypeSpec};
                                 let type_atlas = TypeAtlas::new();
                                 if let SymbolicExpression::Add(base, offset) = expr.offset(*disp as i64 as u64) {
                                     if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
