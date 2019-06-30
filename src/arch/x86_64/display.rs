@@ -18,7 +18,7 @@ use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::cytron::{DFGRef, Direction, SSA};
+use analyses::static_single_assignment::{DFGRef, Direction, SSA};
 use data::types::{Typed, TypeAtlas, TypeSpec};
 
 use memory::MemoryRange;

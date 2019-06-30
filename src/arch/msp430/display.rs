@@ -13,7 +13,7 @@ use arch::msp430::syntaxed_render;
 use arch::msp430::{PartialInstructionContext};
 use yaxpeax_msp430_mc::{Instruction, Opcode, Operand, Width, MSP430};
 use analyses::control_flow::ControlFlowGraph;
-use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::SSA;
 use std::collections::HashMap;
 use memory::MemoryRange;
 
@@ -26,7 +26,7 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
         _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
         ssa: &SSA<MSP430>) -> String {
 
-        use analyses::static_single_assignment::cytron::Direction;
+        use analyses::static_single_assignment::Direction;
         fn render_operand<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, operand: &Operand, context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
             fn signed_hex(num: i16) -> String {
                 if num >= 0 {
@@ -246,7 +246,7 @@ impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContex
     }
 }
 
-use analyses::static_single_assignment::cytron::SSAValues;
+use analyses::static_single_assignment::SSAValues;
 pub fn render_instruction_with_ssa_values<T>(
     address: <MSP430 as Arch>::Address,
     instr: &<MSP430 as Arch>::Instruction,

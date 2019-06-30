@@ -12,7 +12,7 @@
 
 use arch::Symbol;
 use arch::Function;
-use analyses::static_single_assignment::cytron::{AliasInfo, Direction, SSAValues, Value};
+use analyses::static_single_assignment::{AliasInfo, Direction, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
 use std::collections::HashMap;
-use analyses::static_single_assignment::cytron::HashedValue;
+use analyses::static_single_assignment::HashedValue;
 use serialize::Memoable;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -179,7 +179,7 @@ pub enum SymbolicExpression {
 
 #[test]
 fn test_expr_fields() {
-    use analyses::static_single_assignment::cytron::KPCR; 
+    use data::types::KPCR;
     let type_atlas = &TypeAtlas::new();
     let expr = SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCR))))));
     println!("expr: {}", expr.show(type_atlas));

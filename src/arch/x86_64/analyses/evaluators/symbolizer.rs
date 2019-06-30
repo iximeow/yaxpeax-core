@@ -4,7 +4,7 @@ use arch::x86_64::x86_64Data;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use analyses;
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
-use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::SSA;
 use data;
 use data::types::TypeSpec;
 

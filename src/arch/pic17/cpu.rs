@@ -503,7 +503,7 @@ impl CPU {
 }
 
 // TODO: this is wrong lol
-use analyses::static_single_assignment::cytron::NoAliasing;
+use analyses::static_single_assignment::NoAliasing;
 impl NoAliasing for Dependence { }
 
 use data::types::{Typed, TypeAtlas, TypeSpec};
@@ -513,7 +513,7 @@ impl Typed for u8 {
     }
 }
 
-use analyses::static_single_assignment::cytron::{Direction, SSAValues};
+use analyses::static_single_assignment::{Direction, SSAValues};
 use arch::pic17::{Dependence, Update};
 impl SSAValues for PIC17 {
     type Location = Dependence;

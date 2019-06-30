@@ -14,7 +14,7 @@ use std::io;
 
 use yaxpeax_arch::Arch;
 use analyses::control_flow;
-use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
 
 use std::collections::HashMap;

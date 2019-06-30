@@ -17,8 +17,8 @@ use ContextWrite;
 use arch::{Function, Symbol, SymbolQuery};
 
 use analyses::control_flow;
-use analyses::static_single_assignment::cytron::SSA;
-use analyses::static_single_assignment::cytron::{DFGRef, HashedValue};
+use analyses::static_single_assignment::SSA;
+use analyses::static_single_assignment::{DFGRef, HashedValue};
 use analyses::xrefs;
 
 #[derive(Serialize)]
@@ -317,7 +317,7 @@ const READ_ALL_FLAGS: [(Option<Location>, Direction); 4] = [
     (Some(Location::FlagV), Direction::Read)
 ];
 
-use analyses::static_single_assignment::cytron::AliasInfo;
+use analyses::static_single_assignment::AliasInfo;
 impl AliasInfo for Location {
     fn aliases_of(&self) -> Vec<Self> { vec![] }
     fn maximal_alias_of(&self) -> Self {
@@ -344,7 +344,7 @@ impl Memoable for HashedValue<DFGRef<MSP430>> {
     }
 }
 
-use analyses::static_single_assignment::cytron::{Direction, SSAValues};
+use analyses::static_single_assignment::{Direction, SSAValues};
 impl SSAValues for MSP430 {
     type Location = Location;
     type Data = u8;

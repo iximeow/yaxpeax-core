@@ -15,7 +15,7 @@ use analyses::control_flow;
 use analyses::control_flow::{ControlFlowGraph, Determinant};
 use memory::MemoryRange;
 
-use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::SSA;
 
 // TODO: should this whole thing be deleted lol
 impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruction where T: pic17::PartialInstructionContext {
@@ -40,7 +40,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
             }
         }
 
-        use analyses::static_single_assignment::cytron::Direction;
+        use analyses::static_single_assignment::Direction;
         fn render_operand<T: PartialInstructionContext>(_address: <PIC17 as Arch>::Address, operand: &Operand, context: Option<&T>, _ssa: &SSA<PIC17>, _direction: Direction) -> String {
             match operand {
                 Operand::ImmediateU8(i) => {
@@ -171,7 +171,7 @@ impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstru
     }
 }
 
-use analyses::static_single_assignment::cytron::SSAValues;
+use analyses::static_single_assignment::SSAValues;
 pub fn render_instruction_with_ssa_values<T>(
     address: <PIC17 as Arch>::Address,
     instr: &<PIC17 as Arch>::Instruction,

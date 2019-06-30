@@ -48,8 +48,8 @@ pub trait SyntaxedRender<A, T, F> {
     fn render(&self, context: Option<&T>, function_table: &HashMap<A, F>) -> String;
 }
 
-use analyses::static_single_assignment::cytron::SSAValues;
-use analyses::static_single_assignment::cytron::SSA;
+use analyses::static_single_assignment::SSAValues;
+use analyses::static_single_assignment::SSA;
 pub trait SyntaxedSSARender<Architecture: Arch + SSAValues, T, F> where
     <Architecture as Arch>::Address: Eq + Hash,
     <Architecture as SSAValues>::Location: Eq + Hash,
