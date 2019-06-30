@@ -512,8 +512,8 @@ impl ModuleData {
                     // TODO: actually respect ELF loader behavior w.r.t overlays
                     // TODO: does this do stuff with alignment or what
                     let mut section_data = vec![0; section.p_memsz as usize];
-                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
-                    println!("{:?}", section);
+//                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
+//                    println!("{:?}", section);
                     let mut physical_copy_end = (section.p_paddr as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.p_paddr as usize) < data.len() {
@@ -556,15 +556,15 @@ impl ModuleData {
                     Object::PE(pe) => pe,
                     _ => { unreachable!(); }
                 };
-                println!("Parsed PE: {:?}", pe);
+//                println!("Parsed PE: {:?}", pe);
 
                 for section in pe.sections.iter() {
                     // TODO: look into cow handles into the actual data
                     // TODO: actually respect PE loader behavior w.r.t overlays
                     // TODO: does this do stuff with alignment or what
                     let mut section_data = vec![0; section.virtual_size as usize];
-                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.virtual_size, section.size_of_raw_data);
-                    println!("{:?}", section);
+//                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.virtual_size, section.size_of_raw_data);
+//                    println!("{:?}", section);
                     let mut physical_copy_end = (section.pointer_to_raw_data as usize) + std::cmp::min(section.size_of_raw_data as usize, section.virtual_size as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.pointer_to_raw_data as usize) < data.len() {
@@ -597,7 +597,7 @@ impl ModuleData {
                 match &module.module_info {
                     ModuleInfo::PE(_, _, _, _, _, ref imports, ref _exports, _) => {
                         for i in imports.iter() {
-                            println!("import: {:?}", i);
+//                            println!("import: {:?}", i);
                         }
                     }
                     _ => { }

@@ -153,10 +153,10 @@ impl ConstEvaluator<x86_64, x86_64Data, SymbolicDomain> for x86_64 {
             Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI64(i)], .. } => {
                 let use_val = dfg.get_use(addr, Location::Register(*l));
                 let def_val = dfg.get_def(addr, Location::Register(*l));
-                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
+//                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
                 match use_val.get_data() {
                     Some(Data::Expression(expr)) => {
-                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
+//                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
                         def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
                     }
                     _ => { }
