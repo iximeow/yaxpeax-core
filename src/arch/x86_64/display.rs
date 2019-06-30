@@ -499,9 +499,12 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::CVTSD2SI |
             Opcode::CVTSD2SS |
             Opcode::LDDQU |
+            Opcode::MOVSX_b |
+            Opcode::MOVSX_w |
             Opcode::MOVZX_b |
             Opcode::MOVZX_w |
             Opcode::MOVSX |
+            Opcode::MOVSXD |
             Opcode::MOV => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
@@ -573,6 +576,12 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
+            Opcode::BT |
+            Opcode::BTS |
+            Opcode::BTR |
+            Opcode::BTC |
+            Opcode::BSR |
+            Opcode::BSF |
             Opcode::CMP |
             Opcode::TEST => {
                 write!(fmt, " ")?;
@@ -586,6 +595,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
             }
+            Opcode::XADD |
             Opcode::LSL => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
@@ -725,7 +735,15 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::IMUL |
             Opcode::DIV |
             Opcode::IDIV => {
-                unreachable!();
+                write!(fmt, " ")?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt);
+                if let Operand::Nothing = &self.instr.operands[1] {
+                    Ok(())
+                } else {
+                    write!(fmt, ", ")?;
+                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                }
+                // TODO: 3-operand mul/div?
             }
         }
     }

@@ -160,6 +160,13 @@ pub fn find_xrefs(
         }
 
         // one memory access (max)
+        Opcode::XADD |
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF |
         Opcode::LEA |
         Opcode::POPF |
         Opcode::PUSHF |
@@ -233,8 +240,11 @@ pub fn find_xrefs(
         Opcode::CMOVS |
         Opcode::CMOVZ |
         Opcode::MOV |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
         Opcode::MOVZX_b |
         Opcode::MOVZX_w |
+        Opcode::MOVSXD |
         Opcode::MOVSX => {
             // TODO: anything other than mov probably should be read+write
             let mut refs: Vec<(<x86_64Arch as Arch>::Address, Update)> = vec![];

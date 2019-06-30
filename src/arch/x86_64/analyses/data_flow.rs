@@ -634,14 +634,18 @@ impl SSAValues for x86_64 {
             Opcode::CVTSD2SS |
             Opcode::LDDQU |
             Opcode::LEA |
+            Opcode::MOVSX_b |
+            Opcode::MOVSX_w |
             Opcode::MOVZX_b |
             Opcode::MOVZX_w |
             Opcode::MOVSX |
+            Opcode::MOVSXD |
             Opcode::MOV => {
                 let mut locs = decompose_read(&instr.operands[1]);
                 locs.append(&mut decompose_write(&instr.operands[0]));
                 locs
             }
+            Opcode::XADD |
             Opcode::XCHG => {
                 let mut locs = decompose_readwrite(&instr.operands[1]);
                 locs.append(&mut decompose_readwrite(&instr.operands[0]));
@@ -664,6 +668,17 @@ impl SSAValues for x86_64 {
                 vec![
                     (Some(Location::CF), Direction::Write)
                 ]
+            }
+            Opcode::BT |
+            Opcode::BTS |
+            Opcode::BTR |
+            Opcode::BTC |
+            Opcode::BSR |
+            Opcode::BSF => {
+                let mut locs = decompose_read(&instr.operands[0]);
+                locs.append(&mut decompose_read(&instr.operands[1]));
+                locs.push((Some(Location::ZF), Direction::Write));
+                locs
             }
             Opcode::SAR |
             Opcode::SAL |
