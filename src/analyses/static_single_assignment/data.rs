@@ -5,15 +5,18 @@ use std::cell::RefCell;
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use serde::Serialize;
-
 use yaxpeax_arch::Arch;
 
 use data::types::Typed;
+use data::modifier;
+use data::ValueLocations;
+use data::Direction;
 
 pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
-pub type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
-pub type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
+pub type RWMap<A> = HashMap<(<A as ValueLocations>::Location, Direction), DFGRef<A>>;
+#[derive(Clone, Debug)]
+pub struct PhiOp<A: SSAValues> { pub out: DFGRef<A>, pub ins: Vec<DFGRef<A>> }
+pub type PhiLocations<A> = HashMap<<A as ValueLocations>::Location, PhiOp<A>>;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum DefSource {
@@ -23,7 +26,7 @@ pub enum DefSource {
     Phi,
     /// The defined value is some custom definition - possibly automatically added or manually
     /// declared.
-    Extension
+    Modifier(modifier::Precedence)
 }
 
 impl fmt::Display for DefSource {
@@ -31,12 +34,13 @@ impl fmt::Display for DefSource {
         match self {
             DefSource::Instruction => write!(f, "instruction"),
             DefSource::Phi => write!(f, "phi"),
-            DefSource::Extension => write!(f, "extension"),
+            DefSource::Modifier(modifier::Precedence::Before) => write!(f, "modifier (before)"),
+            DefSource::Modifier(modifier::Precedence::After) => write!(f, "modifier (after)"),
         }
     }
 }
 
-// Look. Just rewrite this as a graph (one day). Vertices are DFGRef, edges are data
+// Look. Just rewrite this as a graph (one day). Vertices are DFGRef, edges ae data
 // dependences. Secondary graph with vertices (DFGRef | Address) where edges are Address -> DFGRef
 // (define) -> Address (use of DFGRef)
 //
@@ -45,19 +49,16 @@ impl fmt::Display for DefSource {
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
     // TODO: Fairly sure these Rc<RefCell<...>> could all just be raw pointers
     // these aren't individually freed so Rc shouldn't be necessary?
-    pub values: HashMap<A::Address, RWMap<A>>,
+    pub instruction_values: HashMap<A::Address, RWMap<A>>,
+    pub modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
     pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)>,
     pub phi: HashMap<A::Address, PhiLocations<A>>
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
-pub enum Direction {
-    Read,
-    Write
-}
-
 #[derive(Debug)]
 pub struct Value<A: SSAValues> {
+    // record the size of the defined value, in addition to the widest alias, for granular tracking
+    // of what elements of the register are known? // than just the widest alias
     // Temporarily necessary to map from some use back to a def site
     pub location: (A::Address, A::Location),
     // None indicates "not written anywhere in this dfg", which indicates this value can
@@ -134,38 +135,13 @@ impl <A: SSAValues + Arch> Value<A> {
     }
 }
 
-pub trait UseDefExt<A: Arch + SSAValues> {
-    fn at(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)>;
-}
-
-impl <A: Arch + SSAValues, T> UseDefExt<A> for T {
-    fn at(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
-        vec![]
-    }
-}
-
-pub trait NoAliasing { }
-
-impl <T> AliasInfo for T where T: NoAliasing + Clone + Copy {
-    fn aliases_of(&self) -> Vec<Self> { vec![] }
-    fn maximal_alias_of(&self) -> Self { self.clone() }
-}
-
-pub trait AliasInfo where Self: Sized {
-    fn aliases_of(&self) -> Vec<Self>;
-    fn maximal_alias_of(&self) -> Self;
-}
-
-pub trait SSAValues where Self: Arch {
-    type Location: Debug + AliasInfo + Hash + Eq + Serialize + Copy + Clone;
+pub trait SSAValues where Self: Arch + ValueLocations {
     type Data: Debug + Hash + Clone + Typed;
-
-    fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }
 
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
-    fn get_value(&self, addr: A::Address, loc: A::Location, dir: Direction) -> Option<DFGRef<A>> {
-        self.values.get(&addr)
+    pub fn get_value(&self, addr: A::Address, loc: A::Location, dir: Direction) -> Option<DFGRef<A>> {
+        self.instruction_values.get(&addr)
             .and_then(|addr_values| addr_values.get(&(loc, dir)))
             .map(|x| Rc::clone(x))
     }

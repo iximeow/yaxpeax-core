@@ -14,6 +14,8 @@ use yaxpeax_pic17::{Opcode, Operand, PIC17};
 use analyses::control_flow;
 use analyses::control_flow::{ControlFlowGraph, Determinant};
 use memory::MemoryRange;
+use data::ValueLocations;
+use data::Direction;
 
 use analyses::static_single_assignment::SSA;
 
@@ -40,7 +42,6 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
             }
         }
 
-        use analyses::static_single_assignment::Direction;
         fn render_operand<T: PartialInstructionContext>(_address: <PIC17 as Arch>::Address, operand: &Operand, context: Option<&T>, _ssa: &SSA<PIC17>, _direction: Direction) -> String {
             match operand {
                 Operand::ImmediateU8(i) => {
@@ -171,7 +172,6 @@ impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstru
     }
 }
 
-use analyses::static_single_assignment::SSAValues;
 pub fn render_instruction_with_ssa_values<T>(
     address: <PIC17 as Arch>::Address,
     instr: &<PIC17 as Arch>::Instruction,
@@ -181,7 +181,7 @@ pub fn render_instruction_with_ssa_values<T>(
     ssa: &SSA<PIC17>
 ) where
     T: pic17::PartialInstructionContext,
-    <PIC17 as SSAValues>::Location: Eq + Hash,
+    <PIC17 as ValueLocations>::Location: Eq + Hash,
     <PIC17 as Arch>::Address: Eq + Hash,
     <PIC17 as Arch>::Instruction: SyntaxedSSARender<PIC17, T, pic17::Function> {
     println!(" {}", instr.render_with_ssa_values(address, colors, ctx, function_table, ssa))
@@ -278,8 +278,8 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
                 function_table,
                 ssa
             );
-            if ssa.values.contains_key(&address) {
-                // println!("  values: {:?}", ssa.values[&address]);
+            if ssa.instruction_values.contains_key(&address) {
+                // println!("  values: {:?}", ssa.instruction_values[&address]);
             }
            //println!("{:#04x}: {}", address, instr);
         }

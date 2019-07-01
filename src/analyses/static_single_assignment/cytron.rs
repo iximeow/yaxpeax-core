@@ -14,7 +14,10 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
 
-use analyses::static_single_assignment::{HashedValue, DefSource, UseDefExt, Direction, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations, AliasInfo};
+use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations};
+use analyses::static_single_assignment::data::PhiOp;
+use data::{AliasInfo, Direction};
+use data::modifier::ModifierCollection;
 
 use num_traits::Zero;
 
@@ -99,12 +102,12 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefExt<A>>(
+pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>>(
     data: &M,
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
-    usedef_extensions: &U,
+    value_modifiers: &U
 ) -> SSA<A> where A::Address: Copy + Ord + Hash + Eq, A::Location: Copy + Hash + Eq {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -127,7 +130,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in A::decompose(&instr).into_iter().chain(usedef_extensions.at(address)) {
+            for (maybeloc, direction) in A::decompose(&instr).into_iter() {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
                         let widening = loc.maximal_alias_of();
@@ -188,7 +191,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
                             value: Rc::clone(&new_value)
                         }, (*Y, DefSource::Phi));
                         phi.entry(*Y).or_insert_with(|| HashMap::new())
-                            .insert(*loc, (new_value, vec![]));
+                            .insert(*loc, PhiOp { out: new_value, ins: vec![] });
                         // TODO: phi nodes are assignments too! this is definitely a bug.
                         has_already.insert(*Y, iter_count);
                         if work[Y] < iter_count {
@@ -227,7 +230,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         C: &mut HashMap<A::Location, u32>,
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>
-    ) where <A as SSAValues>::Location: Copy + Hash + Eq, <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address>, <A as SSAValues>::Location: AliasInfo {
+    ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {
         // also check phis at start of the block...
@@ -236,7 +239,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
                 // these are very clear reads vs assignments:
                 let widening = loc.maximal_alias_of();
                 let i = C[&widening];
-                let mut phi_dest = Rc::clone(&phi[&block.start][loc].0);
+                let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
                 phi_dest.replace(Value::new(block.start, *loc, Some(i)));
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 C.entry(widening).and_modify(|x| *x += 1);
@@ -292,12 +295,12 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
 //            for each phi in Y {
             if let Some(block_phis) = phi.get_mut(&Y) {
 //                for loc in phi.get(Y)
-                for (loc, (_dest, args)) in block_phis.iter_mut() {
+                for (loc, phi_op) in block_phis.iter_mut() {
                     let widening = loc.maximal_alias_of();
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough
                     let widen_stack = &S[&widening];
-                    args.push(widen_stack[widen_stack.len() - 1].clone());
+                    phi_op.ins.push(widen_stack[widen_stack.len() - 1].clone());
                 }
             }
         }
@@ -356,5 +359,5 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
         &mut S
     );
 
-    SSA { values: values, defs: defs, phi: phi }
+    SSA { instruction_values: values, modifier_values: HashMap::new(), defs: defs, phi: phi }
 }

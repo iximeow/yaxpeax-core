@@ -502,9 +502,12 @@ impl CPU {
     }
 }
 
+use data::AliasInfo;
 // TODO: this is wrong lol
-use analyses::static_single_assignment::NoAliasing;
-impl NoAliasing for Dependence { }
+impl AliasInfo for Dependence {
+    fn aliases_of(&self) -> Vec<Self> { vec![] }
+    fn maximal_alias_of(&self) -> Self { self.clone() }
+}
 
 use data::types::{Typed, TypeAtlas, TypeSpec};
 impl Typed for u8 {
@@ -513,11 +516,16 @@ impl Typed for u8 {
     }
 }
 
-use analyses::static_single_assignment::{Direction, SSAValues};
+use analyses::static_single_assignment::{SSAValues};
 use arch::pic17::{Dependence, Update};
 impl SSAValues for PIC17 {
-    type Location = Dependence;
     type Data = u8; // TODO: either some id of something interesting or a value?
+}
+
+use data::Direction;
+use data::ValueLocations;
+impl ValueLocations for PIC17 {
+    type Location = Dependence;
 
     fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
         use arch::pic17::MergedContext;

@@ -231,12 +231,6 @@ pub struct MergedContextTable {
     >
 }
 
-impl Default for MergedContextTable {
-    fn default() -> Self {
-        MergedContextTable::create_empty()
-    }
-}
-
 impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {
@@ -317,7 +311,7 @@ const READ_ALL_FLAGS: [(Option<Location>, Direction); 4] = [
     (Some(Location::FlagV), Direction::Read)
 ];
 
-use analyses::static_single_assignment::AliasInfo;
+use data::AliasInfo;
 impl AliasInfo for Location {
     fn aliases_of(&self) -> Vec<Self> { vec![] }
     fn maximal_alias_of(&self) -> Self {
@@ -344,10 +338,15 @@ impl Memoable for HashedValue<DFGRef<MSP430>> {
     }
 }
 
-use analyses::static_single_assignment::{Direction, SSAValues};
+use analyses::static_single_assignment::SSAValues;
 impl SSAValues for MSP430 {
-    type Location = Location;
     type Data = u8;
+}
+
+use data::ValueLocations;
+use data::Direction;
+impl ValueLocations for MSP430 {
+    type Location = Location;
 
     fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
         use yaxpeax_msp430_mc::Width;

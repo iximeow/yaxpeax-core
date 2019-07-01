@@ -19,7 +19,7 @@ impl Domain for ConcreteDomain {
     }
 }
 
-fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) -> Option<u64> {
+fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &x86_64Data) -> Option<u64> {
     match mem_op {
         Operand::DisplacementU32(disp) => Some(*disp as i32 as i64 as u64),
         Operand::DisplacementU64(disp) => Some(*disp),

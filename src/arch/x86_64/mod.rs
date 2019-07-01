@@ -24,6 +24,7 @@ use std::cell::RefCell;
 use num_traits::Zero;
 
 use arch::{BaseUpdate, Function, Symbol, SymbolQuery, Library};
+use data::{Direction, ValueLocations};
 
 use ContextRead;
 use ContextWrite;
@@ -67,6 +68,73 @@ impl Default for x86_64Data {
     }
 }
 
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum ModifierExpression {
+    /* At some point these should go through MemoSerialize, so these can be arbitrary expressions
+    Below(analyses::data_flow::Data),
+    Above(analyses::data_flow::Data),
+    Is(analyses::data_flow::Data),
+    IsNot(analyses::data_flow::Data)
+    */
+    Below(u64),
+    Above(u64),
+    Is(u64),
+    IsNot(u64),
+}
+
+#[derive(Serialize)]
+pub struct InstructionModifiers {
+    before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
+    after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>
+}
+
+use data::modifier::ModifierCollection;
+
+impl ModifierCollection<x86_64> for InstructionModifiers {
+    fn before(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
+        let mut res = vec![];
+        if let Some(modifiers) = self.before.get(&addr) {
+            for (k, vs) in modifiers.iter() {
+                for v in vs {
+                    match v {
+                        ModifierExpression::IsNot(_) |
+                        ModifierExpression::Below(_) |
+                        ModifierExpression::Above(_) => {
+                            res.push((k.to_owned(), Direction::Read));
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                        ModifierExpression::Is(_) => {
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                    }
+                }
+            }
+        }
+        res
+    }
+    fn after(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
+        let mut res = vec![];
+        if let Some(modifiers) = self.before.get(&addr) {
+            for (k, vs) in modifiers.iter() {
+                for v in vs {
+                    match v {
+                        ModifierExpression::IsNot(_) |
+                        ModifierExpression::Below(_) |
+                        ModifierExpression::Above(_) => {
+                            res.push((k.to_owned(), Direction::Read));
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                        ModifierExpression::Is(_) => {
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                    }
+                }
+            }
+        }
+        res
+    }
+}
+
 #[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
@@ -76,11 +144,12 @@ pub struct MergedContextTable {
     #[serde(skip)]
     pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
     pub functions: HashMap<<x86_64 as Arch>::Address, Function>,
+    pub ssa: HashMap<<x86_64 as Arch>::Address, (
+        control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
+        SSA<x86_64>
+    )>,
+    pub function_data: HashMap<<x86_64 as Arch>::Address, InstructionModifiers>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
-    pub ssa: HashMap<
-        <x86_64 as Arch>::Address,
-        (control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>)
-    >
 }
 
 #[derive(Debug)]
@@ -105,6 +174,7 @@ impl MergedContextTable {
             function_hints: Vec::new(),
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
+            function_data: HashMap::new(),
             ssa: HashMap::new()
         }
     }
@@ -543,7 +613,6 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::HADDPS |
             Opcode::HSUBPS |
             Opcode::ADDSUBPS |
-            Opcode::CVTSI2SS |
             Opcode::CVTSI2SD |
             Opcode::CVTTSD2SI |
             Opcode::CVTSD2SI |

@@ -46,7 +46,6 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F,
         let mut instr_text = String::new();
         instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
         println!(" {}", instr_text);
-        use analyses::control_flow::Determinant;
         println!("Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
     }
 }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 use serde::{Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
 use serialize::{Memoable, Memos, MemoizingSerializer};
@@ -21,10 +20,10 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Phi
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut location_phis_map = serializer.serialize_map(Some(self.inner.len()))?;
         for (loc, phispec) in self.inner.iter() {
-            let new_phiargs: Vec<u32> = phispec.1.iter().map(|v| {
+            let new_phiargs: Vec<u32> = phispec.ins.iter().map(|v| {
                 self.id_of(HashedValue { value: Rc::clone(v) })
             }).collect();
-            let newvalue = (self.id_of(HashedValue { value: Rc::clone(&phispec.0) }), new_phiargs);
+            let newvalue = (self.id_of(HashedValue { value: Rc::clone(&phispec.out) }), new_phiargs);
             location_phis_map.serialize_entry(&format!("{:?}", loc), &newvalue)?;
         }
         location_phis_map.end()
@@ -73,7 +72,7 @@ impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<DFGR
         let mut ssa_serializer = serializer.serialize_struct("SSA", 3)?;
 
         {
-            let values = MemoizingSerializer::new(&mut memoizer, &self.values);
+            let values = MemoizingSerializer::new(&mut memoizer, &self.instruction_values);
             ssa_serializer.serialize_field("values", &values)?;
         }
 

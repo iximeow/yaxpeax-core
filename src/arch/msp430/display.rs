@@ -16,6 +16,7 @@ use analyses::control_flow::ControlFlowGraph;
 use analyses::static_single_assignment::SSA;
 use std::collections::HashMap;
 use memory::MemoryRange;
+use data::{Direction, ValueLocations};
 
 impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
     fn render_with_ssa_values(
@@ -26,7 +27,6 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
         _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
         ssa: &SSA<MSP430>) -> String {
 
-        use analyses::static_single_assignment::Direction;
         fn render_operand<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, operand: &Operand, context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
             fn signed_hex(num: i16) -> String {
                 if num >= 0 {
@@ -51,7 +51,7 @@ impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction whe
             fn numbered_register_name<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, reg: u8, _context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
                 format!("{}_{}",
                     register_name(reg),
-                    match ssa.values.get(&address).and_then(|addr_values| addr_values.get(&(msp430::Location::Register(reg), direction))) {
+                    match ssa.get_value(address, msp430::Location::Register(reg), direction) {
                         Some(data) => data.borrow().version().map(|v| v.to_string()).unwrap_or("input".to_string()),
                         None => format!("ERR_{:?}", direction)
                     }
@@ -246,7 +246,6 @@ impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContex
     }
 }
 
-use analyses::static_single_assignment::SSAValues;
 pub fn render_instruction_with_ssa_values<T>(
     address: <MSP430 as Arch>::Address,
     instr: &<MSP430 as Arch>::Instruction,
@@ -256,7 +255,7 @@ pub fn render_instruction_with_ssa_values<T>(
     ssa: &SSA<MSP430>
 ) where
     T: msp430::PartialInstructionContext,
-    <MSP430 as SSAValues>::Location: Eq + Hash,
+    <MSP430 as ValueLocations>::Location: Eq + Hash,
     <MSP430 as Arch>::Address: Eq + Hash,
     <MSP430 as Arch>::Instruction: SyntaxedSSARender<MSP430, T, ()> {
     println!(" {}", instr.render_with_ssa_values(address, colors, ctx, &function_table, ssa))
@@ -367,8 +366,8 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
                 &HashMap::new(),
                 ssa
             );
-            if ssa.values.contains_key(&address) {
-                // println!("  values: {:?}", ssa.values[&address]);
+            if ssa.instruction_values.contains_key(&address) {
+                // println!("  values: {:?}", ssa.instruction_values[&address]);
             }
            //println!("{:#04x}: {}", address, instr);
         }

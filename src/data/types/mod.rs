@@ -1,14 +1,3 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::Hash;
-use std::cmp::Eq;
-
-use std::fmt::Debug;
-
-use yaxpeax_arch::{Arch, LengthedInstruction};
-
-use serde::{Serialize, Serializer};
-use serde::ser::{SerializeMap, SerializeStruct, SerializeSeq};
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub size: u32,
@@ -90,7 +79,7 @@ impl TypeAtlas {
             "KPCR".to_string(),
             vec![
                 // 0x0000
-                Field::size(8).with_ty((TypeSpec::Unknown.pointer_to())).with_name("GdtBase"),
+                Field::size(8).with_ty(TypeSpec::Unknown.pointer_to()).with_name("GdtBase"),
                 // 0x0008
                 Field::size(8).with_ty(TypeSpec::struct_pointer(KTSS64)).with_name("TssBase"),
                 // 0x0010

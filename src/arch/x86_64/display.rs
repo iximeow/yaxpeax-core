@@ -18,10 +18,13 @@ use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::{DFGRef, Direction, SSA, SSAValues};
+use analyses::static_single_assignment::{DFGRef, SSA};
+use data::Direction;
 use data::types::{Typed, TypeAtlas, TypeSpec};
 
 use memory::MemoryRange;
+
+use data::ValueLocations;
 
 use std::fmt;
 
@@ -166,7 +169,6 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
 
         fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
             fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
-                use data::types::{Typed, TypeAtlas, TypeSpec};
                 let type_atlas = TypeAtlas::new();
                 match value {
                     Some(value) => {
@@ -205,7 +207,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                                     }
                                 },
                                 Data::Concrete(v, ty) => {
-                                    if let Some(real_ty) = ty {
+                                    if let Some(_real_ty) = ty {
                                         write!(fmt, " (= {})", v)?;
                                     } else {
                                         write!(fmt, " (= {})", v)?;
@@ -223,8 +225,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
 
             fn numbered_register_name<'a, 'b, 'c, 'd>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd>, direction: Direction) -> Colored<String> {
                 let text = context.ssa.map(|ssa| {
-                    let num = ssa.values.get(&address)
-                        .and_then(|addr_values| addr_values.get(&(Location::Register(reg), direction)))
+                    let num = ssa.get_value(address, Location::Register(reg), direction)
                         .map(|data| data.borrow().version());
                     format!("{}_{}",
                         reg,
@@ -319,7 +320,6 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                         let use_val = ssa.get_use(ctx.addr, Location::Register(*spec));
                         match use_val.get_data() {
                             Some(Data::Expression(expr)) => {
-                                use data::types::{Typed, TypeAtlas, TypeSpec};
                                 let type_atlas = TypeAtlas::new();
                                 if let SymbolicExpression::Add(base, offset) = expr.offset(*disp as i64 as u64) {
                                     if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
@@ -343,7 +343,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                         write!(fmt, " {}]",
     //                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
                             format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                        );
+                        )?;
                     }
 
                     Ok(())
@@ -736,7 +736,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::DIV |
             Opcode::IDIV => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt);
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
                 if let Operand::Nothing = &self.instr.operands[1] {
                     Ok(())
                 } else {
@@ -952,7 +952,7 @@ pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<
             });
             if let Some(ssa) = ssa {
                 if CONDITIONAL_OPS.contains(&instr.opcode) {
-                    for (loc, dir) in <x86_64Arch as SSAValues>::decompose(instr) {
+                    for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
                         if let (Some(flag), Direction::Read) = (loc, dir) {
                             if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
                                 println!("    --- looking for flag {:?}", flag);

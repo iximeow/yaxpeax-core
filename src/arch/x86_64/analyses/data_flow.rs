@@ -11,8 +11,7 @@
 /// this should be optimistic or pessimistic, I'm .. ignoring it :)
 
 use arch::Symbol;
-use arch::Function;
-use analyses::static_single_assignment::{AliasInfo, Direction, SSAValues, Value};
+use analyses::static_single_assignment::{SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
@@ -24,6 +23,8 @@ use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
 use serialize::Memoable;
 
+use data::{Direction, ValueLocations};
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
@@ -33,6 +34,7 @@ pub enum Location {
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL
 }
 
+use data::AliasInfo;
 impl AliasInfo for Location {
     fn aliases_of(&self) -> Vec<Self> {
         match self {
@@ -214,7 +216,7 @@ impl SymbolicExpression {
                 // inner part first:
                 let inner_ty = expr.type_of(type_atlas);
                 let inner_expr = expr.show(type_atlas);
-                let (this_ty, this_name) = if let Some(this_field) = type_atlas.get_field(&inner_ty, *offset as u32) {
+                let (_this_ty, this_name) = if let Some(this_field) = type_atlas.get_field(&inner_ty, *offset as u32) {
                     (this_field.ty.as_ref(), this_field.name.as_ref())
                 } else {
                     (None, None)
@@ -227,7 +229,7 @@ impl SymbolicExpression {
                 }
             }
             SymbolicExpression::Deref(expr) => {
-                let inner_ty = expr.type_of(type_atlas);
+                let _inner_ty = expr.type_of(type_atlas);
                 let inner_expr = expr.show(type_atlas);
 
                 format!("*{}", inner_expr)
@@ -357,8 +359,11 @@ impl Hash for Data {
 }
 
 impl SSAValues for x86_64 {
-    type Location = Location;
     type Data = Data;
+}
+
+impl ValueLocations for x86_64 {
+    type Location = Location;
 
     fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
         fn decompose_write(op: &Operand) -> Vec<(Option<Location>, Direction)> {

@@ -50,9 +50,10 @@ pub trait SyntaxedRender<A, T, F> {
 
 use analyses::static_single_assignment::SSAValues;
 use analyses::static_single_assignment::SSA;
+use data::ValueLocations;
 pub trait SyntaxedSSARender<Architecture: Arch + SSAValues, T, F> where
     <Architecture as Arch>::Address: Eq + Hash,
-    <Architecture as SSAValues>::Location: Eq + Hash,
+    <Architecture as ValueLocations>::Location: Eq + Hash,
 {
     fn render_with_ssa_values(
         &self,

@@ -2,7 +2,6 @@ use yaxpeax_arch::Arch;
 use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
 use arch::x86_64::x86_64Data;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
-use analyses;
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
 use data;
@@ -81,12 +80,12 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
         }
         Operand::RegDeref(reg) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {
-                Some(Data::Concrete(v, None)) => {
+                Some(Data::Concrete(_v, None)) => {
                     // TODO: check const addr derefs for the same structures checked in disp
                     // eg gs:[rax] for rax = 0
                     None
                 },
-                Some(Data::Concrete(v, Some(ty))) => {
+                Some(Data::Concrete(_v, Some(_ty))) => {
                     // TODO: check const addr derefs for the same structures checked in disp
                     // eg gs:[rax] for rax = 0
                     None
@@ -113,22 +112,22 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                 _ => None
             }
         },
-        Operand::RegScale(reg, scale) => {
+        Operand::RegScale(_reg, _scale) => {
             None
         },
-        Operand::RegIndexBase(base, index) => {
+        Operand::RegIndexBase(_base, _index) => {
             None
         },
-        Operand::RegIndexBaseDisp(base, index, disp) => {
+        Operand::RegIndexBaseDisp(_base, _index, _disp) => {
             None
         }
-        Operand::RegScaleDisp(base, scale, disp) => {
+        Operand::RegScaleDisp(_base, _scale, _disp) => {
             None
         }
-        Operand::RegIndexBaseScale(index, base, scale) => {
+        Operand::RegIndexBaseScale(_index, _base, _scale) => {
             None
         }
-        Operand::RegIndexBaseScaleDisp(index, base, scale, disp) => {
+        Operand::RegIndexBaseScaleDisp(_index, _base, _scale, _disp) => {
             None
         }
         _ => None

@@ -3,4 +3,4 @@ mod data;
 mod serialize;
 
 pub use analyses::static_single_assignment::data::SSA;
-pub use analyses::static_single_assignment::data::{UseDefExt, DefSource, DFGRef, RWMap, PhiLocations, Direction, Value, DFGLValue, HashedValue, AliasInfo, NoAliasing, SSAValues};
+pub use analyses::static_single_assignment::data::{DefSource, DFGRef, RWMap, PhiLocations, Value, DFGLValue, HashedValue, SSAValues};

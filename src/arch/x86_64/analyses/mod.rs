@@ -201,7 +201,6 @@ pub fn find_xrefs(
         Opcode::HADDPS |
         Opcode::HSUBPS |
         Opcode::ADDSUBPS |
-        Opcode::CVTSI2SS |
         Opcode::CVTSI2SD |
         Opcode::CVTTSD2SI |
         Opcode::CVTSD2SI |
