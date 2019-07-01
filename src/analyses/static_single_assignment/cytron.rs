@@ -14,7 +14,7 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
 
-use analyses::static_single_assignment::{Direction, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations, AliasInfo};
+use analyses::static_single_assignment::{HashedValue, DefSource, UseDefExt, Direction, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations, AliasInfo};
 
 use num_traits::Zero;
 
@@ -99,11 +99,12 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
+pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefExt<A>>(
     data: &M,
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
-    cfg: &GraphMap<A::Address, (), petgraph::Directed>
+    cfg: &GraphMap<A::Address, (), petgraph::Directed>,
+    usedef_extensions: &U,
 ) -> SSA<A> where A::Address: Copy + Ord + Hash + Eq, A::Location: Copy + Hash + Eq {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -126,7 +127,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in A::decompose(&instr).into_iter() {
+            for (maybeloc, direction) in A::decompose(&instr).into_iter().chain(usedef_extensions.at(address)) {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
                         let widening = loc.maximal_alias_of();
@@ -153,6 +154,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
     // TODO: some nice abstraction to look up by (Address, Location) but also
     // find all Location for an Address
     let mut values: HashMap<A::Address, RWMap<A>> = HashMap::new();
+    let mut defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)> = HashMap::new();
     let mut phi: HashMap<A::Address, PhiLocations<A>> = HashMap::new();
 
     let mut iter_count = 0;
@@ -181,8 +183,12 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                     if has_already[Y] < iter_count {
                         // versioned at 0xffffffff to indicate a specialness to them.
                         // These should never be present after search().
+                        let new_value = Rc::new(RefCell::new(Value::new(*Y, *loc, Some(0xffffffff))));
+                        defs.insert(HashedValue {
+                            value: Rc::clone(&new_value)
+                        }, (*Y, DefSource::Phi));
                         phi.entry(*Y).or_insert_with(|| HashMap::new())
-                            .insert(*loc, (Rc::new(RefCell::new(Value::new(*Y, *loc, Some(0xffffffff)))), vec![]));
+                            .insert(*loc, (new_value, vec![]));
                         // TODO: phi nodes are assignments too! this is definitely a bug.
                         has_already.insert(*Y, iter_count);
                         if work[Y] < iter_count {
@@ -213,6 +219,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         data: &M,
         block: &BasicBlock<A::Address>,
         values: &mut HashMap<A::Address, RWMap<A>>,
+        defs: &mut HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)>,
         phi: &mut HashMap<A::Address, PhiLocations<A>>,
         basic_blocks: &ControlFlowGraph<A::Address>,
         cfg: &GraphMap<A::Address, (), petgraph::Directed>,
@@ -234,29 +241,32 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 C.entry(widening).and_modify(|x| *x += 1);
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
-                // eg is it faster to store thsi and pop it back or is it faster to just
+                // eg is it faster to store this and pop it back or is it faster to just
                 // decode again..?
                 assignments.push(widening); // ???
             }
         }
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in A::decompose(&instr).into_iter() {
+            for (maybeloc, direction) in A::decompose(&instr).into_iter().zip(std::iter::repeat(DefSource::Instruction)) {
                 match (maybeloc, direction) {
-                    (Some(loc), Direction::Read) => {
+                    ((Some(loc), Direction::Read), _) => {
                         let widening = loc.maximal_alias_of();
                         let at_address = values.entry(address).or_insert_with(||
                             HashMap::new()
                         );
                         at_address.insert((loc, Direction::Read), Rc::clone(&S[&widening][S[&widening].len() - 1]));
                     },
-                    (None, Direction::Read) => {
+                    ((None, Direction::Read), _) => {
                         // it's a read of something, but we don't know what, 
                     },
-                    (Some(loc), Direction::Write) => {
+                    ((Some(loc), Direction::Write), def_source) => {
                         let widening = loc.maximal_alias_of();
                         let i = C[&widening];
                         let new_value = Rc::new(RefCell::new(Value::new(address, loc, Some(i))));
+                        defs.insert(HashedValue {
+                            value: Rc::clone(&new_value)
+                        }, (address, def_source));
                         let at_address = values.entry(address).or_insert_with(||
                             HashMap::new()
                         );
@@ -268,7 +278,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                         // decode again..?
                         assignments.push(widening); // ???
                     },
-                    (None, Direction::Write) => {
+                    ((None, Direction::Write), _) => {
                         // a write to somewhere, we don't know where, this should def ...
                         // everything
                     }
@@ -301,6 +311,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
                     data,
                     basic_blocks.get_block(u),
                     values,
+                    defs,
                     phi,
                     basic_blocks,
                     cfg,
@@ -334,6 +345,7 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         data,
         basic_blocks.get_block(entry),
         &mut values,
+        &mut defs,
         &mut phi,
         basic_blocks,
         cfg,
@@ -343,5 +355,5 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
         &mut S
     );
 
-    SSA { values: values, phi: phi }
+    SSA { values: values, defs: defs, phi: phi }
 }

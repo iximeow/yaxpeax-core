@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::fmt::Debug;
+use std::fmt;
 use std::cell::RefCell;
 use std::hash::Hash;
 use std::collections::HashMap;
@@ -14,6 +15,27 @@ pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
 pub type RWMap<A> = HashMap<(<A as SSAValues>::Location, Direction), DFGRef<A>>;
 pub type PhiLocations<A> = HashMap<<A as SSAValues>::Location, (DFGRef<A>, Vec<DFGRef<A>>)>;
 
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum DefSource {
+    /// The defined value comes from an instruction in the underlying binary
+    Instruction,
+    /// The defined value comes from a phi pseudo-op
+    Phi,
+    /// The defined value is some custom definition - possibly automatically added or manually
+    /// declared.
+    Extension
+}
+
+impl fmt::Display for DefSource {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DefSource::Instruction => write!(f, "instruction"),
+            DefSource::Phi => write!(f, "phi"),
+            DefSource::Extension => write!(f, "extension"),
+        }
+    }
+}
+
 // Look. Just rewrite this as a graph (one day). Vertices are DFGRef, edges are data
 // dependences. Secondary graph with vertices (DFGRef | Address) where edges are Address -> DFGRef
 // (define) -> Address (use of DFGRef)
@@ -24,6 +46,7 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     // TODO: Fairly sure these Rc<RefCell<...>> could all just be raw pointers
     // these aren't individually freed so Rc shouldn't be necessary?
     pub values: HashMap<A::Address, RWMap<A>>,
+    pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)>,
     pub phi: HashMap<A::Address, PhiLocations<A>>
 }
 
@@ -111,6 +134,16 @@ impl <A: SSAValues + Arch> Value<A> {
     }
 }
 
+pub trait UseDefExt<A: Arch + SSAValues> {
+    fn at(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)>;
+}
+
+impl <A: Arch + SSAValues, T> UseDefExt<A> for T {
+    fn at(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
+        vec![]
+    }
+}
+
 pub trait NoAliasing { }
 
 impl <T> AliasInfo for T where T: NoAliasing + Clone + Copy {
@@ -124,7 +157,7 @@ pub trait AliasInfo where Self: Sized {
 }
 
 pub trait SSAValues where Self: Arch {
-    type Location: Debug + AliasInfo + Hash + Eq + Serialize;
+    type Location: Debug + AliasInfo + Hash + Eq + Serialize + Copy + Clone;
     type Data: Debug + Hash + Clone + Typed;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
@@ -151,5 +184,18 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
     }
     pub fn get_use(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
         DFGLValue { value: self.get_value(addr, loc, Direction::Read).unwrap() }
+    }
+
+    pub fn get_def_site(&self, value: DFGRef<A>) -> (A::Address, DefSource) {
+        match self.defs.get(&HashedValue { value: Rc::clone(&value) }) {
+            Some(site) => *site,
+            None => {
+                // This is a rather serious bug - we have a value but it was never defined.
+                // well. it should be a bug. this is probably reachable if the def is actually
+                // external to the current control flow graph (for example, function arguments)
+                // this should be backed by a set of fake defs at function entry
+                unreachable!("use with no def");
+            }
+        }
     }
 }

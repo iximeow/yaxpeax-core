@@ -18,7 +18,7 @@ use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
-use analyses::static_single_assignment::{DFGRef, Direction, SSA};
+use analyses::static_single_assignment::{DFGRef, Direction, SSA, SSAValues};
 use data::types::{Typed, TypeAtlas, TypeSpec};
 
 use memory::MemoryRange;
@@ -861,6 +861,57 @@ pub fn show_linear<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     }
 }
 
+static CONDITIONAL_OPS: [Opcode; 48] = [
+        Opcode::JO,
+        Opcode::JNO,
+        Opcode::JB,
+        Opcode::JNB,
+        Opcode::JZ,
+        Opcode::JNZ,
+        Opcode::JA,
+        Opcode::JNA,
+        Opcode::JS,
+        Opcode::JNS,
+        Opcode::JP,
+        Opcode::JNP,
+        Opcode::JL,
+        Opcode::JGE,
+        Opcode::JLE,
+        Opcode::JG,
+        Opcode::CMOVA,
+        Opcode::CMOVB,
+        Opcode::CMOVG,
+        Opcode::CMOVGE,
+        Opcode::CMOVL,
+        Opcode::CMOVLE,
+        Opcode::CMOVNA,
+        Opcode::CMOVNB,
+        Opcode::CMOVNO,
+        Opcode::CMOVNP,
+        Opcode::CMOVNS,
+        Opcode::CMOVNZ,
+        Opcode::CMOVO,
+        Opcode::CMOVP,
+        Opcode::CMOVS,
+        Opcode::CMOVZ,
+        Opcode::SETO,
+        Opcode::SETNO,
+        Opcode::SETB,
+        Opcode::SETAE,
+        Opcode::SETZ,
+        Opcode::SETNZ,
+        Opcode::SETBE,
+        Opcode::SETA,
+        Opcode::SETS,
+        Opcode::SETNS,
+        Opcode::SETP,
+        Opcode::SETNP,
+        Opcode::SETL,
+        Opcode::SETGE,
+        Opcode::SETLE,
+        Opcode::SETG,
+];
+
 pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<<x86_64Arch as Arch>::Address>>(
     data: &M,
     ctx: &MergedContextTable,
@@ -899,6 +950,20 @@ pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<
                 ssa: ssa,
                 colors: colors
             });
+            if let Some(ssa) = ssa {
+                if CONDITIONAL_OPS.contains(&instr.opcode) {
+                    for (loc, dir) in <x86_64Arch as SSAValues>::decompose(instr) {
+                        if let (Some(flag), Direction::Read) = (loc, dir) {
+                            if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
+                                println!("    --- looking for flag {:?}", flag);
+                                let use_site = ssa.get_def_site(ssa.get_use(address, flag).value);
+                                println!("    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0);
+                            }
+                        }
+                    }
+//                    */
+                }
+            }
             if address.wrapping_add(instr.len()) > end {
                 println!("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄");
             }
