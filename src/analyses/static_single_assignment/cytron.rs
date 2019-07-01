@@ -296,7 +296,8 @@ pub fn generate_ssa<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: UseDefEx
                     let widening = loc.maximal_alias_of();
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough
-                    args.push(S[&widening][S[&widening].len() - 1].clone());
+                    let widen_stack = &S[&widening];
+                    args.push(widen_stack[widen_stack.len() - 1].clone());
                 }
             }
         }
