@@ -85,12 +85,26 @@ pub enum ModifierExpression {
 #[derive(Serialize)]
 pub struct InstructionModifiers {
     before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
-    after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>
+    after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
+    between: HashMap<<x86_64 as Arch>::Address, HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>>
+}
+
+impl InstructionModifiers {
+    pub fn new() -> Self {
+        InstructionModifiers {
+            before: HashMap::new(),
+            after: HashMap::new(),
+        }
+    }
 }
 
 use data::modifier::ModifierCollection;
 
 impl ModifierCollection<x86_64> for InstructionModifiers {
+    fn between(&self, addr: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
+        vec![]
+    }
+
     fn before(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
         let mut res = vec![];
         if let Some(modifiers) = self.before.get(&addr) {

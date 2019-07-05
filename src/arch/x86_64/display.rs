@@ -188,7 +188,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                         if let Some(data) = value.borrow().data.as_ref() {
                             match data {
                                 Data::Alias(alias) => {
-                                    if let Location::Register(alias_reg) = alias.borrow().location.1 {
+                                    if let Location::Register(alias_reg) = alias.borrow().location {
                                         write!(fmt, " (= ")?;
                                         use std::rc::Rc;
                                         write_location_value(fmt, alias_reg, ctx, Some(Rc::clone(alias)))?;

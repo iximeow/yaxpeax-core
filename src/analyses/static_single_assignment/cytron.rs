@@ -19,8 +19,6 @@ use analyses::static_single_assignment::data::PhiOp;
 use data::{AliasInfo, Direction};
 use data::modifier::ModifierCollection;
 
-use num_traits::Zero;
-
 #[test]
 fn test_immediate_dominators_construction() {
     let start = 83u16;
@@ -152,12 +150,51 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                 }
             }
         }
+
+        // now, it's possible that an assignment only occurs in the between-block limbo states
+        // added f.ex by control-dependent constants, like `x` in constructs like
+        //
+        // if (x == 10) {
+        //   // <---- HERE
+        // } else {
+        //   // <---- AND HERE
+        // }
+        //
+        // but otherwise are unused in this basic block. so, check the inter-block modifiers
+        //
+        // this is imprecise! any write on any out-edge is treated as if it were a write on all
+        // out-edges. for initial use, this may be correct, but there may be cases where this
+        // intruoduces unnecessary phi nodes.
+        for next in cfg.neighbors(block.start) {
+            for modifier in value_modifiers.between(block.start, next) {
+                match modifier {
+                    (Some(loc), Direction::Write) => {
+                        let widening = loc.maximal_alias_of();
+                        all_locations.insert(widening);
+                        assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(block.start);
+                    }
+                    (None, Direction::Write) => {
+                        // TODO: this is a write to something, we don't know what
+                        // this should set a bit to indicate potential all-clobber or something
+                    }
+                    (Some(loc), Direction::Read) => {
+                        let widening = loc.maximal_alias_of();
+                        all_locations.insert(widening);
+                    }
+                    (None, Direction::Read) => {
+                        // TODO: this is a read from something, but we don't know what
+                        // not sure if there's anything we can do with this, really
+                    }
+                }
+            }
+        }
     }
 
     // TODO: some nice abstraction to look up by (Address, Location) but also
     // find all Location for an Address
     let mut values: HashMap<A::Address, RWMap<A>> = HashMap::new();
-    let mut defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)> = HashMap::new();
+    let mut between_block_bounds: HashMap<A::Address, HashMap<A::Address, RWMap<A>>> = HashMap::new();
+    let mut defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)> = HashMap::new();
     let mut phi: HashMap<A::Address, PhiLocations<A>> = HashMap::new();
 
     let mut iter_count = 0;
@@ -186,7 +223,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     if has_already[Y] < iter_count {
                         // versioned at 0xffffffff to indicate a specialness to them.
                         // These should never be present after search().
-                        let new_value = Rc::new(RefCell::new(Value::new(*Y, *loc, Some(0xffffffff))));
+                        let new_value = Rc::new(RefCell::new(Value::new(*loc, Some(0xffffffff))));
                         defs.insert(HashedValue {
                             value: Rc::clone(&new_value)
                         }, (*Y, DefSource::Phi));
@@ -218,24 +255,26 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
      */
 
     #[allow(non_snake_case)]
-    fn search<A: Arch + SSAValues, M: MemoryRange<A::Address>>(
+    fn search<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>>(
         data: &M,
         block: &BasicBlock<A::Address>,
         values: &mut HashMap<A::Address, RWMap<A>>,
-        defs: &mut HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)>,
+        between_block_bounds: &mut HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
+        defs: &mut HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
         phi: &mut HashMap<A::Address, PhiLocations<A>>,
         basic_blocks: &ControlFlowGraph<A::Address>,
         cfg: &GraphMap<A::Address, (), petgraph::Directed>,
         dominance_frontiers: &HashMap<A::Address, Vec<A::Address>>,
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         C: &mut HashMap<A::Location, u32>,
-        S: &mut HashMap<A::Location, Vec<DFGRef<A>>>
+        S: &mut HashMap<A::Location, Vec<DFGRef<A>>>,
+        value_modifiers: &U
     ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
-        fn new_value<A: Arch + SSAValues>(addr: A::Address, loc: A::Location, C: &mut HashMap<A::Location, u32>, S: &mut HashMap<A::Location, Vec<DFGRef<A>>>) -> Value<A> {
+        fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
             let widening = loc.maximal_alias_of();
             let i = C[&widening];
             C.entry(widening).and_modify(|x| *x += 1);
-            Value::new(addr, loc, Some(i))
+            Value::new(loc, Some(i))
         }
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {
@@ -245,7 +284,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                 // these are very clear reads vs assignments:
                 let widening = loc.maximal_alias_of();
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
-                phi_dest.replace(new_value(block.start, *loc, C, S));
+                phi_dest.replace(new_value(*loc, C));
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                 // eg is it faster to store this and pop it back or is it faster to just
@@ -269,7 +308,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     },
                     ((Some(loc), Direction::Write), def_source) => {
                         let widening = loc.maximal_alias_of();
-                        let new_value = Rc::new(RefCell::new(new_value(address, loc, C, S)));
+                        let new_value = Rc::new(RefCell::new(new_value(loc, C)));
                         defs.insert(HashedValue {
                             value: Rc::clone(&new_value)
                         }, (address, def_source));
@@ -279,7 +318,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                         at_address.insert((loc, Direction::Write), Rc::clone(&new_value));
                         S.get_mut(&widening).expect("S should have entries for all locations.").push(new_value);
                         // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
-                        // eg is it faster to store thsi and pop it back or is it faster to just
+                        // eg is it faster to store this and pop it back or is it faster to just
                         // decode again..?
                         assignments.push(widening); // ???
                     },
@@ -291,8 +330,56 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
             }
         }
 
+        /*
+         * Now compute the modifier-affected locations we need to shim in when we look at
+         * neighbors..
+         *
+         * there will be at most one modifier to a location, so at most one assignment per
+         * out-edge to a neighbor. this is handy because we can track all this stuff as a map of
+         * next_block -> (map<location, value>)
+         *
+         * this is merged with the typical phi argument placement loop because both iterate
+         * neighbors of the current basic block
+         */
+
+        {
+        let introduced_bounds: &mut HashMap<A::Address, RWMap<A>> = between_block_bounds.entry(block.start).or_insert_with(|| HashMap::new());
         // succ == traditional successors-in-cfg
         for Y in cfg.neighbors(block.start) {
+            let edge_modifiers: &mut RWMap<A> = introduced_bounds.entry(Y).or_insert_with(|| HashMap::new());
+
+            for between in value_modifiers.between(block.start, Y) {
+                match between {
+                    (Some(loc), Direction::Read) => {
+                        let widening = loc.maximal_alias_of();
+                        edge_modifiers.insert((loc, Direction::Read), Rc::clone(&S[&widening][S[&widening].len() - 1]));
+                    },
+                    (None, Direction::Read) => {
+                        // it's a read of something, but we don't know what, 
+                    },
+                    (Some(loc), Direction::Write) => {
+                        let widening = loc.maximal_alias_of();
+                        let new_value = Rc::new(RefCell::new(new_value(loc, C)));
+                        defs.insert(HashedValue {
+                            value: Rc::clone(&new_value)
+                        }, (block.start, DefSource::Between(Y)));
+                        edge_modifiers.insert((loc, Direction::Write), Rc::clone(&new_value));
+                        // Note we push S here only to immediately pop it when done with this
+                        // block.
+                        // This is replicated when working with immediate dominators as well.
+                        // The value only exists in the context of one particular control flow
+                        // path.
+                        S.get_mut(&widening).expect("S should have entries for all locations.").push(new_value);
+                        // this does not modify assignments because it does not need the same
+                        // block-global assignment cleanup - it should be neutral w.r.t S in all
+                        // cases.
+                    },
+                    (None, Direction::Write) => {
+                        // a write to somewhere, we don't know where, this should def ...
+                        // everything
+                    }
+                }
+            }
 //            j = whichpred(Y, block);
 //            for each phi in Y {
             if let Some(block_phis) = phi.get_mut(&Y) {
@@ -305,6 +392,13 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     phi_op.ins.push(widen_stack[widen_stack.len() - 1].clone());
                 }
             }
+
+            for (loc, direction) in edge_modifiers.keys() {
+                if *direction == Direction::Write {
+                    S.get_mut(&loc.maximal_alias_of()).expect("S has entries for all locations").pop();
+                }
+            }
+        }
         }
 
         // children == nodes immediately dominated by block
@@ -313,10 +407,18 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         while let Some(u) = bfs.next(&cfg) {
             if let Some(u_idom) = idom.immediate_dominator(u) {
                 if u_idom == block.start && u != block.start {
+                    if let Some(adjustments) = between_block_bounds[&block.start].get(&u) {
+                        for ((loc, direction), value) in adjustments {
+                            if *direction == Direction::Write {
+                                S.get_mut(&loc.maximal_alias_of()).expect("S has entries for locations").push(Rc::clone(value));
+                            }
+                        }
+                    }
                 search(
                     data,
                     basic_blocks.get_block(u),
                     values,
+                    between_block_bounds,
                     defs,
                     phi,
                     basic_blocks,
@@ -324,8 +426,19 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     dominance_frontiers,
                     idom,
                     C,
-                    S
+                    S,
+                    value_modifiers
                 );
+                    // this shouldn't be modified in recursive calls (we won't visit the same block
+                    // [so, same bounds] twice), but it's clumsy to express that to rustc. might
+                    // revisit in the future.
+                    if let Some(adjustments) = between_block_bounds[&block.start].get(&u) {
+                        for ((loc, direction), value) in adjustments {
+                            if *direction == Direction::Write {
+                                S.get_mut(&loc.maximal_alias_of()).expect("S has entries for locations").pop();
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -344,13 +457,14 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
 //    for each variable in vars {
     for loc in all_locations {
         C.insert(loc, 0);
-        S.insert(loc, vec![Rc::new(RefCell::new(Value::new(A::Address::zero(), loc, None)))]);
+        S.insert(loc, vec![Rc::new(RefCell::new(Value::new(loc, None)))]);
     }
 
     search(
         data,
         basic_blocks.get_block(entry),
         &mut values,
+        &mut between_block_bounds,
         &mut defs,
         &mut phi,
         basic_blocks,
@@ -358,8 +472,9 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         &dominance_frontiers,
         &idom,
         &mut C,
-        &mut S
+        &mut S,
+        value_modifiers
     );
 
-    SSA { instruction_values: values, modifier_values: HashMap::new(), defs: defs, phi: phi }
+    SSA { instruction_values: values, modifier_values: HashMap::new(), control_dependent_values: between_block_bounds, defs: defs, phi: phi }
 }

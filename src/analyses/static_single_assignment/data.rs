@@ -6,6 +6,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressDisplay;
 
 use data::types::Typed;
 use data::modifier;
@@ -19,23 +20,27 @@ pub struct PhiOp<A: SSAValues> { pub out: DFGRef<A>, pub ins: Vec<DFGRef<A>> }
 pub type PhiLocations<A> = HashMap<<A as ValueLocations>::Location, PhiOp<A>>;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum DefSource {
+pub enum DefSource<A: AddressDisplay> {
     /// The defined value comes from an instruction in the underlying binary
     Instruction,
     /// The defined value comes from a phi pseudo-op
     Phi,
     /// The defined value is some custom definition - possibly automatically added or manually
     /// declared.
-    Modifier(modifier::Precedence)
+    Modifier(modifier::Precedence),
+    /// Defined on the edge between two basic blocks - due to some value modifier, likely from
+    /// conditionally defining a value after a conditional branch
+    Between(A)
 }
 
-impl fmt::Display for DefSource {
+impl <A: AddressDisplay> fmt::Display for DefSource<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DefSource::Instruction => write!(f, "instruction"),
             DefSource::Phi => write!(f, "phi"),
             DefSource::Modifier(modifier::Precedence::Before) => write!(f, "modifier (before)"),
             DefSource::Modifier(modifier::Precedence::After) => write!(f, "modifier (after)"),
+            DefSource::Between(addr) => write!(f, "between ({:?})", addr.stringy())
         }
     }
 }
@@ -51,16 +56,14 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     // these aren't individually freed so Rc shouldn't be necessary?
     pub instruction_values: HashMap<A::Address, RWMap<A>>,
     pub modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
-    pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource)>,
+    pub control_dependent_values: HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
+    pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
     pub phi: HashMap<A::Address, PhiLocations<A>>
 }
 
 #[derive(Debug)]
 pub struct Value<A: SSAValues> {
-    // record the size of the defined value, in addition to the widest alias, for granular tracking
-    // of what elements of the register are known? // than just the widest alias
-    // Temporarily necessary to map from some use back to a def site
-    pub location: (A::Address, A::Location),
+    pub location: A::Location,
     // None indicates "not written anywhere in this dfg", which indicates this value can
     // be considered an input from some enclosing control flow
     pub version: Option<u32>,
@@ -126,9 +129,9 @@ impl <A> Value<A> where A: SSAValues {
 }
 
 impl <A: SSAValues + Arch> Value<A> {
-    pub fn new(addr: A::Address, location: A::Location, version: Option<u32>) -> Value<A> {
+    pub fn new(location: A::Location, version: Option<u32>) -> Value<A> {
         Value {
-            location: (addr, location),
+            location: location,
             version: version,
             data: None
         }
@@ -162,7 +165,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         DFGLValue { value: self.get_value(addr, loc, Direction::Read).unwrap() }
     }
 
-    pub fn get_def_site(&self, value: DFGRef<A>) -> (A::Address, DefSource) {
+    pub fn get_def_site(&self, value: DFGRef<A>) -> (A::Address, DefSource<A::Address>) {
         match self.defs.get(&HashedValue { value: Rc::clone(&value) }) {
             Some(site) => *site,
             None => {

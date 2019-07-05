@@ -310,7 +310,7 @@ pub enum DataMemo {
 
 #[derive(Debug, Serialize)]
 pub struct ValueMemo {
-    pub location: (u64, Location),
+    pub location: Location,
     pub version: Option<u32>,
     pub data: Option<DataMemo>
 }
