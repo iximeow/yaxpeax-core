@@ -108,7 +108,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
     value_modifiers: &U
-) -> SSA<A> where A::Address: Copy + Ord + Hash + Eq, A::Location: Copy + Hash + Eq {
+) -> SSA<A> {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
     let dominance_frontiers = compute_dominance_frontiers_from_idom(cfg, entry, &idom);
