@@ -231,6 +231,12 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         C: &mut HashMap<A::Location, u32>,
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>
     ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
+        fn new_value<A: Arch + SSAValues>(addr: A::Address, loc: A::Location, C: &mut HashMap<A::Location, u32>, S: &mut HashMap<A::Location, Vec<DFGRef<A>>>) -> Value<A> {
+            let widening = loc.maximal_alias_of();
+            let i = C[&widening];
+            C.entry(widening).and_modify(|x| *x += 1);
+            Value::new(addr, loc, Some(i))
+        }
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {
         // also check phis at start of the block...
@@ -238,11 +244,9 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
             for (loc, _data) in phis {
                 // these are very clear reads vs assignments:
                 let widening = loc.maximal_alias_of();
-                let i = C[&widening];
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
-                phi_dest.replace(Value::new(block.start, *loc, Some(i)));
+                phi_dest.replace(new_value(block.start, *loc, C, S));
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
-                C.entry(widening).and_modify(|x| *x += 1);
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                 // eg is it faster to store this and pop it back or is it faster to just
                 // decode again..?
@@ -265,8 +269,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     },
                     ((Some(loc), Direction::Write), def_source) => {
                         let widening = loc.maximal_alias_of();
-                        let i = C[&widening];
-                        let new_value = Rc::new(RefCell::new(Value::new(address, loc, Some(i))));
+                        let new_value = Rc::new(RefCell::new(new_value(address, loc, C, S)));
                         defs.insert(HashedValue {
                             value: Rc::clone(&new_value)
                         }, (address, def_source));
@@ -275,7 +278,6 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                         );
                         at_address.insert((loc, Direction::Write), Rc::clone(&new_value));
                         S.get_mut(&widening).expect("S should have entries for all locations.").push(new_value);
-                        C.entry(widening).and_modify(|x| *x += 1);
                         // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                         // eg is it faster to store thsi and pop it back or is it faster to just
                         // decode again..?
