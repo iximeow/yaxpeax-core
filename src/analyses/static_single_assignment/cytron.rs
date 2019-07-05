@@ -135,7 +135,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     (Some(loc), Direction::Write) => {
                         let widening = loc.maximal_alias_of();
                         all_locations.insert(widening);
-                        assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(address);
+                        assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(block.start);
                     }
                     (None, Direction::Write) => {
                         // TODO: this is a write to something, we don't know what
