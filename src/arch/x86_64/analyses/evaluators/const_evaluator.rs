@@ -1,13 +1,16 @@
 use yaxpeax_arch::Arch;
 use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
 use arch::x86_64::x86_64Data;
+use arch::x86_64::ModifierExpression;
 use arch::x86_64::analyses::data_flow::{Data, Location};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
+use data::ValueLocations;
 
 pub struct ConcreteDomain;
 
 impl Domain for ConcreteDomain {
+    type Modifier = ModifierExpression;
     type Value = u64;
 
     fn join(l: Option<u64>, r: Option<u64>) -> Option<Self::Value> {
@@ -107,7 +110,24 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
 }
 
 impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
-    fn evaluate(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &x86_64Data) {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<ModifierExpression>, dfg: &SSA<x86_64>, _contexts: &x86_64Data) {
+        for expr in exprs {
+            match expr {
+                ModifierExpression::IsNot(_) |
+                ModifierExpression::Below(_) |
+                ModifierExpression::Above(_) => { }
+                ModifierExpression::Is(v) => {
+                    if let Some(loc) = location {
+                        println!("Applying bound {:?} to location {:?}", expr, loc);
+                        println!("The corresponding def version is: {:?}", dfg.get_transient_def(from, to, loc).as_rc());
+                        dfg.get_transient_def(from, to, loc).update(Data::Concrete(*v, None));
+                    }
+                }
+            }
+        }
+    }
+
+    fn evaluate_instruction(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &x86_64Data) {
         //TODO: handle prefixes like at all
         match instr {
             Instruction { opcode: Opcode::XOR, operands: [Operand::Register(l), Operand::Register(r)], .. } => {

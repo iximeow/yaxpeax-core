@@ -5,11 +5,14 @@ use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
 use data;
+use arch::x86_64::ModifierExpression;
+use data::ValueLocations;
 use data::types::TypeSpec;
 
 pub struct SymbolicDomain;
 
 impl Domain for SymbolicDomain {
+    type Modifier = ModifierExpression;
     type Value = SymbolicExpression;
 
     fn join(l: Option<Self::Value>, r: Option<Self::Value>) -> Option<Self::Value> {
@@ -135,7 +138,10 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
 }
 
 impl ConstEvaluator<x86_64, x86_64Data, SymbolicDomain> for x86_64 {
-    fn evaluate(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<SymbolicDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
+
+    }
+    fn evaluate_instruction(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
         use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr {

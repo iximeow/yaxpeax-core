@@ -94,16 +94,46 @@ impl InstructionModifiers {
         InstructionModifiers {
             before: HashMap::new(),
             after: HashMap::new(),
+            between: HashMap::new(),
         }
+    }
+
+    pub fn modifiers_between(&self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Option<&HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>> {
+        self.between.get(&from).and_then(|tos| tos.get(&to))
+    }
+
+    pub fn add_edge_modifier(&mut self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, loc: Option<<x86_64 as ValueLocations>::Location>, expr: ModifierExpression) {
+        let edges: &mut HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>> = self.between.entry(from).or_insert_with(|| HashMap::new());
+        let edge: &mut HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>> = edges.entry(to).or_insert_with(|| HashMap::new());
+        let modifiers: &mut Vec<ModifierExpression> = edge.entry(loc).or_insert_with(|| Vec::new());
+        modifiers.push(expr);
     }
 }
 
 use data::modifier::ModifierCollection;
 
 impl ModifierCollection<x86_64> for InstructionModifiers {
-    fn between(&self, addr: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
-        vec![]
-    }
+    fn between(&self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
+        let mut res = vec![];
+        if let Some(modifiers) = self.modifiers_between(from, to) {
+             for (k, vs) in modifiers.iter() {
+                for v in vs {
+                    match v {
+                        ModifierExpression::IsNot(_) |
+                        ModifierExpression::Below(_) |
+                        ModifierExpression::Above(_) => {
+                            res.push((k.to_owned(), Direction::Read));
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                        ModifierExpression::Is(_) => {
+                            res.push((k.to_owned(), Direction::Write));
+                        }
+                    }
+                }
+            }
+        }
+        res
+   }
 
     fn before(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
         let mut res = vec![];

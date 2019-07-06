@@ -148,6 +148,12 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
             .and_then(|addr_values| addr_values.get(&(loc, dir)))
             .map(|x| Rc::clone(x))
     }
+    pub fn get_transient_value(&self, from: A::Address, to: A::Address, loc: A::Location, dir: Direction) -> Option<DFGRef<A>> {
+        self.control_dependent_values.get(&from)
+            .and_then(|dests| dests.get(&to))
+            .and_then(|values| values.get(&(loc, dir)))
+            .map(|x| Rc::clone(x))
+    }
     pub fn try_get_def(&self, addr: A::Address, loc: A::Location) -> Option<DFGRef<A>> {
         self.get_value(addr, loc, Direction::Write)
     }
@@ -163,6 +169,13 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
     }
     pub fn get_use(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
         DFGLValue { value: self.get_value(addr, loc, Direction::Read).unwrap() }
+    }
+
+    pub fn get_transient_def(&self, from: A::Address, to: A::Address, loc: A::Location) -> DFGLValue<A> {
+        DFGLValue { value: self.get_transient_value(from, to, loc, Direction::Write).unwrap() }
+    }
+    pub fn get_transient_use(&self, from: A::Address, to: A::Address, loc: A::Location) -> DFGLValue<A> {
+        DFGLValue { value: self.get_transient_value(from, to, loc, Direction::Read).unwrap() }
     }
 
     pub fn get_def_site(&self, value: DFGRef<A>) -> (A::Address, DefSource<A::Address>) {
