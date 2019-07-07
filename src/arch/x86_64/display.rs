@@ -425,22 +425,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
         match self.instr.opcode {
             Opcode::CALL |
             Opcode::JMP |
-            Opcode::JO |
-            Opcode::JNO |
-            Opcode::JB |
-            Opcode::JNB |
-            Opcode::JZ |
-            Opcode::JNZ |
-            Opcode::JA |
-            Opcode::JNA |
-            Opcode::JS |
-            Opcode::JNS |
-            Opcode::JP |
-            Opcode::JNP |
-            Opcode::JL |
-            Opcode::JGE |
-            Opcode::JLE |
-            Opcode::JG => {
+            Opcode::Jcc(_) => {
                 match &self.instr.operands[0] {
                     Operand::ImmediateI8(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
@@ -555,22 +540,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
 
             Opcode::SQRTSD |
             Opcode::SQRTSS |
-            Opcode::CMOVA |
-            Opcode::CMOVB |
-            Opcode::CMOVG |
-            Opcode::CMOVGE |
-            Opcode::CMOVL |
-            Opcode::CMOVLE |
-            Opcode::CMOVNA |
-            Opcode::CMOVNB |
-            Opcode::CMOVNO |
-            Opcode::CMOVNP |
-            Opcode::CMOVNS |
-            Opcode::CMOVNZ |
-            Opcode::CMOVO |
-            Opcode::CMOVP |
-            Opcode::CMOVS |
-            Opcode::CMOVZ => {
+            Opcode::MOVcc(_) => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
@@ -608,22 +578,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
-            Opcode::SETO |
-            Opcode::SETNO |
-            Opcode::SETB |
-            Opcode::SETAE |
-            Opcode::SETZ |
-            Opcode::SETNZ |
-            Opcode::SETBE |
-            Opcode::SETA |
-            Opcode::SETS |
-            Opcode::SETNS |
-            Opcode::SETP |
-            Opcode::SETNP |
-            Opcode::SETL |
-            Opcode::SETGE |
-            Opcode::SETLE |
-            Opcode::SETG => {
+            Opcode::SETcc(_) => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
             }
@@ -861,56 +816,14 @@ pub fn show_linear<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     }
 }
 
-static CONDITIONAL_OPS: [Opcode; 48] = [
-        Opcode::JO,
-        Opcode::JNO,
-        Opcode::JB,
-        Opcode::JNB,
-        Opcode::JZ,
-        Opcode::JNZ,
-        Opcode::JA,
-        Opcode::JNA,
-        Opcode::JS,
-        Opcode::JNS,
-        Opcode::JP,
-        Opcode::JNP,
-        Opcode::JL,
-        Opcode::JGE,
-        Opcode::JLE,
-        Opcode::JG,
-        Opcode::CMOVA,
-        Opcode::CMOVB,
-        Opcode::CMOVG,
-        Opcode::CMOVGE,
-        Opcode::CMOVL,
-        Opcode::CMOVLE,
-        Opcode::CMOVNA,
-        Opcode::CMOVNB,
-        Opcode::CMOVNO,
-        Opcode::CMOVNP,
-        Opcode::CMOVNS,
-        Opcode::CMOVNZ,
-        Opcode::CMOVO,
-        Opcode::CMOVP,
-        Opcode::CMOVS,
-        Opcode::CMOVZ,
-        Opcode::SETO,
-        Opcode::SETNO,
-        Opcode::SETB,
-        Opcode::SETAE,
-        Opcode::SETZ,
-        Opcode::SETNZ,
-        Opcode::SETBE,
-        Opcode::SETA,
-        Opcode::SETS,
-        Opcode::SETNS,
-        Opcode::SETP,
-        Opcode::SETNP,
-        Opcode::SETL,
-        Opcode::SETGE,
-        Opcode::SETLE,
-        Opcode::SETG,
-];
+fn is_conditional_op(op: Opcode) -> bool {
+    match op {
+        Opcode::Jcc(_) |
+        Opcode::MOVcc(_) |
+        Opcode::SETcc(_) => true,
+        _ => false
+    }
+}
 
 pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<<x86_64Arch as Arch>::Address>>(
     data: &M,
@@ -951,7 +864,7 @@ pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<
                 colors: colors
             });
             if let Some(ssa) = ssa {
-                if CONDITIONAL_OPS.contains(&instr.opcode) {
+                if is_conditional_op(instr.opcode) {
                     for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
                         if let (Some(flag), Direction::Read) = (loc, dir) {
                             if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {

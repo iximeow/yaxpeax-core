@@ -106,22 +106,7 @@ pub fn find_xrefs(
         Opcode::NOP => { vec! [] }
 
         // Control flow operations are special
-        Opcode::JO |
-        Opcode::JNO |
-        Opcode::JB |
-        Opcode::JNB |
-        Opcode::JZ |
-        Opcode::JNZ |
-        Opcode::JA |
-        Opcode::JNA |
-        Opcode::JS |
-        Opcode::JNS |
-        Opcode::JP |
-        Opcode::JNP |
-        Opcode::JL |
-        Opcode::JGE |
-        Opcode::JLE |
-        Opcode::JG |
+        Opcode::Jcc(_) |
         Opcode::CALL |
         Opcode::CALLF |
         Opcode::JMP |
@@ -206,38 +191,8 @@ pub fn find_xrefs(
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
         Opcode::LDDQU |
-        Opcode::SETO |
-        Opcode::SETNO |
-        Opcode::SETB |
-        Opcode::SETAE |
-        Opcode::SETZ |
-        Opcode::SETNZ |
-        Opcode::SETBE |
-        Opcode::SETA |
-        Opcode::SETS |
-        Opcode::SETNS |
-        Opcode::SETP |
-        Opcode::SETNP |
-        Opcode::SETL |
-        Opcode::SETGE |
-        Opcode::SETLE |
-        Opcode::SETG |
-        Opcode::CMOVA |
-        Opcode::CMOVB |
-        Opcode::CMOVG |
-        Opcode::CMOVGE |
-        Opcode::CMOVL |
-        Opcode::CMOVLE |
-        Opcode::CMOVNA |
-        Opcode::CMOVNB |
-        Opcode::CMOVNO |
-        Opcode::CMOVNP |
-        Opcode::CMOVNS |
-        Opcode::CMOVNZ |
-        Opcode::CMOVO |
-        Opcode::CMOVP |
-        Opcode::CMOVS |
-        Opcode::CMOVZ |
+        Opcode::SETcc(_) |
+        Opcode::MOVcc(_) |
         Opcode::MOV |
         Opcode::MOVSX_b |
         Opcode::MOVSX_w |

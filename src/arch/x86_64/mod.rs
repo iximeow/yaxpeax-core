@@ -846,22 +846,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::HLT => {
                 control_flow::Effect::stop()
             },
-            Opcode::JO |
-            Opcode::JNO |
-            Opcode::JB |
-            Opcode::JNB |
-            Opcode::JZ |
-            Opcode::JNZ |
-            Opcode::JA |
-            Opcode::JNA |
-            Opcode::JS |
-            Opcode::JNS |
-            Opcode::JP |
-            Opcode::JNP |
-            Opcode::JL |
-            Opcode::JGE |
-            Opcode::JLE |
-            Opcode::JG => {
+            Opcode::Jcc(_) => {
                 match self.operands[0] {
                     Operand::ImmediateI8(i) => {
                         control_flow::Effect::cont_and(
@@ -894,38 +879,8 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
                 control_flow::Effect::stop()
             },
 
-            Opcode::CMOVA |
-            Opcode::CMOVB |
-            Opcode::CMOVG |
-            Opcode::CMOVGE |
-            Opcode::CMOVL |
-            Opcode::CMOVLE |
-            Opcode::CMOVNA |
-            Opcode::CMOVNB |
-            Opcode::CMOVNO |
-            Opcode::CMOVNP |
-            Opcode::CMOVNS |
-            Opcode::CMOVNZ |
-            Opcode::CMOVO |
-            Opcode::CMOVP |
-            Opcode::CMOVS |
-            Opcode::CMOVZ |
-            Opcode::SETO |
-            Opcode::SETNO |
-            Opcode::SETB |
-            Opcode::SETAE |
-            Opcode::SETZ |
-            Opcode::SETNZ |
-            Opcode::SETBE |
-            Opcode::SETA |
-            Opcode::SETS |
-            Opcode::SETNS |
-            Opcode::SETP |
-            Opcode::SETNP |
-            Opcode::SETL |
-            Opcode::SETGE |
-            Opcode::SETLE |
-            Opcode::SETG => {
+            Opcode::MOVcc(_) |
+            Opcode::SETcc(_) => {
                 control_flow::Effect::cont()
             }
 

@@ -13,7 +13,7 @@
 use arch::Symbol;
 use analyses::static_single_assignment::{SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::{RegSpec, RegisterBank, x86_64, Opcode, Operand};
+use yaxpeax_x86::{ConditionCode, RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -360,6 +360,79 @@ impl Hash for Data {
 
 impl SSAValues for x86_64 {
     type Data = Data;
+}
+
+fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>, Direction)] {
+    match cond {
+        ConditionCode::O => {
+            &[(Some(Location::OF), Direction::Read)]
+        }
+        ConditionCode::NO => {
+            &[(Some(Location::OF), Direction::Read)]
+        }
+        ConditionCode::B => {
+            &[(Some(Location::CF), Direction::Read)]
+        }
+        ConditionCode::NB => {
+            &[(Some(Location::CF), Direction::Read)]
+        }
+        ConditionCode::Z => {
+            &[(Some(Location::ZF), Direction::Read)]
+        }
+        ConditionCode::NZ => {
+            &[(Some(Location::ZF), Direction::Read)]
+        }
+        ConditionCode::A => {
+            &[
+                (Some(Location::CF), Direction::Read),
+                (Some(Location::ZF), Direction::Read)
+            ]
+        }
+        ConditionCode::NA => {
+            &[
+                (Some(Location::CF), Direction::Read),
+                (Some(Location::ZF), Direction::Read)
+            ]
+        }
+        ConditionCode::S => {
+            &[(Some(Location::SF), Direction::Read)]
+        }
+        ConditionCode::NS => {
+            &[(Some(Location::SF), Direction::Read)]
+        }
+        ConditionCode::P => {
+            &[(Some(Location::PF), Direction::Read)]
+        }
+        ConditionCode::NP => {
+            &[(Some(Location::PF), Direction::Read)]
+        }
+        ConditionCode::L => {
+            &[
+                (Some(Location::SF), Direction::Read),
+                (Some(Location::OF), Direction::Read)
+            ]
+        }
+        ConditionCode::GE => {
+            &[
+                (Some(Location::SF), Direction::Read),
+                (Some(Location::OF), Direction::Read)
+            ]
+        }
+        ConditionCode::LE => {
+            &[
+                (Some(Location::ZF), Direction::Read),
+                (Some(Location::SF), Direction::Read),
+                (Some(Location::OF), Direction::Read)
+            ]
+        }
+        ConditionCode::G => {
+            &[
+                (Some(Location::ZF), Direction::Read),
+                (Some(Location::SF), Direction::Read),
+                (Some(Location::OF), Direction::Read)
+            ]
+        }
+    }
 }
 
 impl ValueLocations for x86_64 {
@@ -1029,265 +1102,19 @@ impl ValueLocations for x86_64 {
             Opcode::Invalid => {
                 vec![]
             },
-            Opcode::JO => {
-                vec![(Some(Location::OF), Direction::Read)]
-            }
-            Opcode::JNO => {
-                vec![(Some(Location::OF), Direction::Read)]
-            }
-            Opcode::JB => {
-                vec![(Some(Location::CF), Direction::Read)]
-            }
-            Opcode::JNB => {
-                vec![(Some(Location::CF), Direction::Read)]
-            }
-            Opcode::JZ => {
-                vec![(Some(Location::ZF), Direction::Read)]
-            }
-            Opcode::JNZ => {
-                vec![(Some(Location::ZF), Direction::Read)]
-            }
-            Opcode::JA => {
-                vec![
-                    (Some(Location::CF), Direction::Read),
-                    (Some(Location::ZF), Direction::Read)
-                ]
-            }
-            Opcode::JNA => {
-                vec![
-                    (Some(Location::CF), Direction::Read),
-                    (Some(Location::ZF), Direction::Read)
-                ]
-            }
-            Opcode::JS => {
-                vec![(Some(Location::SF), Direction::Read)]
-            }
-            Opcode::JNS => {
-                vec![(Some(Location::SF), Direction::Read)]
-            }
-            Opcode::JP => {
-                vec![(Some(Location::PF), Direction::Read)]
-            }
-            Opcode::JNP => {
-                vec![(Some(Location::PF), Direction::Read)]
-            }
-            Opcode::JL => {
-                vec![
-                    (Some(Location::SF), Direction::Read),
-                    (Some(Location::OF), Direction::Read)
-                ]
-            }
-            Opcode::JGE => {
-                vec![
-                    (Some(Location::SF), Direction::Read),
-                    (Some(Location::OF), Direction::Read)
-                ]
-            }
-            Opcode::JLE => {
-                vec![
-                    (Some(Location::ZF), Direction::Read),
-                    (Some(Location::SF), Direction::Read),
-                    (Some(Location::OF), Direction::Read)
-                ]
-            }
-            Opcode::JG => {
-                vec![
-                    (Some(Location::ZF), Direction::Read),
-                    (Some(Location::SF), Direction::Read),
-                    (Some(Location::OF), Direction::Read)
-                ]
+            Opcode::Jcc(cond) => {
+                cond_to_flags(cond).to_vec()
             }
 
-            Opcode::CMOVA => {
+            Opcode::MOVcc(cond) => {
                 let mut locs = decompose_write(&instr.operands[0]);
                 locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::CF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
+                locs.extend_from_slice(cond_to_flags(cond));
                 locs
             }
-            Opcode::CMOVB => {
+            Opcode::SETcc(cond) => {
                 let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::CF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVG => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVGE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVL => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVLE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNA => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::CF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNB => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::CF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNO => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNP => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::PF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNS => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVNZ => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVO => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVP => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::PF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVS => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::SF), Direction::Read));
-                locs
-            }
-            Opcode::CMOVZ => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETO => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::SETNO => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::SETB => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::CF), Direction::Read));
-                locs
-            }
-            Opcode::SETAE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::CF), Direction::Read));
-                locs
-            }
-            Opcode::SETZ => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETNZ => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETBE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::CF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETA => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::CF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETS => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs
-            }
-            Opcode::SETNS => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs
-            }
-            Opcode::SETP => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::PF), Direction::Read));
-                locs
-            }
-            Opcode::SETNP => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::PF), Direction::Read));
-                locs
-            }
-            Opcode::SETL => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::SETGE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs
-            }
-            Opcode::SETLE => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
-                locs
-            }
-            Opcode::SETG => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.push((Some(Location::SF), Direction::Read));
-                locs.push((Some(Location::OF), Direction::Read));
-                locs.push((Some(Location::ZF), Direction::Read));
+                locs.extend_from_slice(cond_to_flags(cond));
                 locs
             }
             Opcode::LSL => {
