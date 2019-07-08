@@ -85,7 +85,15 @@ pub struct DFGLValue<A: SSAValues> {
 
 impl <A: SSAValues> DFGLValue<A> {
     pub fn update(&self, new_data: A::Data) {
+        // TODO: check to see if the new value conflicts with what we're setting?
         self.value.borrow_mut().data.replace(new_data);
+    }
+    pub fn replace(&self, new_data: Option<A::Data>) {
+        // TODO: check to see if the new value conflicts with what we're setting?
+        std::mem::replace(&mut self.value.borrow_mut().data, new_data);
+    }
+    pub fn clear(&self) {
+        self.value.borrow_mut().data.take();
     }
     pub fn get_data(&self) -> Option<A::Data> {
         self.value.borrow().data.clone()

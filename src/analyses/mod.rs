@@ -3,3 +3,4 @@ pub mod function_signatures;
 pub mod static_single_assignment;
 pub mod xrefs;
 pub mod evaluators;
+pub mod value_range;
