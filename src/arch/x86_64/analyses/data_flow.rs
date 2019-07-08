@@ -11,7 +11,7 @@
 /// this should be optimistic or pessimistic, I'm .. ignoring it :)
 
 use arch::Symbol;
-use analyses::static_single_assignment::{SSAValues, Value};
+use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{ConditionCode, RegSpec, RegisterBank, x86_64, Opcode, Operand};
 
@@ -280,12 +280,29 @@ impl Typed for SymbolicExpression {
 // => mov rdx_1, [KPCR.field_7 + 0x48]
 // => mov rdx_1, KPCR.field_7.field_9
 
+#[derive(Debug, Clone, Hash)]
+pub enum ValueRange {
+    Between(Data, Data),
+    Precisely(Data),
+}
+
 #[derive(Debug, Clone)]
 pub enum Data {
     Concrete(u64, Option<TypeSpec>),
     Str(String),
     Expression(SymbolicExpression),
-    Alias(Rc<RefCell<Value<x86_64>>>)
+    Alias(Rc<RefCell<Value<x86_64>>>),
+    // This is a disjunction of "ranges" that may be a range of a single element
+    // eg this is a set of ranges/specific values
+    //
+    // It is a logical error for this to be ValueSet(vec![Precisely(_)]).
+    ValueSet(Vec<ValueRange>),
+    // This value has contradictory bounds, or is otherwise unknowable. This must be distinct
+    // from "not yet inspected" to avoid situations where analysis starts with an unknown, infers
+    // some value, disproves the value, resets to unknown, and loops.
+    // Not yet added because analyses are not applied more than once, so we know on first check
+    // that the value has not been considered yet.
+    // Indeterminate,
 }
 
 impl Typed for Data {
@@ -294,7 +311,10 @@ impl Typed for Data {
             Data::Concrete(_, ref t) => t.to_owned().unwrap_or(TypeSpec::Bottom),
             Data::Str(_) => TypeSpec::Bottom,
             Data::Expression(expr) => expr.type_of(type_atlas),
-            Data::Alias(ptr) => ptr.borrow().data.to_owned().map(|d| d.type_of(type_atlas)).unwrap_or(TypeSpec::Unknown)
+            Data::Alias(ptr) => ptr.borrow().data.to_owned().map(|d| d.type_of(type_atlas)).unwrap_or(TypeSpec::Unknown),
+            // TODO: technically not valid - we could see if there's a shared type among
+            // all the elements of the value set.
+            Data::ValueSet(_) => TypeSpec::Bottom,
         }
     }
 }
@@ -305,7 +325,14 @@ pub enum DataMemo {
     Concrete(u64, Option<TypeSpec>),
     Str(String),
     Expression(SymbolicExpression),
-    Alias(u32)
+    Alias(u32),
+    ValueSet(Vec<ValueRangeMemo>)
+}
+
+#[derive(Debug, Serialize)]
+pub enum ValueRangeMemo {
+    Between(DataMemo, DataMemo),
+    Precisely(DataMemo),
 }
 
 #[derive(Debug, Serialize)]
@@ -319,13 +346,32 @@ impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
     type Out = ValueMemo;
 
     fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
+        fn memoize_data(data: &Data, memos: &HashMap<HashedValue<DFGRef<x86_64>>, u32>) -> DataMemo {
+            match data {
+                Data::Concrete(v, ty) => DataMemo::Concrete(*v, ty.to_owned()),
+                Data::Str(string) => DataMemo::Str(string.to_owned()),
+                Data::Expression(expr) => DataMemo::Expression(expr.to_owned()),
+                Data::Alias(ptr) => DataMemo::Alias(memos[&HashedValue { value: Rc::clone(ptr) }]),
+                Data::ValueSet(values) => {
+                    let mut memoized_values: Vec<ValueRangeMemo> = vec![];
+                    for value in values {
+                        let memoized_value = match value {
+                            ValueRange::Between(start, end) => {
+                                ValueRangeMemo::Between(memoize_data(start, memos), memoize_data(end, memos))
+                            }
+                            ValueRange::Precisely(v) => {
+                                ValueRangeMemo::Precisely(memoize_data(v, memos))
+                            }
+                        };
+                        memoized_values.push(memoized_value)
+                    }
+                    DataMemo::ValueSet(memoized_values)
+                }
+            }
+        }
+
         let selfref: &Value<x86_64> = &*(&*self.value.borrow());
-        let newdata = selfref.data.as_ref().map(|data| match data {
-            Data::Concrete(v, ty) => DataMemo::Concrete(*v, ty.to_owned()),
-            Data::Str(string) => DataMemo::Str(string.to_owned()),
-            Data::Expression(expr) => DataMemo::Expression(expr.to_owned()),
-            Data::Alias(ptr) => DataMemo::Alias(memos[&HashedValue { value: Rc::clone(ptr) }])
-        });
+        let newdata = selfref.data.as_ref().map(|data| memoize_data(data, memos));
 
         ValueMemo {
             location: selfref.location,
@@ -353,6 +399,12 @@ impl Hash for Data {
             Data::Alias(ref value) => {
                 state.write_u8(3);
                 value.borrow().hash(state);
+            }
+            Data::ValueSet(ref values) => {
+                state.write_u8(4);
+                for v in values {
+                    v.hash(state);
+                }
             }
         }
     }

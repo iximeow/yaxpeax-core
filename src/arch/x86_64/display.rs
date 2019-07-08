@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::rc::Rc;
 
 use termion::color;
 
@@ -13,7 +14,7 @@ use arch::display::BaseDisplay;
 use arch::InstructionSpan;
 use arch::x86_64;
 use arch::x86_64::{ContextRead, MergedContextTable};
-use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
+use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange};
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
@@ -77,6 +78,119 @@ pub struct InstructionContext<'a, 'b, 'c, 'd> {
     contexts: Option<&'b MergedContextTable>,
     ssa: Option<&'c SSA<x86_64Arch>>,
     colors: Option<&'d ColorSettings>
+}
+
+pub struct RegValueDisplay<'a, 'b, 'c> {
+    pub reg: &'a RegSpec,
+    pub value: &'b Option<DFGRef<x86_64Arch>>,
+    pub colors: Option<&'c ColorSettings>,
+}
+
+impl <'a, 'b, 'c> fmt::Display for RegValueDisplay<'a, 'b, 'c> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.value {
+            Some(value) => {
+                write!(
+                    fmt,
+                    "{}",
+                    self.colors.register(
+                        format!(
+                            "{}_{}",
+                            self.reg,
+                            value.borrow().version()
+                                .map(|ver| ver.to_string())
+                                .unwrap_or_else(|| "input".to_string())
+                        )
+                    )
+                )?;
+                if let Some(data) = value.borrow().data.as_ref() {
+                    write!(fmt, " (= {})", DataDisplay { data: &data, colors: self.colors })?;
+                }
+                Ok(())
+            },
+            None => {
+                write!(fmt, "{}", self.reg)
+            }
+        }
+    }
+}
+
+pub struct ValueRangeDisplay<'a, 'b> {
+    pub range: &'a ValueRange,
+    pub colors: Option<&'b ColorSettings>,
+}
+
+impl <'a, 'b> fmt::Display for ValueRangeDisplay<'a, 'b> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self.range {
+            ValueRange::Between(start, end) => {
+                write!(fmt, "[{}, {}]", DataDisplay { data: &start, colors: self.colors }, DataDisplay { data: &end, colors: self.colors })
+            },
+            ValueRange::Precisely(v) => {
+                write!(fmt, "{}", DataDisplay { data: &v, colors: self.colors })
+            }
+        }
+    }
+}
+
+pub struct DataDisplay<'a, 'b> {
+    pub data: &'a Data,
+    pub colors: Option<&'b ColorSettings>,
+}
+
+impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let type_atlas = TypeAtlas::new();
+        match self.data {
+            Data::Alias(alias) => {
+                if let Location::Register(alias_reg) = alias.borrow().location {
+                    write!(fmt, "{}", RegValueDisplay {
+                        reg: &alias_reg,
+                        value: &Some(Rc::clone(alias)),
+                        colors: self.colors
+                    })?;
+                } else {
+                    unreachable!("Register alias must be another register");
+                }
+            },
+            Data::Str(string) => { write!(fmt, "\"{}\"", string)?; }
+            Data::Expression(expr) => {
+                let real_ty = expr.type_of(&type_atlas);
+                if real_ty != TypeSpec::Unknown {
+                    write!(fmt, "{}", expr.show(&type_atlas))?;
+                } else {
+                    write!(fmt, "{}", expr.show(&type_atlas))?;
+                }
+            },
+            Data::Concrete(v, ty) => {
+                if let Some(_real_ty) = ty {
+                    write!(fmt, "{}", v)?;
+                } else {
+                    write!(fmt, "{}", v)?;
+                }
+            }
+            Data::ValueSet(values) => {
+                if values.len() == 0 {
+                    unreachable!("Value sets cannot be empty, logical bug");
+                } else if values.len() == 1 {
+                    write!(fmt, "{}", ValueRangeDisplay {
+                        range: &values[0],
+                        colors: self.colors
+                    })?;
+                } else {
+                    write!(fmt, "{{ {}", ValueRangeDisplay {
+                        range: &values[0],
+                        colors: self.colors
+                    })?;
+                    for value in &values[1..] {
+                        write!(fmt, ", {}", ValueRangeDisplay { range: value, colors: self.colors })?;
+                    }
+                    write!(fmt, " }}")?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 pub enum Use {
@@ -168,61 +282,6 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
         }
 
         fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
-            fn write_location_value(fmt: &mut fmt::Formatter, reg: RegSpec, ctx: &InstructionContext, value: Option<DFGRef<x86_64Arch>>) -> fmt::Result {
-                let type_atlas = TypeAtlas::new();
-                match value {
-                    Some(value) => {
-                        write!(
-                            fmt,
-                            "{}",
-                            ctx.colors.register(
-                                format!(
-                                    "{}_{}",
-                                    reg,
-                                    value.borrow().version()
-                                        .map(|ver| ver.to_string())
-                                        .unwrap_or_else(|| "input".to_string())
-                                )
-                            )
-                        )?;
-                        if let Some(data) = value.borrow().data.as_ref() {
-                            match data {
-                                Data::Alias(alias) => {
-                                    if let Location::Register(alias_reg) = alias.borrow().location {
-                                        write!(fmt, " (= ")?;
-                                        use std::rc::Rc;
-                                        write_location_value(fmt, alias_reg, ctx, Some(Rc::clone(alias)))?;
-                                        write!(fmt, ")")?;
-                                    } else {
-                                        panic!("Register alias must be another register");
-                                    }
-                                },
-                                Data::Str(string) => { write!(fmt, " (= \"{}\")", string)?; }
-                                Data::Expression(expr) => {
-                                    let real_ty = expr.type_of(&type_atlas);
-                                    if real_ty != TypeSpec::Unknown {
-                                        write!(fmt, " (= {})", expr.show(&type_atlas))?;
-                                    } else {
-                                        write!(fmt, " (= {})", expr.show(&type_atlas))?;
-                                    }
-                                },
-                                Data::Concrete(v, ty) => {
-                                    if let Some(_real_ty) = ty {
-                                        write!(fmt, " (= {})", v)?;
-                                    } else {
-                                        write!(fmt, " (= {})", v)?;
-                                    }
-                                }
-                            }
-                        }
-                        Ok(())
-                    },
-                    None => {
-                        write!(fmt, "{}", reg)
-                    }
-                }
-            }
-
             fn numbered_register_name<'a, 'b, 'c, 'd>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd>, direction: Direction) -> Colored<String> {
                 let text = context.ssa.map(|ssa| {
                     let num = ssa.get_value(address, Location::Register(reg), direction)
@@ -266,16 +325,44 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 Operand::Register(spec) => {
                     match usage {
                         Use::Read => {
-                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))
+                            let value = ctx.ssa.map(|ssa| {
+                                ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()
+                            });
+                            write!(fmt, "{}", RegValueDisplay {
+                                reg: spec,
+                                value: &value,
+                                colors: ctx.colors,
+                            })
                         },
                         Use::Write => {
-                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()))
+                            let value = ctx.ssa.map(|ssa| {
+                                ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()
+                            });
+                            write!(fmt, "{}", RegValueDisplay {
+                                reg: spec,
+                                value: &value,
+                                colors: ctx.colors,
+                            })
                         },
                         Use::ReadWrite => {
-                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
-                            write!(fmt, " (-> ")?;
-                            write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()))?;
-                            write!(fmt, ")")
+                            let read = ctx.ssa.map(|ssa| {
+                                ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()
+                            });
+                            let write = ctx.ssa.map(|ssa| {
+                                ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()
+                            });
+                            write!(fmt, "{} (-> {})",
+                                RegValueDisplay {
+                                    reg: spec,
+                                    value: &read,
+                                    colors: ctx.colors,
+                                },
+                                RegValueDisplay {
+                                    reg: spec,
+                                    value: &write,
+                                    colors: ctx.colors,
+                                },
+                            )
                         }
                     }
                 },
@@ -295,9 +382,13 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    write!(fmt, "[")?;
-                    write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
-                    write!(fmt, "]")
+                    write!(fmt, "[{}]",
+                        RegValueDisplay {
+                            reg: spec,
+                            value: &ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()),
+                            colors: ctx.colors
+                        }
+                    )
                 }
                 Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
@@ -338,10 +429,12 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     }
 
                     if !drawn {
-                        write!(fmt, "[")?;
-                        write_location_value(fmt, *spec, &ctx, ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()))?;
-                        write!(fmt, " {}]",
-    //                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
+                        write!(fmt, "[{} {}",
+                            RegValueDisplay {
+                                reg: spec,
+                                value: &ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()),
+                                colors: ctx. colors
+                            },
                             format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                         )?;
                     }

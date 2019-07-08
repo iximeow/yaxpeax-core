@@ -82,6 +82,9 @@ pub enum ModifierExpression {
     IsNot(u64),
 }
 
+/// The `Vec<ModifierExpression>` are _conjunctions_. This differs from `ValueSet`, which uses a
+/// sequence of values as disjunctions. This means there's no way to express a sparseset of values
+/// as ModifierExpression, for the time being.
 #[derive(Serialize)]
 pub struct InstructionModifiers {
     before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,

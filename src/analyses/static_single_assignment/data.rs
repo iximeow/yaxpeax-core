@@ -63,6 +63,7 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
 
 #[derive(Debug)]
 pub struct Value<A: SSAValues> {
+    pub name: Option<String>,
     pub location: A::Location,
     // None indicates "not written anywhere in this dfg", which indicates this value can
     // be considered an input from some enclosing control flow
@@ -133,7 +134,8 @@ impl <A: SSAValues + Arch> Value<A> {
         Value {
             location: location,
             version: version,
-            data: None
+            data: None,
+            name: None
         }
     }
 }
