@@ -305,6 +305,83 @@ pub enum Data {
     // Indeterminate,
 }
 
+impl Data {
+    pub fn add(left: &Data, right: &Data) -> Option<Data> {
+        match (left, right) {
+            (Data::ValueSet(values), Data::Concrete(right, _)) => {
+                let mut new_values: Vec<ValueRange> = Vec::new();
+                for value in values {
+                    match value {
+                        ValueRange::Precisely(Data::Concrete(v, _)) => {
+                            new_values.push(ValueRange::Precisely(Data::Concrete(v.wrapping_add(*right), None)));
+                        },
+                        _ => {
+                            panic!("aaa");
+                        }
+                    }
+                }
+                Some(Data::ValueSet(new_values))
+            },
+            _ => {
+                return None;
+                use arch::x86_64::display::DataDisplay;
+                println!("Adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
+                panic!("add!");
+            }
+        }
+    }
+
+    pub fn mul(left: &Data, right: &Data) -> Option<Data> {
+        // panic!("mul!");
+        match (left, right) {
+            (Data::ValueSet(values), Data::Concrete(m, _)) => {
+                let mut out_values: Vec<ValueRange> = Vec::new();
+                for value in values {
+                    match value {
+                        ValueRange::Between(Data::Concrete(low, _), Data::Concrete(high, _)) => {
+                            // TODO: check that low < high
+                            for i in *low..=*high {
+                                out_values.push(
+                                    ValueRange::Precisely(
+                                        Data::Concrete(i.wrapping_mul(*m), None)
+                                    )
+                                );
+                            }
+                        },
+                        ValueRange::Between(_, _) => {
+                            // TODO
+                            // nothing
+                        }
+                        ValueRange::Precisely(Data::Concrete(v, _)) => {
+                            out_values.push(
+                                ValueRange::Precisely(
+                                    Data::Concrete(v.wrapping_mul(*m), None)
+                                )
+                            );
+                        }
+                        ValueRange::Precisely(_) => {
+                            // TODO
+                            // nothing
+                        }
+                    }
+                }
+                if out_values.len() == 0 {
+                    return None;
+                } else if out_values.len() == 1 {
+                    match &out_values[0] {
+                        ValueRange::Precisely(v) => {
+                            return Some(v.clone());
+                        },
+                        _ => { }
+                    };
+                }
+                return Some(Data::ValueSet(out_values));
+            },
+            _ => { None }
+        }
+    }
+}
+
 impl Typed for Data {
     fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec {
         match self {
