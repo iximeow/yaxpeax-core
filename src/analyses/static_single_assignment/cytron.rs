@@ -224,9 +224,6 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                         // versioned at 0xffffffff to indicate a specialness to them.
                         // These should never be present after search().
                         let new_value = Rc::new(RefCell::new(Value::new(*loc, Some(0xffffffff))));
-                        defs.insert(HashedValue {
-                            value: Rc::clone(&new_value)
-                        }, (*Y, DefSource::Phi));
                         phi.entry(*Y).or_insert_with(|| HashMap::new())
                             .insert(*loc, PhiOp { out: new_value, ins: vec![] });
                         // TODO: phi nodes are assignments too! this is definitely a bug.
@@ -285,6 +282,9 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                 let widening = loc.maximal_alias_of();
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
                 phi_dest.replace(new_value(*loc, C));
+                defs.insert(HashedValue {
+                    value: Rc::clone(&phi_dest)
+                }, (block.start, DefSource::Phi));
                 S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                 // eg is it faster to store this and pop it back or is it faster to just
