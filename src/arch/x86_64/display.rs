@@ -164,9 +164,9 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
             },
             Data::Concrete(v, ty) => {
                 if let Some(_real_ty) = ty {
-                    write!(fmt, "{}", v)?;
+                    write!(fmt, "{:#x}", v)?;
                 } else {
-                    write!(fmt, "{}", v)?;
+                    write!(fmt, "{:#x}", v)?;
                 }
             }
             Data::ValueSet(values) => {
@@ -429,7 +429,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     }
 
                     if !drawn {
-                        write!(fmt, "[{} {}",
+                        write!(fmt, "[{} {}]",
                             RegValueDisplay {
                                 reg: spec,
                                 value: &ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()),
@@ -654,9 +654,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             }
             Opcode::CMPXCHG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
             Opcode::XADD |
             Opcode::LSL => {
@@ -675,7 +675,11 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
             }
-            Opcode::NOP |
+            Opcode::NOP => {
+                // TODO: work around the fact that NOP doesn't decompose into ssa operations ...
+                // because it's a nop.
+                return Ok(())
+            }
             Opcode::RETURN => {
                 match &self.instr.operands[0] {
                     Operand::Nothing => { return Ok(()); },
@@ -693,7 +697,9 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)
             }
             Opcode::CALLF | // TODO: this is wrong.
-            Opcode::JMPF | // TODO: this is wrong.
+            Opcode::JMPF => { // TODO: this is wrong.
+                Ok(())
+            }
             Opcode::PUSH => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
@@ -779,17 +785,21 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             Opcode::Invalid => {
                 Ok(())
             }
-            Opcode::MUL |
-            Opcode::IMUL |
             Opcode::DIV |
+            Opcode::MUL => {
+                write!(fmt, " ")?;
+                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+            },
+            Opcode::IMUL |
             Opcode::IDIV => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
                 if let Operand::Nothing = &self.instr.operands[1] {
+                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
                     Ok(())
                 } else {
+                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
                     write!(fmt, ", ")?;
-                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                    contextualize_operand(&self.instr.operands[1], 0, self, Use::Read, fmt)
                 }
                 // TODO: 3-operand mul/div?
             }

@@ -25,6 +25,19 @@ use serialize::Memoable;
 
 use data::{Direction, ValueLocations};
 
+pub const FLAGS: [Location; 10] = [
+    Location::CF,
+    Location::PF,
+    Location::AF,
+    Location::ZF,
+    Location::SF,
+    Location::TF,
+    Location::IF,
+    Location::DF,
+    Location::OF,
+    Location::IOPL
+];
+
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
@@ -280,13 +293,13 @@ impl Typed for SymbolicExpression {
 // => mov rdx_1, [KPCR.field_7 + 0x48]
 // => mov rdx_1, KPCR.field_7.field_9
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, PartialEq)]
 pub enum ValueRange {
     Between(Data, Data),
     Precisely(Data),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Data {
     Concrete(u64, Option<TypeSpec>),
     Str(String),
@@ -315,7 +328,16 @@ impl Data {
                         ValueRange::Precisely(Data::Concrete(v, _)) => {
                             new_values.push(ValueRange::Precisely(Data::Concrete(v.wrapping_add(*right), None)));
                         },
+                        ValueRange::Between(Data::Concrete(low, _), Data::Concrete(high, _)) => {
+                            if let (Some(new_low), Some(new_high)) = (low.checked_add(*right), high.checked_add(*right)) {
+                                new_values.push(ValueRange::Between(Data::Concrete(new_low, None), Data::Concrete(new_high, None)));
+                            } else {
+                                // TODO: handle overflow
+                                return None;
+                            }
+                        }
                         _ => {
+                            println!("{:?} + {:?}", left, right);
                             panic!("aaa");
                         }
                     }
@@ -950,14 +972,36 @@ impl ValueLocations for x86_64 {
 
             Opcode::IMUL => {
                 // TODO: this.
-                vec![]
+                let mut locs = if let Operand::Nothing = instr.operands[1] {
+                    decompose_read(&instr.operands[0])
+                } else {
+                    let mut ls = decompose_readwrite(&instr.operands[0]);
+                    ls.append(&mut decompose_read(&instr.operands[1]));
+                    ls
+                };
+                locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
+                locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
+                locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
+                locs.push((Some(Location::CF), Direction::Write));
+                locs.push((Some(Location::OF), Direction::Write));
+                locs.push((Some(Location::SF), Direction::Write));
+                locs.push((Some(Location::ZF), Direction::Write));
+                locs.push((Some(Location::PF), Direction::Write));
+                locs.push((Some(Location::AF), Direction::Write));
+                locs
             },
             Opcode::IDIV |
             Opcode::DIV => {
                 // TODO: this is lazy and assumes writes of all flags
                 // this may not be true
                 // TODO: this may not read *dx (if this is idiv r/m 8)
-                let mut locs = decompose_read(&instr.operands[0]);
+                let mut locs = if let Operand::Nothing = instr.operands[1] {
+                    decompose_read(&instr.operands[0])
+                } else {
+                    let mut ls = decompose_readwrite(&instr.operands[0]);
+                    ls.append(&mut decompose_read(&instr.operands[1]));
+                    ls
+                };
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
                 locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Read));

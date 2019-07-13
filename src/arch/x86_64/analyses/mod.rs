@@ -8,6 +8,7 @@ use analyses::xrefs::{RefType, RefAction};
 
 pub mod data_flow;
 pub mod evaluators;
+pub mod value_range;
 
 pub fn all_instruction_analyses(
     instr: &<x86_64Arch as Arch>::Instruction,

@@ -195,7 +195,7 @@ pub struct MergedContextTable {
         control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
         SSA<x86_64>
     )>,
-    pub function_data: HashMap<<x86_64 as Arch>::Address, InstructionModifiers>,
+    pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
 }
 
