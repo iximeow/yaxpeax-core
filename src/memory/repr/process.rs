@@ -722,33 +722,27 @@ impl <A: Address> PatchyMemoryRepr<A> for ProcessMemoryRepr {
 
 impl <A: Address> MemoryRange<A> for ProcessMemoryRepr {
     // TODO:
-    fn range<'a>(&'a self, _range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
-        None
-        /*
-        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
+    fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
+//        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
+            Some(ReadCursor::from(self, range))
+                /*
             Some(ReadCursor {
                 data: self,
                 start: range.start,
                 end: range.end
             })
-        } else {
-            None
-        }
-        */
+            */
+//        } else {
+//            None
+//        }
     }
     // TODO:
-    fn range_from<'a>(&'a self, _start: A) -> Option<UnboundedCursor<'a, A, Self>> {
-        None
-        /*
-        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
-            Some(UnboundedCursor {
-                data: self,
-                addr: range.start
-            })
-        } else {
-            None
-        }
-        */
+    fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
+//        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
+            Some(UnboundedCursor::from(self, start))
+//        } else {
+//            None
+//        }
     }
 }
 
