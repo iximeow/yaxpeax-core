@@ -105,7 +105,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
-    value_modifiers: &U
+    value_modifiers: impl std::ops::Deref<Target = U>
 ) -> SSA<A> {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -268,7 +268,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         C: &mut HashMap<A::Location, u32>,
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>,
-        value_modifiers: &U
+        value_modifiers: &impl std::ops::Deref<Target = U>
     ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
         fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
             let widening = loc.maximal_alias_of();
@@ -473,7 +473,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         &idom,
         &mut C,
         &mut S,
-        value_modifiers
+        &value_modifiers
     );
 
     SSA { instruction_values: values, modifier_values: HashMap::new(), control_dependent_values: between_block_bounds, defs: defs, phi: phi }
