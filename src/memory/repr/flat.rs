@@ -7,7 +7,7 @@ use std::ops::Range;
 #[derive(Clone, Debug)]
 pub struct FlatMemoryRepr {
     data: Vec<u8>,
-    name: String
+    pub name: String
 }
 
 impl FlatMemoryRepr {

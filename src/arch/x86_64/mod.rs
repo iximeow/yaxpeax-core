@@ -23,7 +23,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use num_traits::Zero;
 
-use arch::{BaseUpdate, Function, Symbol, SymbolQuery, Library};
+use arch::{BaseUpdate, CommentQuery, Function, FunctionQuery, Symbol, SymbolQuery, Library};
 use data::{Direction, ValueLocations};
 
 use ContextRead;
@@ -39,15 +39,49 @@ pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
-    pub functions: HashMap<<x86_64 as Arch>::Address, Function>
+}
+
+impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
+    type Function = Function;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Function> {
+        self.contexts.function_at(addr)
+    }
+}
+
+impl CommentQuery<<x86_64 as Arch>::Address> for x86_64Data {
+    fn comment_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&str> {
+        self.contexts.comment_for(addr)
+    }
 }
 
 impl SymbolQuery<<x86_64 as Arch>::Address> for x86_64Data {
     fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
-        self.contexts.symbols.get(&addr)
+        self.contexts.symbol_for(addr)
     }
     fn symbol_addr(&self, sym: &Symbol) -> Option<<x86_64 as Arch>::Address> {
-        for (k, v) in self.contexts.symbols.iter() {
+        self.contexts.symbol_addr(sym)
+    }
+}
+
+impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
+    type Function = Function;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Function> {
+        self.functions.get(&addr)
+    }
+}
+
+impl CommentQuery<<x86_64 as Arch>::Address> for MergedContextTable {
+    fn comment_for(&self, _addr: <x86_64 as Arch>::Address) -> Option<&str> {
+        None
+    }
+}
+
+impl SymbolQuery<<x86_64 as Arch>::Address> for MergedContextTable {
+    fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
+        self.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<x86_64 as Arch>::Address> {
+        for (k, v) in self.symbols.iter() {
             if v == sym {
                 return Some(*k);
             }
@@ -63,7 +97,6 @@ impl Default for x86_64Data {
             preferred_addr: <x86_64 as Arch>::Address::zero(),
             contexts: MergedContextTable::create_empty(),
             cfg: control_flow::ControlFlowGraph::new(),
-            functions: HashMap::new()
         }
     }
 }

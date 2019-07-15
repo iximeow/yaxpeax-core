@@ -43,7 +43,7 @@ trait SSAAnalyses<A: Arch + SSAValues> {
 }
 */
 
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{Arch, Address};
 use arch;
 use arch::Symbol;
 
@@ -220,7 +220,7 @@ impl fmt::Display for AnalysisHelp {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum OperationSuccess {
     Ok,
-    OkWithOutput(Vec<String>),
+    OkWithOutput(Vec<(usize, Vec<String>)>),
     SwitchArch(arch::ISA)
 }
 
@@ -250,6 +250,7 @@ impl std::fmt::Display for ParseError {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum OperationError {
     ParseError(ParseError),
+    Invalid(String),
     Unknown(String),
     Unsupported(String),
     Misc(String)

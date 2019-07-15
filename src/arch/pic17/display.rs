@@ -7,6 +7,9 @@ use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction};
 use arch;
 use arch::display::BaseDisplay;
+use arch::CommentQuery;
+use arch::FunctionQuery;
+use arch::FunctionRepr;
 use arch::InstructionSpan;
 use arch::pic17;
 use arch::pic17::{ContextRead, PartialInstructionContext};
@@ -16,6 +19,7 @@ use analyses::control_flow::{ControlFlowGraph, Determinant};
 use memory::MemoryRange;
 use data::ValueLocations;
 use data::Direction;
+use std::fmt;
 
 use analyses::static_single_assignment::SSA;
 
@@ -139,36 +143,40 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
     }
 }
 
-impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: pic17::PartialInstructionContext {
-    fn render_frame<Data: Iterator<Item=u8>>(
+impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: FunctionQuery<<PIC17 as Arch>::Address> + CommentQuery<<PIC17 as Arch>::Address> {
+    fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
+        dest: &mut W,
         addr: u16,
         _instr: &<PIC17 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
-        function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>
-    ) where T: pic17::PartialInstructionContext {
-        if let Some(comment) = ctx.and_then(|x| x.comment()) {
-            println!("{:04x}: {}{}{}",
-                addr,
-                color::Fg(&color::Blue as &color::Color),
-                comment,
-                color::Fg(&color::Reset as &color::Color)
-            );
+    ) -> fmt::Result {
+        if let Some(ctx) = ctx {
+            if let Some(comment) = ctx.comment_for(addr) {
+                writeln!(dest, "{:04x}: {}{}{}",
+                    addr,
+                    color::Fg(&color::Blue as &color::Color),
+                    comment,
+                    color::Fg(&color::Reset as &color::Color)
+                )?;
+            }
+            if let Some(fn_dec) = ctx.function_at(addr) {
+                writeln!(dest, "      {}{}{}",
+                    color::Fg(&color::LightYellow as &color::Color),
+                    fn_dec.decl_string(),
+                    color::Fg(&color::Reset as &color::Color)
+                )?;
+            }
         }
-        if let Some(fn_dec) = function_table.get(&addr) {
-            println!("      {}{}{}",
-                color::Fg(&color::LightYellow as &color::Color),
-                fn_dec.decl_string(),
-                color::Fg(&color::Reset as &color::Color)
-            );
-        }
-        print!(
-            "{:04x}: {}{}: |{}|",
+        write!(
+            dest,
+//            "{:04x}: {}{}: |{}|",
+            "{:04x}: {}{}: | |",
             addr,
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-            ctx.map(|c| c.indicator_tag()).unwrap_or("   ".to_owned())
-        );
+            //ctx.map(|c| c.indicator_tag()).unwrap_or("   ".to_owned())
+        )
     }
 }
 
@@ -215,7 +223,9 @@ pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        arch::display::show_linear(data, ctx, continuation, end, function_table, colors);
+        panic!("\
+        arch::display::show_linear(data, ctx, continuation, end, function_table, colors);\
+        ");
 
         // and continue on right after this block
         continuation = block.end + <PIC17 as Arch>::Address::from(1u16);
@@ -263,13 +273,15 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
+            let mut instr_string = String::new();
             PIC17::render_frame(
+                &mut instr_string,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                function_table
+                Some(ctx),
             );
+            print!("{}", instr_string);
             render_instruction_with_ssa_values(
                 address,
                 instr,

@@ -6,19 +6,23 @@ use arch::InstructionSpan;
 use memory::{MemoryRepr, MemoryRange};
 use num_traits::Zero;
 
+use std::fmt;
+
+pub mod function;
+
 pub trait BaseDisplay<F, U> where
     Self: Arch,
     Self::Address: std::hash::Hash + petgraph::graphmap::NodeTrait {
-    fn render_frame<Data: Iterator<Item=u8>>(
+    fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
+        dest: &mut W,
         addr: Self::Address,
         instr: &Self::Instruction,
         bytes: &mut Data,
         ctx: Option<&U>,
-        function_table: &HashMap<Self::Address, F>
-    ) -> ();
+    ) -> fmt::Result;
 }
 
-pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F, Contexts>(
+pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
     data: &M,
     ctx: &Contexts,
     function_table: &HashMap<A::Address, F>,
@@ -27,8 +31,7 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F,
     colors: Option<&ColorSettings>
 ) where 
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: Determinant<U, A::Address> + ShowContextual<A::Address, Contexts, String>,
-    Contexts: ContextRead<A, U> {
+    A::Instruction: Determinant<Contexts, A::Address> + ShowContextual<A::Address, Contexts, String> {
     println!("Basic block --\n  start: {}\n  end:   {}", block.start.stringy(), block.end.stringy());
     println!("  next:");
     for neighbor in cfg.graph.neighbors(block.start) {
@@ -36,21 +39,21 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F,
     }
     let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
     while let Some((address, instr)) = iter.next() {
+        let mut instr_text = String::new();
         A::render_frame(
+            &mut instr_text,
             address,
             instr,
             &mut data.range(address..(address + instr.len())).unwrap(),
-            Some(&ctx.at(&address)),
-            function_table
+            Some(ctx),
         );
-        let mut instr_text = String::new();
         instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
         println!(" {}", instr_text);
-        println!("Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
+        println!("Control flow: {:?}", instr.control_flow(Some(&ctx)));
     }
 }
 
-pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F, Contexts>(
+pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
     data: &M,
     ctx: &Contexts,
     address: A::Address,
@@ -58,18 +61,17 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>,
     colors: Option<&ColorSettings>
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: Determinant<U, A::Address> + ShowContextual<A::Address, Contexts, String>,
-    Contexts: ContextRead<A, U> {
+    A::Instruction: ShowContextual<A::Address, Contexts, String> {
     match A::Instruction::decode(data.range_from(address).unwrap()) {
         Some(instr) => {
+            let mut instr_text = String::new();
             A::render_frame(
+                &mut instr_text,
                 address,
                 &instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                function_table
+                Some(ctx),
             );
-            let mut instr_text = String::new();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
         },
@@ -79,7 +81,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>,
     };
 }
 
-pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F, Contexts>(
+pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
     data: &M,
     ctx: &Contexts,
     start_addr: A::Address,
@@ -88,8 +90,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F
     colors: Option<&ColorSettings>
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: Determinant<U, A::Address> + ShowContextual<A::Address, Contexts, String>,
-    Contexts: ContextRead<A, U> {
+    A::Instruction: ShowContextual<A::Address, Contexts, String> {
     let mut continuation = start_addr;
     while continuation < end_addr {
         let mut iter = data.instructions_spanning::<A::Instruction>(continuation, end_addr);
@@ -113,14 +114,14 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F
                 }
             };
 
+            let mut instr_text = String::new();
             A::render_frame(
+                &mut instr_text,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                function_table
+                Some(ctx),
             );
-            let mut instr_text = String::new();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
             continuation += instr.len();
@@ -128,7 +129,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F
     }
 }
 
-pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arch + BaseDisplay<F, U>, U, F, Contexts>(
+pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
     data: &M,
     ctx: &Contexts,
     function_table: &HashMap<A::Address, F>,
@@ -137,8 +138,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
     colors: Option<&ColorSettings>
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: ShowContextual<A::Address, Contexts, String>,
-    Contexts: ContextRead<A, U> {
+    A::Instruction: ShowContextual<A::Address, Contexts, String> {
 
     let fn_graph = cfg.get_function(addr, function_table);
 
@@ -155,14 +155,14 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
+            let mut instr_text = String::new();
             A::render_frame(
+                &mut instr_text,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                function_table
+                Some(ctx),
             );
-            let mut instr_text = String::new();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
         }

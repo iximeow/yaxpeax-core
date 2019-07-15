@@ -482,13 +482,13 @@ pub struct ModuleData {
 }
 
 impl ModuleData {
-    pub fn load_from(data: &[u8]) -> Option<ModuleData> {
+    pub fn load_from(data: &[u8], name: String) -> Option<ModuleData> {
         match Object::parse(data) {
             Ok(obj @ Object::Elf(_)) => {
                 let mut module = ModuleData {
                     segments: vec![],
                     module_info: ModuleInfo::from_goblin(&obj, data).unwrap(),
-                    name: "anon_module".to_string()
+                    name
                 };
 
                 let elf = match obj {
@@ -549,7 +549,7 @@ impl ModuleData {
                 let mut module = ModuleData {
                     segments: vec![],
                     module_info: ModuleInfo::from_goblin(&obj, data).unwrap(),
-                    name: "anon_module".to_string()
+                    name
                 };
 
                 let pe = match obj {

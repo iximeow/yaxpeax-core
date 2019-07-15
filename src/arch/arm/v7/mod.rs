@@ -2,6 +2,9 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operands, ConditionCode};
 
 use arch::{Symbol, SymbolQuery};
+use arch::Function;
+use arch::FunctionRepr;
+use arch::FunctionQuery;
 
 use analyses::control_flow;
 
@@ -14,8 +17,8 @@ use ContextWrite;
 
 mod display;
 
-#[derive(Serialize, Deserialize)]
-pub struct Function { }
+// #[derive(Serialize, Deserialize)]
+// pub struct Function { }
 
 #[derive(Serialize)]
 pub struct ARMv7Data {
@@ -25,7 +28,28 @@ pub struct ARMv7Data {
     pub functions: HashMap<<ARMv7 as Arch>::Address, Function>
 }
 
+impl FunctionQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
+    type Function = Function;
+    fn function_at(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
+        self.contexts.function_at(addr)
+    }
+}
 impl SymbolQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
+    fn symbol_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
+        self.contexts.symbol_for(addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
+        self.contexts.symbol_addr(sym)
+    }
+}
+
+impl FunctionQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
+    type Function = Function;
+    fn function_at(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
+        None
+    }
+}
+impl SymbolQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
     fn symbol_for(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
         None
     }
@@ -46,8 +70,7 @@ impl Default for ARMv7Data {
 }
 
 #[allow(non_snake_case)]
-impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction
-    where T: PartialInstructionContext {
+impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction {
 
     fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<ARMv7 as Arch>::Address> {
         let conditional = self.condition == ConditionCode::AL;

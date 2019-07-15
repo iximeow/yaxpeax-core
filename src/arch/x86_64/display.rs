@@ -11,10 +11,16 @@ use yaxpeax_arch::{ColorSettings, Colorize, Colored};
 use yaxpeax_arch::{AddressDisplay, Arch, Decodable, LengthedInstruction, YaxColors};
 use yaxpeax_arch::display::*;
 use arch::display::BaseDisplay;
+use arch::FunctionRepr;
 use arch::InstructionSpan;
+use arch::FunctionQuery;
+use arch::CommentQuery;
+use arch::SymbolQuery;
+use arch::AddressNamer;
 use arch::x86_64;
 use arch::x86_64::{ContextRead, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange};
+use analyses::static_single_assignment::SSAValues;
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
@@ -22,60 +28,67 @@ use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
 use data::Direction;
 use data::types::{Typed, TypeAtlas, TypeSpec};
+use arch::display::function::FunctionInstructionDisplay;
+use arch::display::function::FunctionView;
 
 use memory::MemoryRange;
 
 use data::ValueLocations;
 
 use std::fmt;
+use std::fmt::Write;
+use std::marker::PhantomData;
+use num_traits::WrappingAdd;
 
-impl <T> BaseDisplay<x86_64::Function, T> for x86_64Arch {
-    fn render_frame<Data: Iterator<Item=u8>>(
+impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<x86_64::Function, T> for x86_64Arch {
+    fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
+        dest: &mut W,
         addr: <x86_64Arch as Arch>::Address,
         instr: &<x86_64Arch as Arch>::Instruction,
         bytes: &mut Data,
-        _ctx: Option<&T>,
-        function_table: &HashMap<<x86_64Arch as Arch>::Address, x86_64::Function>
-    ) {
-        /*
-        if let Some(comment) = ctx.and_then(|x| x.comment()) {
-            println!("{:04x}: {}{}{}",
-                addr,
-                color::Fg(&color::Blue as &color::Color),
-                comment,
-                color::Fg(&color::Reset as &color::Color)
-            );
+        ctx: Option<&T>,
+    ) -> fmt::Result {
+        if let Some(ctx) = ctx {
+            if let Some(comment) = ctx.comment_for(addr) {
+                writeln!(dest, "{:04x}: {}{}{}",
+                    addr,
+                    color::Fg(&color::Blue as &color::Color),
+                    comment,
+                    color::Fg(&color::Reset as &color::Color)
+                );
+            }
+            if let Some(fn_dec) = ctx.function_at(addr) {
+                writeln!(dest, "      {}{}{}",
+                    color::Fg(&color::LightYellow as &color::Color),
+                    "<function>",
+                    // TODO:
+                    //fn_dec.decl_string(),
+                    color::Fg(&color::Reset as &color::Color)
+                )?;
+            }
         }
-        */
-        if let Some(_fn_dec) = function_table.get(&addr) {
-            println!("      {}{}{}",
-                color::Fg(&color::LightYellow as &color::Color),
-                "<function>",
-                //fn_dec.decl_string(),
-                color::Fg(&color::Reset as &color::Color)
-            );
-        }
-        print!("{:08x}: ", addr);
+        write!(dest, "{:08x}: ", addr)?;
         for i in 0..16 {
             if i < instr.length {
                 match bytes.next() {
                     Some(b) => {
-                        print!("{:02x}", b);
+                        write!(dest, "{:02x}", b)?;
                     },
-                    None => { print!("  "); }
+                    None => { write!(dest, "  ")?; }
                 }
             } else {
-                print!("  ");
+                write!(dest, "  ")?;
             }
         }
-        print!(": | |");
+        write!(dest, ": | |")?;
+        Ok(())
     }
 }
 
-pub struct InstructionContext<'a, 'b, 'c, 'd> {
+pub struct InstructionContext<'a, 'b, 'c, 'd, Context: AddressNamer<<x86_64Arch as Arch>::Address>> {
     instr: &'a Instruction,
     addr: <x86_64Arch as Arch>::Address,
-    contexts: Option<&'b MergedContextTable>,
+    contexts: Option<&'b Context>,
     ssa: Option<&'c SSA<x86_64Arch>>,
     colors: Option<&'d ColorSettings>
 }
@@ -200,7 +213,7 @@ pub enum Use {
 }
 
 
-impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
+impl <'a, 'b, 'c, 'd, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address>> Display for InstructionContext<'a, 'b, 'c, 'd, Context> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fn colorize_i8(num: i8, colors: Option<&ColorSettings>) -> String {
             match num {
@@ -274,15 +287,8 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
             }
         }
 
-        fn render_function<'a, 'b, 'c, 'd>(address: <x86_64Arch as Arch>::Address, ctx: &InstructionContext<'a, 'b, 'c, 'd>) -> Option<Colored<String>> {
-            ctx.contexts
-                .and_then(|ctx| ctx.functions.get(&address).map(|f| f.name.to_owned()))
-                .or_else(|| { ctx.contexts.and_then(|ctx| ctx.symbols.get(&address).map(|sym| sym.to_string())) })
-                .map(|name| { ctx.colors.function(name) })
-        }
-
-        fn contextualize_operand<'a, 'b, 'c, 'd>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
-            fn numbered_register_name<'a, 'b, 'c, 'd>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd>, direction: Direction) -> Colored<String> {
+        fn contextualize_operand<'a, 'b, 'c, 'd, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd, C>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
+            fn numbered_register_name<'a, 'b, 'c, 'd, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd, C>, direction: Direction) -> Colored<String> {
                 let text = context.ssa.map(|ssa| {
                     let num = ssa.get_value(address, Location::Register(reg), direction)
                         .map(|data| data.borrow().version());
@@ -396,7 +402,7 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                     }
                     let addr = ctx.addr.wrapping_add(*disp as i64 as u64).wrapping_add(ctx.instr.len());
                     let text = ctx.contexts
-                        .and_then(|ctx| ctx.symbols.get(&addr))
+                        .and_then(|ctx| ctx.symbol_for(addr))
                         .map(|sym| { ctx.colors.symbol(format!("&{}", sym)) })
                         .unwrap_or_else(|| { ctx.colors.address(addr.stringy()) });
                     write!(fmt, "[{}]", text)
@@ -522,37 +528,37 @@ impl <'a, 'b, 'c, 'd> Display for InstructionContext<'a, 'b, 'c, 'd> {
                 match &self.instr.operands[0] {
                     Operand::ImmediateI8(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|_context| {
-                            render_function(addr, self)
+                        let text = self.contexts.and_then(|context| {
+                            context.address_name(addr).map(|name| self.colors.function(name))
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI16(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|_context| {
-                            render_function(addr, self)
+                        let text = self.contexts.and_then(|context| {
+                            context.address_name(addr).map(|name| self.colors.function(name))
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI32(i) => {
                         let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|_context| {
-                            render_function(addr, self)
+                        let text = self.contexts.and_then(|context| {
+                            context.address_name(addr).map(|name| self.colors.function(name))
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::ImmediateI64(i) => {
                         let addr = (*i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|_context| {
-                            render_function(addr, self)
+                        let text = self.contexts.and_then(|context| {
+                            context.address_name(addr).map(|name| self.colors.function(name))
                         }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
                         return write!(fmt, " {}", text);
                     },
                     Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                         let addr = self.addr.wrapping_add(*disp as i64 as u64).wrapping_add(self.instr.len());
                         let text = self.contexts.and_then(|context| {
-                            context.symbols.get(&addr)
-                                .map(|sym| { self.colors.function(sym).to_string() })
+                            context.address_name(addr)
+                                .map(|name| { self.colors.function(name).to_string() })
                         })
                             .unwrap_or_else(|| colorize_u64(addr, self.colors));
                         return write!(fmt, " [{}]", text);
@@ -822,14 +828,15 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     }
     let mut iter = data.instructions_spanning::<<x86_64Arch as Arch>::Instruction>(block.start, block.end);
     while let Some((address, instr)) = iter.next() {
+        let mut instr_string = String::new();
         x86_64Arch::render_frame(
+            &mut instr_string,
             address,
             instr,
             &mut data.range(address..(address + instr.len())).unwrap(),
-            Some(&ctx.at(&address)),
-            &ctx.functions
+            Some(ctx),
         );
-        println!(" {}", InstructionContext {
+        writeln!(instr_string, " {}", InstructionContext {
             instr: &instr,
             addr: address,
             contexts: Some(ctx),
@@ -837,7 +844,8 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
             colors: colors
         });
         use analyses::control_flow::Determinant;
-        println!("Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
+        writeln!(instr_string, "Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
+        print!("{}", instr_string);
     }
 }
 
@@ -849,13 +857,15 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
 ) {
     match <x86_64Arch as Arch>::Instruction::decode(data.range_from(address).unwrap()) {
         Some(instr) => {
+            let mut instr_text = String::new();
             x86_64Arch::render_frame(
+                &mut instr_text,
                 address,
                 &instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                &ctx.functions
+                Some(ctx),
             );
+            print!("{}", instr_text);
             println!(" {}", InstructionContext {
                 instr: &instr,
                 addr: address,
@@ -900,13 +910,15 @@ pub fn show_linear<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
                 }
             };
 
+            let mut instr_text = String::new();
             x86_64Arch::render_frame(
+                &mut instr_text,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                &ctx.functions
+                Some(ctx),
             );
+            print!("{}", instr_text);
             println!(" {}", InstructionContext {
                 instr: &instr,
                 addr: address,
@@ -928,66 +940,55 @@ fn is_conditional_op(op: Opcode) -> bool {
     }
 }
 
-pub fn show_function<M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<<x86_64Arch as Arch>::Address>>(
-    data: &M,
-    ctx: &MergedContextTable,
-    ssa: Option<&SSA<x86_64Arch>>,
-    cfg: &ControlFlowGraph<<x86_64Arch as Arch>::Address>,
-    addr: <x86_64Arch as Arch>::Address,
-    colors: Option<&ColorSettings>
-) {
-    let fn_graph = cfg.get_function(addr, &ctx.functions);
-
-    let mut blocks: Vec<<x86_64Arch as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
-    blocks.sort();
-
-    for blockaddr in blocks.iter() {
-        let block = cfg.get_block(*blockaddr);
-//        println!("  -- block: {} --", blockaddr.stringy());
-        if block.start == <x86_64Arch as Arch>::Address::zero() { continue; }
-//        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
-//        continue;
-        let mut iter = data.instructions_spanning::<<x86_64Arch as Arch>::Instruction>(block.start, block.end);
-//                println!("Block: {:#04x}", next);
-//                println!("{:#04x}", block.start);
-        let end = iter.end;
-        while let Some((address, instr)) = iter.next() {
-            x86_64Arch::render_frame(
-                address,
-                instr,
-                &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&ctx.at(&address)),
-                &ctx.functions
-            );
-            println!(" {}", InstructionContext {
-                instr: &instr,
-                addr: address,
-                contexts: Some(ctx),
-                ssa: ssa,
-                colors: colors
-            });
-            if let Some(ssa) = ssa {
-                if is_conditional_op(instr.opcode) {
-                    for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
-                        if let (Some(flag), Direction::Read) = (loc, dir) {
-                            if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
-                                println!("    --- looking for flag {:?}", flag);
-                                let use_site = ssa.get_def_site(ssa.get_use(address, flag).value);
-                                println!("    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0);
-                            }
+impl <
+    Context: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>,
+> FunctionInstructionDisplay<x86_64Arch, Context> for x86_64Arch {
+    fn display_instruction_in_function<W: fmt::Write>(
+        dest: &mut W,
+        instr: &<x86_64Arch as Arch>::Instruction,
+        address: <x86_64Arch as Arch>::Address,
+        context: &Context,
+        ssa: Option<&SSA<x86_64Arch>>,
+        colors: Option<&ColorSettings>,
+    ) -> fmt::Result {
+        write!(dest, "{}", InstructionContext {
+            instr: &instr,
+            addr: address,
+            contexts: Some(context),
+            ssa: ssa,
+            colors: colors
+        });
+        if let Some(ssa) = ssa {
+            if is_conditional_op(instr.opcode) {
+                for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
+                    if let (Some(flag), Direction::Read) = (loc, dir) {
+                        if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
+                            let use_site = ssa.get_def_site(ssa.get_use(address, flag).value);
+                            write!(dest, "\n    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0)?;
                         }
                     }
-//                    */
                 }
             }
-            if address.wrapping_add(instr.len()) > end {
-                println!("┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄");
-            }
         }
-        let next: Vec<<x86_64Arch as Arch>::Address> = cfg.destinations(*blockaddr);
-        for _n in next {
-//            println!("  -> {}", n.stringy());
-        }
-//        println!("  ------------");
+        Ok(())
+    }
+}
+
+pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<<x86_64Arch as Arch>::Address>>(
+    data: &'a M,
+    ctx: &'b MergedContextTable,
+    ssa: Option<&'d SSA<x86_64Arch>>,
+    fn_graph: &'c ControlFlowGraph<<x86_64Arch as Arch>::Address>,
+    colors: Option<&'e ColorSettings>
+) -> FunctionView<'a, 'b, 'c, 'd, 'e, x86_64::Function, MergedContextTable, x86_64Arch, M> {
+    FunctionView {
+        _function_type: PhantomData,
+        data,
+        ctx,
+        fn_graph,
+        ssa,
+        colors,
+        highlight_instrs: Vec::new(),
+        highlight_locs: Vec::new(),
     }
 }

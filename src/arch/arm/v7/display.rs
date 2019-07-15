@@ -4,39 +4,47 @@ use yaxpeax_arch::{Arch, ColorSettings, ShowContextual};
 use arch::display::BaseDisplay;
 use arch::arm;
 use std::collections::HashMap;
+use std::fmt;
 
+use arch::CommentQuery;
+use arch::FunctionQuery;
+use arch::FunctionRepr;
 use arch::arm::v7::MergedContextTable;
 
 use termion::color;
 
-impl <T: arm::v7::PartialInstructionContext> BaseDisplay<arm::v7::Function, T> for ARMv7 {
-    fn render_frame<Data: Iterator<Item=u8>>(
+impl <T: FunctionQuery<<ARMv7 as Arch>::Address>> BaseDisplay<arm::v7::Function, T> for ARMv7 {
+    fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
+        dest: &mut W,
         addr: <ARMv7 as Arch>::Address,
         _instr: &<ARMv7 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
-        function_table: &HashMap<<ARMv7 as Arch>::Address, arm::v7::Function>
-    ) {
+    ) -> fmt::Result {
         /*
          * if there's a comment, show that
          */
         // TODO: totally replace this?
-        if let Some(_fn_dec) = function_table.get(&addr) {
-            println!("      {}{}{}",
-                color::Fg(&color::LightYellow as &color::Color),
-                "___",
-                color::Fg(&color::Reset as &color::Color)
-            );
+        if let Some(ctx) = ctx {
+            if let Some(fn_dec) = ctx.function_at(addr) {
+                writeln!(dest, "      {}{}{}",
+                    color::Fg(&color::LightYellow as &color::Color),
+                    fn_dec.decl_string(),
+                    color::Fg(&color::Reset as &color::Color)
+                );
+            }
         }
-        print!(
-            "{:08x}: {}{}{}{}: |{}|",
+        write!(
+            dest,
+//            "{:08x}: {}{}{}{}: |{}|",
+            "{:08x}: {}{}{}{}: | |",
                 addr,
                 bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
                 bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
                 bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
                 bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-                ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
-        );
+//                ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
+        )
     }
 }
 

@@ -7,6 +7,9 @@ use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual};
 use arch;
 use arch::display::BaseDisplay;
+use arch::CommentQuery;
+use arch::FunctionQuery;
+use arch::FunctionRepr;
 use arch::InstructionSpan;
 use arch::msp430;
 use arch::msp430::syntaxed_render;
@@ -17,6 +20,7 @@ use analyses::static_single_assignment::SSA;
 use std::collections::HashMap;
 use memory::MemoryRange;
 use data::{Direction, ValueLocations};
+use std::fmt;
 
 impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
     fn render_with_ssa_values(
@@ -208,32 +212,35 @@ impl <T: std::fmt::Write> ShowContextual<u16, msp430::MergedContextTable, T> for
         self.contextualize(colors, address, Some(&ctxs[..]), out)
     }
 }
-impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContext {
-    fn render_frame<Data: Iterator<Item=u8>>(
+impl <T> BaseDisplay<(), T> for MSP430 where T: FunctionQuery<<MSP430 as Arch>::Address> + CommentQuery<<MSP430 as Arch>::Address> {
+    fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
+        dest: &mut W,
         addr: u16,
         _instr: &<MSP430 as Arch>::Instruction,
         bytes: &mut Data,
         ctx: Option<&T>,
-        function_table: &HashMap<u16, ()>
-    ) {
-        if let Some(comment) = ctx.and_then(|x| x.comment()) {
-            println!("{:04x}: {}{}{}",
-                addr,
-                color::Fg(&color::Blue as &color::Color),
-                comment,
-                color::Fg(&color::Reset as &color::Color)
-            );
+    ) -> fmt::Result {
+        if let Some(ctx) = ctx {
+            if let Some(comment) = ctx.comment_for(addr) {
+                writeln!(dest, "{:04x}: {}{}{}",
+                    addr,
+                    color::Fg(&color::Blue as &color::Color),
+                    comment,
+                    color::Fg(&color::Reset as &color::Color)
+                )?;
+            }
+            if let Some(fn_dec) = ctx.function_at(addr) {
+                writeln!(dest, "      {}{}{}",
+                    color::Fg(&color::LightYellow as &color::Color),
+                    fn_dec.decl_string(),
+                    color::Fg(&color::Reset as &color::Color)
+                )?;
+            }
         }
-        if let Some(_fn_dec) = function_table.get(&addr) {
-            println!("      {}{}{}",
-                color::Fg(&color::LightYellow as &color::Color),
-                "___",
-    //                        fn_dec.decl_string(),
-                color::Fg(&color::Reset as &color::Color)
-            );
-        }
-        print!(
-            "{:04x}: {}{} {}{} {}{}: |{}|",
+        write!(
+            dest,
+//            "{:04x}: {}{} {}{} {}{}: |{}|",
+            "{:04x}: {}{} {}{} {}{}: | |",
             addr,
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
@@ -241,8 +248,8 @@ impl <T> BaseDisplay<(), T> for MSP430 where T: msp430::PartialInstructionContex
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
             bytes.next().map(|x| format!("{:02x}", x)).unwrap_or("  ".to_owned()),
-            ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
-        );
+            // ctx.map(|c| c.indicator_tag()).unwrap_or(" ")
+        )
     }
 }
 
@@ -289,7 +296,9 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        arch::display::show_linear(data, ctx, continuation, end, function_table, colors);
+        panic!("\
+        arch::display::show_linear(data, ctx, continuation, end, function_table, colors);\
+        ");
 
         // and continue on right after this block
         if block.end == 0xffff {
@@ -340,29 +349,21 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
-            let mut computed = Rc::new(msp430::ComputedContext {
-                address: Some(address),
-                comment: None
-            });
             let user = user_infos.get(&address);
+            let mut instr_text = String::new();
             MSP430::render_frame(
+                &mut instr_text,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&msp430::MergedContext {
-                    user: user.map(|v| Rc::clone(v)),
-                    computed: Some(Rc::clone(&computed))
-                }),
-                &HashMap::new()
+                Option::<&msp430::MergedContextTable>::None
             );
+            print!("{}", instr_text);
             render_instruction_with_ssa_values(
                 address,
                 instr,
                 colors,
-                Some(&msp430::MergedContext {
-                    user: user.map(|v| Rc::clone(v)),
-                    computed: Some(computed)
-                }),
+                Option::<&msp430::MergedContext>::None,
                 &HashMap::new(),
                 ssa
             );
@@ -396,21 +397,14 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
-            let mut computed = Rc::new(msp430::ComputedContext {
-                address: Some(address),
-                comment: None
-            });
+            let mut instr_text = String::new();
             MSP430::render_frame(
+                &mut instr_text,
                 address,
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(&msp430::MergedContext {
-                    user: user_infos.get(&address).map(|v| Rc::clone(v)),
-                    computed: Some(Rc::clone(&computed))
-                }),
-                &HashMap::new()
+                Option::<&msp430::MergedContextTable>::None,
             );
-            let mut instr_text = String::new();
             instr.contextualize(colors, address, None::<&[Option<String>]>, &mut instr_text).unwrap();
             println!(" {}", instr_text);
            //println!("{:#04x}: {}", address, instr);

@@ -15,6 +15,9 @@ use ContextRead;
 use ContextWrite;
 
 use arch::{Function, Symbol, SymbolQuery};
+use arch::FunctionRepr;
+use arch::FunctionQuery;
+use arch::CommentQuery;
 
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
@@ -27,6 +30,19 @@ pub struct MSP430Data {
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>,
     pub functions: HashMap<<MSP430 as Arch>::Address, ()>
+}
+
+impl CommentQuery<<MSP430 as Arch>::Address> for MergedContextTable {
+    fn comment_for(&self, _addr: <MSP430 as Arch>::Address) -> Option<&str> {
+        None
+    }
+}
+
+impl FunctionQuery<<MSP430 as Arch>::Address> for MergedContextTable {
+    type Function = Function;
+    fn function_at(&self, _addr: <MSP430 as Arch>::Address) -> Option<&Self::Function> {
+        None
+    }
 }
 
 impl SymbolQuery<<MSP430 as Arch>::Address> for MSP430Data {
@@ -55,12 +71,8 @@ impl Default for MSP430Data {
     }
 }
 
-impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction where T: PartialInstructionContext {
-    fn control_flow(&self, ctx: Option<&T>) -> control_flow::Effect<u16> {
-        match ctx.and_then(|x| x.control_flow()) {
-            Some(effect) => { return effect.clone(); }
-            _ => ()
-        };
+impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction {
+    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<u16> {
         match self.opcode {
             Opcode::JMP => {
                 control_flow::Effect::stop_and(

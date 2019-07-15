@@ -8,6 +8,9 @@ use arch::pic17::deps::{updates_of, dependencies_of};
 use analyses::control_flow;
 
 use arch::{Symbol, SymbolQuery};
+use arch::FunctionRepr;
+use arch::FunctionQuery;
+use arch::CommentQuery;
 
 use std::collections::HashMap;
 
@@ -30,7 +33,42 @@ pub struct PIC17Data {
     pub functions: HashMap<<PIC17 as Arch>::Address, Function>
 }
 
+impl CommentQuery<<PIC17 as Arch>::Address> for PIC17Data {
+    fn comment_for(&self, addr: <PIC17 as Arch>::Address) -> Option<&str> {
+        self.contexts.comment_for(addr)
+    }
+}
+
+impl FunctionQuery<<PIC17 as Arch>::Address> for PIC17Data {
+    type Function = Function;
+    fn function_at(&self, addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
+        self.contexts.function_at(addr)
+    }
+}
+
 impl SymbolQuery<<PIC17 as Arch>::Address> for PIC17Data {
+    fn symbol_for(&self, addr: <PIC17 as Arch>::Address) -> Option<&Symbol> {
+        self.contexts.symbol_for(addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<PIC17 as Arch>::Address> {
+        self.contexts.symbol_addr(sym)
+    }
+}
+
+impl CommentQuery<<PIC17 as Arch>::Address> for MergedContextTable {
+    fn comment_for(&self, _addr: <PIC17 as Arch>::Address) -> Option<&str> {
+        None
+    }
+}
+
+impl FunctionQuery<<PIC17 as Arch>::Address> for MergedContextTable {
+    type Function = Function;
+    fn function_at(&self, _addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
+        None
+    }
+}
+
+impl SymbolQuery<<PIC17 as Arch>::Address> for MergedContextTable {
     fn symbol_for(&self, _addr: <PIC17 as Arch>::Address) -> Option<&Symbol> {
         None
     }
@@ -563,8 +601,14 @@ impl Function {
             params: params
         }
     }
+}
 
-    pub fn decl_string(&self) -> String {
+impl FunctionRepr for Function {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn decl_string(&self) -> String {
         format!(
             "{}({})",
             self.name,

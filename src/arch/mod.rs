@@ -10,14 +10,35 @@ pub mod display;
 pub mod interface;
 
 use std::fmt::Display;
+use std::collections::HashMap;
 
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 
+pub trait FunctionQuery<A: Address> {
+    type Function: FunctionRepr;
+    fn function_at(&self, addr: A) -> Option<&Self::Function>;
+}
+
 pub trait SymbolQuery<A: Address> {
     fn symbol_for(&self, addr: A) -> Option<&Symbol>;
     fn symbol_addr(&self, sym: &Symbol) -> Option<A>;
+}
+
+pub trait AddressNamer<A: Address> {
+    fn address_name(&self, addr: A) -> Option<String>;
+}
+
+impl <T, A: Address> AddressNamer<A> for T where T: FunctionQuery<A> + SymbolQuery<A> {
+    fn address_name(&self, addr: A) -> Option<String> {
+        self.function_at(addr).map(|func| func.name().to_owned())
+            .or_else(|| { self.symbol_for(addr).map(|sym| sym.to_string()) })
+    }
+}
+
+pub trait CommentQuery<A: Address> {
+    fn comment_for(&self, addr: A) -> Option<&str>;
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,6 +48,11 @@ pub struct Function {
     returns: Vec<String>
 }
 
+pub trait FunctionRepr {
+    fn decl_string(&self) -> String;
+    fn name(&self) -> &str;
+}
+
 impl Function {
     pub fn of(name: String, args: Vec<String>, rets: Vec<String>) -> Function {
         Function {
@@ -34,6 +60,23 @@ impl Function {
             arguments: args,
             returns: rets
         }
+    }
+}
+
+impl FunctionRepr for Function {
+    fn decl_string(&self) -> String {
+        format!("{}({}){}",
+            self.name,
+            self.arguments.join(", "),
+            match self.returns.len() {
+                0 => "".to_string(),
+                1 => format!(" -> {}", self.returns[0]),
+                _ => format!(" -> ({})", self.returns.join(", "))
+            }
+        )
+    }
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 

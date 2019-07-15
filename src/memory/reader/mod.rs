@@ -5,6 +5,9 @@ use std::io::Read;
 use memory::repr::FlatMemoryRepr;
 use memory::repr::process::ModuleData;
 
+use std::fs::OpenOptions;
+use std::path::Path;
+
 pub mod hex;
 
 pub enum FileRepr {
@@ -13,7 +16,9 @@ pub enum FileRepr {
     Flat(FlatMemoryRepr)
 }
 
-pub fn load_from_file(file: &mut File) -> Result<FileRepr, String> {
+pub fn load_from_path(path: &Path) -> Result<FileRepr, String> {
+    let mut file = OpenOptions::new().read(true).open(path).unwrap();
+
     let metadata = match file.metadata() {
         Ok(metadata) => metadata,
         Err(e) => { return Err(e.to_string()); }
@@ -28,7 +33,7 @@ pub fn load_from_file(file: &mut File) -> Result<FileRepr, String> {
         Ok(repr) => Ok(FileRepr::IntelHEX(repr)),
         Err(e) => {
             println!("{}", e);
-            match ModuleData::load_from(&bytes) {
+            match ModuleData::load_from(&bytes, format!("{}", path.display())) {
                 Some(data) => { Ok(FileRepr::Executable(data)) }
                 None => {
                     Ok(FileRepr::Flat(FlatMemoryRepr::of(bytes)))
