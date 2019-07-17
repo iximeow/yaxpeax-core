@@ -60,9 +60,7 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
                     color::Fg(&color::LightYellow as &color::Color),
-                    "<function>",
-                    // TODO:
-                    //fn_dec.decl_string(),
+                    fn_dec.decl_string(),
                     color::Fg(&color::Reset as &color::Color)
                 )?;
             }
