@@ -878,57 +878,6 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     };
 }
 
-pub fn show_linear<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
-    data: &M,
-    ctx: &MergedContextTable,
-    start_addr: <x86_64Arch as Arch>::Address,
-    end_addr: <x86_64Arch as Arch>::Address,
-    colors: Option<&ColorSettings>
-) {
-    let mut continuation = start_addr;
-    while continuation < end_addr {
-        let mut iter = data.instructions_spanning::<<x86_64Arch as Arch>::Instruction>(continuation, end_addr);
-        loop {
-            let (address, instr) = match iter.next() {
-                Some((address, instr)) => {
-                    (address, instr)
-                },
-                None => {
-                    println!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap());
-
-                    continuation += <x86_64Arch as Arch>::Instruction::min_size();
-                        /*
-                        opcode: Opcode::Invalid(
-                            (data[(continuation as usize)] as u16) |
-                            ((data[(continuation as usize) + 1] as u16) << 8)
-                        ),
-                        */
-                    break; // ... the iterator doesn't distinguish
-                           // between None and Invalid ...
-                }
-            };
-
-            let mut instr_text = String::new();
-            x86_64Arch::render_frame(
-                &mut instr_text,
-                address,
-                instr,
-                &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(ctx),
-            );
-            print!("{}", instr_text);
-            println!(" {}", InstructionContext {
-                instr: &instr,
-                addr: address,
-                contexts: Some(ctx),
-                ssa: None,
-                colors: colors
-            });
-            continuation += instr.len();
-        }
-    }
-}
-
 fn is_conditional_op(op: Opcode) -> bool {
     match op {
         Opcode::Jcc(_) |
