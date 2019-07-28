@@ -88,9 +88,10 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
     end_addr: A::Address,
     function_table: &HashMap<A::Address, F>,
     colors: Option<&ColorSettings>
-) where
+) -> Vec<(A::Address, Vec<String>)> where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
     A::Instruction: ShowContextual<A::Address, Contexts, String> {
+    let mut result: Vec<(A::Address, Vec<String>)> = Vec::new();
     let mut continuation = start_addr;
     while continuation < end_addr {
         let mut iter = data.instructions_spanning::<A::Instruction>(continuation, end_addr);
@@ -100,7 +101,10 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                     (address, instr)
                 },
                 None => {
-                    println!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap());
+                    result.push((
+                        continuation,
+                        vec![format!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap())]
+                    ));
 
                     continuation += A::Instruction::min_size();
                         /*
@@ -114,7 +118,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                 }
             };
 
-            let mut instr_text = String::new();
+            let mut instr_text = "".to_string();
             A::render_frame(
                 &mut instr_text,
                 address,
@@ -122,11 +126,16 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
             );
+            instr_text.push(' ');
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
-            println!(" {}", instr_text);
+            result.push((
+                address,
+                instr_text.split("\n").map(|s| s.to_string()).collect()
+            ));
             continuation += instr.len();
         }
     }
+    result
 }
 
 pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(

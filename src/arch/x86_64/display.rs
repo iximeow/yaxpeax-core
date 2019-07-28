@@ -40,6 +40,13 @@ use std::fmt::Write;
 use std::marker::PhantomData;
 use num_traits::WrappingAdd;
 
+use yaxpeax_arch::ShowContextual;
+impl <T: std::fmt::Write> ShowContextual<u64, MergedContextTable, T> for Instruction {
+    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
+        self.contextualize(colors, _address, Option::<&[Option<String>]>::None, out)
+    }
+}
+
 impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<x86_64::Function, T> for x86_64Arch {
     fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
         dest: &mut W,
