@@ -36,7 +36,13 @@ pub fn load_from_path(path: &Path) -> Result<FileRepr, String> {
             match ModuleData::load_from(&bytes, format!("{}", path.display())) {
                 Some(data) => { Ok(FileRepr::Executable(data)) }
                 None => {
-                    Ok(FileRepr::Flat(FlatMemoryRepr::of(bytes)))
+                    Ok(FileRepr::Flat({
+                        let mut repr = FlatMemoryRepr::of(bytes);
+                        if let Some(x) = path.to_str() {
+                            repr.name = x.to_owned();
+                        };
+                        repr
+                    }))
                 }
             }
         }
