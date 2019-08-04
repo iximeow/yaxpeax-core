@@ -13,7 +13,7 @@ use arch::arm::v7::MergedContextTable;
 
 use termion::color;
 
-impl <T: FunctionQuery<<ARMv7 as Arch>::Address>> BaseDisplay<arm::v7::Function, T> for ARMv7 {
+impl <T: FunctionQuery<<ARMv7 as Arch>::Address> + CommentQuery<<ARMv7 as Arch>::Address>> BaseDisplay<arm::v7::Function, T> for ARMv7 {
     fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
         dest: &mut W,
         addr: <ARMv7 as Arch>::Address,
@@ -26,6 +26,14 @@ impl <T: FunctionQuery<<ARMv7 as Arch>::Address>> BaseDisplay<arm::v7::Function,
          */
         // TODO: totally replace this?
         if let Some(ctx) = ctx {
+            if let Some(comment) = ctx.comment_for(addr) {
+                writeln!(dest, "{:04x}: {}{}{}",
+                    addr,
+                    color::Fg(color::Blue),
+                    comment,
+                    color::Fg(color::Reset)
+                );
+            }
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
                     color::Fg(&color::LightYellow as &color::Color),

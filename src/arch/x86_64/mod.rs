@@ -71,8 +71,8 @@ impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
 }
 
 impl CommentQuery<<x86_64 as Arch>::Address> for MergedContextTable {
-    fn comment_for(&self, _addr: <x86_64 as Arch>::Address) -> Option<&str> {
-        None
+    fn comment_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&str> {
+        self.comments.get(&addr).map(String::as_ref)
     }
 }
 
@@ -219,6 +219,7 @@ impl ModifierCollection<x86_64> for InstructionModifiers {
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
+    pub comments: HashMap<<x86_64 as Arch>::Address, String>,
     pub xrefs: xrefs::XRefCollection<<x86_64 as Arch>::Address>,
     pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
     #[serde(skip)]
@@ -249,6 +250,7 @@ impl MergedContextTable {
         MergedContextTable {
             user_contexts: HashMap::new(),
             computed_contexts: HashMap::new(),
+            comments: HashMap::new(),
             xrefs: xrefs::XRefCollection::new(),
             functions: HashMap::new(),
             function_hints: Vec::new(),
@@ -328,6 +330,9 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
                 self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
                 self.functions.insert(address, f.clone());
+            }
+            BaseUpdate::AddCodeComment(comment) => {
+                self.comments.insert(address, comment);
             }
             _ => { /* todo: the rest */ }
         }

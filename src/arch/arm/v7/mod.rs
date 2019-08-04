@@ -5,6 +5,8 @@ use arch::{Symbol, SymbolQuery};
 use arch::Function;
 use arch::FunctionRepr;
 use arch::FunctionQuery;
+use arch::BaseUpdate;
+use arch::CommentQuery;
 
 use analyses::control_flow;
 
@@ -34,6 +36,11 @@ impl FunctionQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
         self.contexts.function_at(addr)
     }
 }
+impl CommentQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
+    fn comment_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&str> {
+        self.contexts.comment_for(addr)
+    }
+}
 impl SymbolQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
     fn symbol_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
         self.contexts.symbol_for(addr)
@@ -49,12 +56,17 @@ impl FunctionQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
         None
     }
 }
-impl SymbolQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
-    fn symbol_for(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
-        None
+impl CommentQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
+    fn comment_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&str> {
+        self.comments.get(&addr).map(String::as_ref)
     }
-    fn symbol_addr(&self, _sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
-        None
+}
+impl SymbolQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
+    fn symbol_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Symbol> {
+        self.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv7 as Arch>::Address> {
+        self.reverse_symbols.get(sym).map(|x| *x)
     }
 }
 
@@ -314,14 +326,21 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
 #[derive(Serialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<PartialContext>>,
-    pub computed_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<ComputedContext>>
+    pub computed_contexts: HashMap<<ARMv7 as Arch>::Address, Rc<ComputedContext>>,
+    pub comments: HashMap<<ARMv7 as Arch>::Address, String>,
+    pub symbols: HashMap<<ARMv7 as Arch>::Address, Symbol>,
+    #[serde(skip)]
+    pub reverse_symbols: HashMap<Symbol, <ARMv7 as Arch>::Address>,
 }
 
 impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {
             user_contexts: HashMap::new(),
-            computed_contexts: HashMap::new()
+            computed_contexts: HashMap::new(),
+            comments: HashMap::new(),
+            symbols: HashMap::new(),
+            reverse_symbols: HashMap::new(),
         }
     }
 }
@@ -335,9 +354,18 @@ impl ContextRead<ARMv7, MergedContext> for MergedContextTable {
     }
 }
 
-impl ContextWrite<ARMv7, /* Update */ ()> for MergedContextTable {
-    fn put(&mut self, _address: <ARMv7 as Arch>::Address, _update: ()) {
-        // do nothing
+impl ContextWrite<ARMv7, BaseUpdate<()>> for MergedContextTable {
+    fn put(&mut self, address: <ARMv7 as Arch>::Address, update: BaseUpdate<()>) {
+        match update {
+            BaseUpdate::DefineSymbol(sym) => {
+                self.symbols.insert(address, sym.clone());
+                self.reverse_symbols.insert(sym, address);
+            }
+            BaseUpdate::AddCodeComment(comment) => {
+                self.comments.insert(address, comment);
+            }
+            _ => { }
+        }
     }
 }
 

@@ -57,8 +57,8 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
     ) -> fmt::Result {
         if let Some(ctx) = ctx {
             if let Some(comment) = ctx.comment_for(addr) {
-                writeln!(dest, "{:04x}: {}{}{}",
-                    addr,
+                writeln!(dest, "{}: {}{}{}",
+                    addr.stringy(),
                     color::Fg(&color::Blue as &color::Color),
                     comment,
                     color::Fg(&color::Reset as &color::Color)
