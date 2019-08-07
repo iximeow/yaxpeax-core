@@ -2,6 +2,7 @@ use yaxpeax_arch::{Arch, LengthedInstruction};
 use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, Opcode, Operand};
 
 use arch::{Symbol, SymbolQuery};
+use arch::{Function, FunctionQuery};
 
 use analyses::control_flow;
 
@@ -14,15 +15,26 @@ use ContextWrite;
 
 mod display;
 
-#[derive(Serialize, Deserialize)]
-pub struct Function { }
-
 #[derive(Serialize)]
 pub struct ARMv8Data {
     pub preferred_addr: <ARMv8 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<ARMv8 as Arch>::Address>,
     pub functions: HashMap<<ARMv8 as Arch>::Address, Function>
+}
+
+impl FunctionQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
+    type Function = Function;
+    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
+        self.functions.get(&addr)
+    }
+}
+
+impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
+    type Function = Function;
+    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
+        None
+    }
 }
 
 impl SymbolQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
