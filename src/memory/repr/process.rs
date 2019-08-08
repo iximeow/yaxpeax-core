@@ -133,6 +133,15 @@ impl Segment {
             true
         }
     }
+    pub fn start(&self) -> usize {
+        self.start
+    }
+    pub fn end(&self) -> usize {
+        self.start + self.data.len()
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl <A: Address> MemoryRepr<A> for Segment {
