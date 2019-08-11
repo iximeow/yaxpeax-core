@@ -161,6 +161,13 @@ impl ProcessMemory {
     }
 }
 
+use std::fmt;
+impl fmt::Display for DebugeeX86_64 {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        panic!("formatting rc.refcell.debugeex86_64");
+    }
+}
+
 #[derive(Debug)]
 pub struct DebugeeX86_64 {
     pub pid: nix::unistd::Pid,

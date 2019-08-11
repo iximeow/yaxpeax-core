@@ -2,17 +2,17 @@ use yaxpeax_arch::Address;
 use memory::repr::FlatMemoryRepr;
 use memory::{MemoryRange, MemoryRepr};
 use debug::Peek;
-use std::fmt::Debug;
+use debug::gdb_remote::GDBRemote;
+use std::fmt::Display;
 use std::ops::Range;
 use memory::repr::process::ModuleInfo;
 use memory::repr::cursor::{UnboundedCursor, ReadCursor};
 
-#[derive(Debug)]
-pub struct RemoteMemoryRepr<T: Peek + Debug> {
+pub struct RemoteMemoryRepr<T: Peek> {
     pub target: T
 }
 
-impl <A: Address, T: Peek + Debug> MemoryRange<A> for RemoteMemoryRepr<T> {
+impl <A: Address, T: Peek> MemoryRange<A> for RemoteMemoryRepr<T> {
     fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
         Some(ReadCursor::from(self, range))
     }
@@ -21,7 +21,7 @@ impl <A: Address, T: Peek + Debug> MemoryRange<A> for RemoteMemoryRepr<T> {
     }
 }
 
-impl <A: Address, T: Peek + Debug> MemoryRepr<A> for RemoteMemoryRepr<T> {
+impl <A: Address, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
     fn read(&self, addr: A) -> Option<u8> {
         self.target.read(addr)
     }

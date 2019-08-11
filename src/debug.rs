@@ -1,3 +1,5 @@
+pub mod gdb_remote;
+
 pub enum RunResult {
     Ok,
     HitBreakCondition,
