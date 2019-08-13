@@ -1,6 +1,6 @@
 use yaxpeax_arch::Address;
 use memory::repr::{ReadCursor, UnboundedCursor};
-use memory::{LayoutError, MemoryRange, MemoryRepr, PatchyMemoryRepr};
+use memory::{LayoutError, MemoryRange, MemoryRepr, Named, PatchyMemoryRepr};
 use memory::repr::process::ModuleInfo;
 use std::ops::Range;
 
@@ -42,11 +42,14 @@ impl <A: Address> MemoryRepr<A> for FlatMemoryRepr {
     fn module_for(&self, _addr: A) -> Option<&MemoryRepr<A>> {
         Some(self)
     }
-    fn name(&self) -> &str {
-        &self.name
-    }
     fn size(&self) -> Option<u64> {
         Some(self.data.len() as u64)
+    }
+}
+
+impl Named for FlatMemoryRepr {
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 

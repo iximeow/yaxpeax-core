@@ -1,6 +1,6 @@
 use yaxpeax_arch::Address;
 use memory::repr::FlatMemoryRepr;
-use memory::{MemoryRange, MemoryRepr};
+use memory::{MemoryRange, MemoryRepr, Named};
 use debug::Peek;
 use debug::gdb_remote::GDBRemote;
 use std::fmt::Display;
@@ -42,13 +42,15 @@ impl <A: Address, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
         */
         None
     }
-    fn name(&self) -> &str {
-//  TODO: proper trait over debug target stuff
-//        self.target.name
-        "remote target"
-    }
     fn size(&self) -> Option<u64> {
         None
     }
 }
 
+impl <T: Peek> Named for RemoteMemoryRepr<T> {
+    fn name(&self) -> &str {
+//  TODO: proper trait over debug target stuff
+//        self.target.name
+        "remote target"
+    }
+}

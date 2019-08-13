@@ -20,13 +20,16 @@ pub trait MemoryRange<A: Address> where Self: MemoryRepr<A> {
     fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>>;
 }
 
-pub trait MemoryRepr<A: Address> {
+pub trait MemoryRepr<A: Address>: Named {
     fn module_info(&self) -> Option<&ModuleInfo>;
     fn read(&self, addr: A) -> Option<u8>;
     fn to_flat(self) -> Option<FlatMemoryRepr>;
     fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>>;
-    fn name(&self) -> &str;
     fn size(&self) -> Option<u64>;
+}
+
+pub trait Named {
+    fn name(&self) -> &str;
 }
 
 pub trait PatchyMemoryRepr<A: Address> {

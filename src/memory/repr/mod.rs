@@ -1,5 +1,5 @@
 use yaxpeax_arch::Address;
-use memory::{MemoryRange, MemoryRepr};
+use memory::{MemoryRange, MemoryRepr, Named};
 use std::ops::Range;
 
 pub mod cursor;
@@ -31,11 +31,14 @@ impl <A: Address> MemoryRepr<A> for Vec<u8> {
     fn module_for(&self, _addr: A) -> Option<&MemoryRepr<A>> {
         Some(self)
     }
-    fn name(&self) -> &str {
-        "anonymous_vec"
-    }
     fn size(&self) -> Option<u64> {
         Some(self.len() as u64)
+    }
+}
+
+impl Named for Vec<u8> {
+    fn name(&self) -> &str {
+        "anonymous_vec"
     }
 }
 

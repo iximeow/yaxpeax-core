@@ -1,5 +1,5 @@
 use yaxpeax_arch::Address;
-use memory::{MemoryRange, MemoryRepr};
+use memory::{MemoryRange, MemoryRepr, Named};
 use memory::repr::{FlatMemoryRepr, ReadCursor, UnboundedCursor};
 use memory::repr::process::ModuleInfo;
 use std::ops::Range;
@@ -36,8 +36,11 @@ impl <'a, 'b, M: MemoryRepr<usize>> MemoryRepr<u16> for MemoryReprAdapter<'a, us
         // TODO: figure out if it's possible to write this?
         // this really messes up stuff...
     }
-    fn name(&self) -> &str { self.repr.name() }
     fn size(&self) -> Option<u64> { self.repr.size() }
+}
+
+impl <'a, M: MemoryRepr<usize>> Named for MemoryReprAdapter<'a, usize, u16, M> {
+    fn name(&self) -> &str { self.repr.name() }
 }
 
 fn f_u32_to_usize(u: u32) -> usize { u as usize }
@@ -62,8 +65,11 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u32> for MemoryReprAdapter<'a, usize,
         // TODO: figure out if it's possible to write this?
         // self.repr.module_for((self.f)(addr))
     }
-    fn name(&self) -> &str { self.repr.name() }
     fn size(&self) -> Option<u64> { self.repr.size() }
+}
+
+impl <'a, M: MemoryRepr<usize>> Named for MemoryReprAdapter<'a, usize, u32, M> {
+    fn name(&self) -> &str { self.repr.name() }
 }
 
 fn f_u64_to_usize(u: u64) -> usize { u as usize }
@@ -88,8 +94,11 @@ impl <'a, M: MemoryRepr<usize>> MemoryRepr<u64> for MemoryReprAdapter<'a, usize,
         // TODO: figure out if it's possible to write this?
         // self.repr.module_for((self.f)(addr))
     }
-    fn name(&self) -> &str { self.repr.name() }
     fn size(&self) -> Option<u64> { self.repr.size() }
+}
+
+impl <'a, M: MemoryRepr<usize>> Named for MemoryReprAdapter<'a, usize, u64, M> {
+    fn name(&self) -> &str { self.repr.name() }
 }
 
 impl <'a, A: Address, B: Address, M: MemoryRepr<A> + MemoryRange<A>> MemoryRange<B> for MemoryReprAdapter<'a, A, B, M> where Self: MemoryRepr<B> {

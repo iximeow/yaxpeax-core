@@ -2,6 +2,7 @@ use yaxpeax_arch::Address;
 use memory::repr::flat::FlatMemoryRepr;
 use memory::repr::process::ModuleInfo;
 use memory::MemoryRepr;
+use memory::Named;
 
 use std::ops::Range;
 
@@ -39,12 +40,15 @@ impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for ReadCursor<'a, A, T> {
     fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
         self.data.module_for(self.start + addr)
     }
-    fn name(&self) -> &str {
-        self.data.name()
-    }
     fn size(&self) -> Option<u64> {
         // TODO: should be able to get a `ptrdiff`-style diff type for addresses
         Some((self.end - self.start).to_linear() as u64)
+    }
+}
+
+impl <'a, A: Address, T: MemoryRepr<A>> Named for ReadCursor<'a, A, T> {
+    fn name(&self) -> &str {
+        self.data.name()
     }
 }
 
@@ -85,11 +89,14 @@ impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for UnboundedCursor<'a, A,
     fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
         self.data.module_for(self.addr + addr)
     }
-    fn name(&self) -> &str {
-        self.data.name()
-    }
     fn size(&self) -> Option<u64> {
         None
+    }
+}
+
+impl <'a, A: Address, T: MemoryRepr<A>> Named for UnboundedCursor<'a, A, T> {
+    fn name(&self) -> &str {
+        self.data.name()
     }
 }
 

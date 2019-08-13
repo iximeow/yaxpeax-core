@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use yaxpeax_arch::{Address, AddressDisplay};
 use memory::repr::{FlatMemoryRepr, ReadCursor, UnboundedCursor};
-use memory::{LayoutError, MemoryRange, MemoryRepr, PatchyMemoryRepr};
+use memory::{LayoutError, MemoryRange, MemoryRepr, Named, PatchyMemoryRepr};
 use arch::ISA;
 
 #[derive(Debug)]
@@ -139,7 +139,10 @@ impl Segment {
     pub fn end(&self) -> usize {
         self.start + self.data.len()
     }
-    pub fn name(&self) -> &str {
+}
+
+impl Named for Segment {
+    fn name(&self) -> &str {
         &self.name
     }
 }
@@ -163,9 +166,6 @@ impl <A: Address> MemoryRepr<A> for Segment {
             None
         }
     }
-    fn name(&self) -> &str {
-        &self.name
-    }
     fn size(&self) -> Option<u64> {
         Some(self.data.len() as u64)
     }
@@ -184,6 +184,17 @@ pub enum ModuleInfo {
     /*
      * One day, also MachO, .a, .o, .class, .jar, ...
      */
+}
+
+impl ModuleInfo {
+    pub fn isa_hint(&self) -> &ISAHint {
+        match self {
+            ModuleInfo::PE(hint, _, _, _, _, _, _, _) |
+            ModuleInfo::ELF(hint, _, _, _, _, _, _, _) => {
+                hint
+            }
+        }
+    }
 }
 
 fn map_elf_machine(machine: u16) -> ISAHint {
@@ -658,15 +669,18 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
             None
         }
     }
-    fn name(&self) -> &str {
-        &self.name
-    }
     fn size(&self) -> Option<u64> {
         let mut total_size = 0u64;
         for s in self.segments.iter() {
             total_size += <Segment as MemoryRepr<A>>::size(s).unwrap();
         }
         Some(total_size)
+    }
+}
+
+impl Named for ModuleData {
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -715,11 +729,14 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
         }
         None
     }
-    fn name(&self) -> &str {
-        "process"
-    }
     fn size(&self) -> Option<u64> {
         Some(self.modules.iter().map(|m| <ModuleData as MemoryRepr<A>>::size(m).unwrap()).sum())
+    }
+}
+
+impl Named for ProcessMemoryRepr {
+    fn name(&self) -> &str {
+        "process"
     }
 }
 
