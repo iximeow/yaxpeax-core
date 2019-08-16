@@ -22,7 +22,7 @@ impl Domain for ValueSetDomain {
     }
 }
 
-fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) -> Option<Data> {
+fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &()) -> Option<Data> {
     match mem_op {
         Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, _) |
         Operand::DisplacementU32(_) |
@@ -161,7 +161,7 @@ fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRa
     }
 }
 
-impl ConstEvaluator<x86_64, x86_64Data, ValueSetDomain> for x86_64 {
+impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     /// In a situation like
     /// v_1 <- Data::Concrete(10)
     /// v_2 = transient ModifierExpression::Above(20) . v_1
@@ -182,7 +182,7 @@ impl ConstEvaluator<x86_64, x86_64Data, ValueSetDomain> for x86_64 {
     /// v_2 = transient ModifierExpression::Below(20) .
     ///       transient ModifierExpression::Above(5) . v_1
     /// -> v_2 == Data::ValueSet(vec![ValueRange::Between(5, 20)])
-    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<ValueSetDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<ValueSetDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &()) {
         if let Some(loc) = location {
             for expr in exprs {
                 let new_value = dfg.get_transient_value(from, to, loc, Direction::Read).and_then(|lvalue| {
@@ -228,7 +228,7 @@ impl ConstEvaluator<x86_64, x86_64Data, ValueSetDomain> for x86_64 {
         }
     }
 
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data, data: &U) {
+    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
         use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr {

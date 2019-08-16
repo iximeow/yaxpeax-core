@@ -25,7 +25,7 @@ impl Domain for SymbolicDomain {
     }
 }
 
-fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data) -> Option<SymbolicExpression> {
+fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &()) -> Option<SymbolicExpression> {
     match mem_op {
         Operand::DisplacementU32(disp) => {
             if instr.prefixes.gs() {
@@ -138,11 +138,11 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
     }
 }
 
-impl ConstEvaluator<x86_64, x86_64Data, SymbolicDomain> for x86_64 {
-    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<SymbolicDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &x86_64Data) {
+impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<SymbolicDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &()) {
 
     }
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &x86_64Data, data: &U) {
+    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
         use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr {

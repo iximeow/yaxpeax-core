@@ -26,6 +26,10 @@ pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
+    pub ssa: HashMap<<x86_64 as Arch>::Address, (
+        control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
+        SSA<x86_64>
+    )>,
 }
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
@@ -84,6 +88,7 @@ impl Default for x86_64Data {
             preferred_addr: <x86_64 as Arch>::Address::zero(),
             contexts: MergedContextTable::create_empty(),
             cfg: control_flow::ControlFlowGraph::new(),
+            ssa: HashMap::new(),
         }
     }
 }
@@ -212,10 +217,6 @@ pub struct MergedContextTable {
     #[serde(skip)]
     pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
     pub functions: HashMap<<x86_64 as Arch>::Address, Function>,
-    pub ssa: HashMap<<x86_64 as Arch>::Address, (
-        control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
-        SSA<x86_64>
-    )>,
     pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
 }
@@ -244,7 +245,6 @@ impl MergedContextTable {
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
             function_data: HashMap::new(),
-            ssa: HashMap::new()
         }
     }
 }

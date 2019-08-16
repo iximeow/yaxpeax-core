@@ -23,7 +23,7 @@ impl Domain for ConcreteDomain {
     }
 }
 
-fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &x86_64Data) -> Option<u64> {
+fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<u64> {
     match mem_op {
         Operand::DisplacementU32(disp) => Some(*disp as i32 as i64 as u64),
         Operand::DisplacementU64(disp) => Some(*disp),
@@ -110,8 +110,8 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
     }
 }
 
-impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
-    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<ModifierExpression>, dfg: &SSA<x86_64>, _contexts: &x86_64Data) {
+impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<ModifierExpression>, dfg: &SSA<x86_64>, _contexts: &()) {
         for expr in exprs {
             match expr {
                 ModifierExpression::IsNot(_) |
@@ -128,7 +128,7 @@ impl ConstEvaluator<x86_64, x86_64Data, ConcreteDomain> for x86_64 {
         }
     }
 
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &x86_64Data, data: &U) {
+    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &(), data: &U) {
         //TODO: handle prefixes like at all
         match instr {
             Instruction { opcode: Opcode::XOR, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
