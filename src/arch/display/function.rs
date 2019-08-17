@@ -102,8 +102,20 @@ impl <
 
             let mut iter = self.data.instructions_spanning::<A::Instruction>(block.start, block.end);
 
-            let end = iter.end;
+            let span_end = iter.end;
             while let Some((address, instr)) = iter.next() {
+                if let Some(start) = start {
+                    if address < start {
+                        continue;
+                    }
+                }
+
+                if let Some(end) = end {
+                    if address > end {
+                        continue;
+                    }
+                }
+
                 let mut instr_string = String::new();
                 A::render_frame(
                     &mut instr_string,
@@ -114,8 +126,14 @@ impl <
                 ).unwrap();
                 // ok come back to this
                 write!(instr_string, " ").unwrap();
+                if self.highlight_instrs.contains(&address) {
+                    write!(instr_string, "{}", termion::style::Invert).unwrap();
+                }
                 A::display_instruction_in_function(&mut instr_string, &instr, address, self.ctx, self.ssa, self.colors).unwrap();
-                if address.wrapping_add(&instr.len()) > end {
+                if self.highlight_instrs.contains(&address) {
+                    write!(instr_string, "{}", termion::style::NoInvert).unwrap();
+                }
+                if address.wrapping_add(&instr.len()) > span_end {
                     write!(instr_string ,"\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄").unwrap();
                 }
                 let strings: Vec<String> = instr_string.split("\n").map(|s| s.to_string()).collect();
