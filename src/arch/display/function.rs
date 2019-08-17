@@ -46,6 +46,7 @@ pub struct FunctionView<
 }
 
 pub trait FunctionDisplay<A: Arch + SSAValues> {
+    fn entrypoint(&self) -> A::Address;
     fn add_highlight_instr(&mut self, addr: A::Address);
     fn add_highlight_loc(&mut self, loc: (A::Address, A::Location, Direction));
     fn reset_highlight_instrs(&mut self);
@@ -72,6 +73,9 @@ impl <
     A: Arch + BaseDisplay<F, Context> + SSAValues,
     M: MemoryRepr<A::Address> + MemoryRange<A::Address>
 > FunctionDisplay<A> for FunctionView<'a, 'b, 'c, 'd, 'e, F, Context, A, M> where A: FunctionInstructionDisplay<A, Context>  {
+    fn entrypoint(&self) -> A::Address {
+        self.fn_graph.entrypoint
+    }
     fn add_highlight_instr(&mut self, addr: A::Address) {
         self.highlight_instrs.push(addr);
     }

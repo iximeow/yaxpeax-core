@@ -86,6 +86,7 @@ impl <Addr> BasicBlock<Addr> where Addr: Copy + Clone {
 }
 
 pub struct ControlFlowGraph<A> where A: Address {
+    pub entrypoint: A,
     pub blocks: Vec<BasicBlock<A>>,
     pub graph: GraphMap<A, (), petgraph::Directed>
 }
@@ -193,6 +194,17 @@ fn control_flow_graph_construction_3() {
 impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
     pub fn new() -> ControlFlowGraph<A> {
         let mut cfg = ControlFlowGraph {
+            entrypoint: A::zero(),
+            blocks: vec![BasicBlock::new(A::min_value(), A::max_value())],
+            graph: GraphMap::new()
+        };
+        cfg.graph.add_node(A::min_value());
+        cfg
+    }
+
+    pub fn from(addr: A) -> ControlFlowGraph<A> {
+        let mut cfg = ControlFlowGraph {
+            entrypoint: addr,
             blocks: vec![BasicBlock::new(A::min_value(), A::max_value())],
             graph: GraphMap::new()
         };
@@ -216,7 +228,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
      * disincluded?
      */
     pub fn get_function<U>(&self, start: A, function_table: &HashMap<A, U>) -> ControlFlowGraph<A> {
-        let mut result: ControlFlowGraph<A> = ControlFlowGraph::new();
+        let mut result: ControlFlowGraph<A> = ControlFlowGraph::from(start);
         result.graph.add_node(start);
         let mut walk = petgraph::visit::Bfs::new(&self.graph, start);
         for k in function_table.keys() {
@@ -499,10 +511,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
         A::Address: petgraph::graphmap::NodeTrait,
         UTable: ContextRead<A, U> + ContextWrite<A, Update>
 {
-    let mut cfg = ControlFlowGraph {
-        blocks: vec![BasicBlock::new(A::Address::min_value(), A::Address::max_value())], // TODO: this should be the lower and upper bounds of rust-num Bounded one day
-        graph: GraphMap::new()
-    };
+    let mut cfg = ControlFlowGraph::new();
 
     // splits the basic block enclosing split_loc into two basic blocks,
     // one ending directly before split_loc, and one starting at split_loc
