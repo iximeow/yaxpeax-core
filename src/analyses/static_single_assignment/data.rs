@@ -111,8 +111,8 @@ pub struct HashedValue<A> {
 use std::hash::Hasher;
 impl <A: SSAValues> Hash for HashedValue<DFGRef<A>> where Value<A>: Hash {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let v: &RefCell<Value<A>> = &*self.value;
-        (v.borrow()).hash(state);
+//        let v: &RefCell<Value<A>> = &*self.value;
+        (self.value.as_ptr()).hash(state);
     }
 }
 
