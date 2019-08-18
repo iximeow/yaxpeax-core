@@ -12,6 +12,7 @@ use arch::FunctionQuery;
 use arch::SymbolQuery;
 use arch::FunctionRepr;
 use yaxpeax_arch::ColorSettings;
+use yaxpeax_arch::Decodable;
 
 use std::fmt;
 use std::fmt::Write;
@@ -47,6 +48,7 @@ pub struct FunctionView<
 
 pub trait FunctionDisplay<A: Arch + SSAValues> {
     fn entrypoint(&self) -> A::Address;
+    fn remove_highlight_instr(&mut self, addr: A::Address);
     fn add_highlight_instr(&mut self, addr: A::Address);
     fn add_highlight_loc(&mut self, loc: (A::Address, A::Location, Direction));
     fn reset_highlight_instrs(&mut self);
@@ -75,6 +77,14 @@ impl <
 > FunctionDisplay<A> for FunctionView<'a, 'b, 'c, 'd, 'e, F, Context, A, M> where A: FunctionInstructionDisplay<A, Context>  {
     fn entrypoint(&self) -> A::Address {
         self.fn_graph.entrypoint
+    }
+    fn remove_highlight_instr(&mut self, addr: A::Address) {
+        for i in 0..self.highlight_instrs.len() {
+            if self.highlight_instrs[i] == addr {
+                self.highlight_instrs.swap_remove(i);
+                return;
+            }
+        }
     }
     fn add_highlight_instr(&mut self, addr: A::Address) {
         self.highlight_instrs.push(addr);
@@ -125,13 +135,23 @@ impl <
                     Some(self.ctx),
                 ).unwrap();
                 // ok come back to this
-                write!(instr_string, " ").unwrap();
+                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
+                    write!(instr_string, ">").unwrap()
+                } else {
+                    write!(instr_string, " ").unwrap();
+                }
                 if self.highlight_instrs.contains(&address) {
                     write!(instr_string, "{}", termion::style::Invert).unwrap();
+                }
+                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
+                    write!(instr_string, "{}", termion::style::Underline).unwrap();
                 }
                 A::display_instruction_in_function(&mut instr_string, &instr, address, self.ctx, self.ssa, self.colors).unwrap();
                 if self.highlight_instrs.contains(&address) {
                     write!(instr_string, "{}", termion::style::NoInvert).unwrap();
+                }
+                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
+                    write!(instr_string, "{}", termion::style::NoUnderline).unwrap();
                 }
                 if address.wrapping_add(&instr.len()) > span_end {
                     write!(instr_string ,"\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄").unwrap();
