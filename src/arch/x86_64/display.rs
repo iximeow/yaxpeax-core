@@ -1012,6 +1012,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
+            Opcode::XADD |
             Opcode::XCHG => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
@@ -1081,7 +1082,6 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
             }
-            Opcode::XADD |
             Opcode::LSL => {
                 write!(fmt, " ")?;
                 contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
