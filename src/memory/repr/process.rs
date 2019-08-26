@@ -534,10 +534,10 @@ impl ModuleData {
                     let mut section_data = vec![0; section.p_memsz as usize];
 //                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
 //                    println!("{:?}", section);
-                    let mut physical_copy_end = (section.p_paddr as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
+                    let mut physical_copy_end = (section.p_offset as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
                     let copy_size = if physical_copy_end > data.len() {
-                        if (section.p_paddr as usize) < data.len() {
-                            data.len() - section.p_paddr as usize
+                        if (section.p_offset as usize) < data.len() {
+                            data.len() - section.p_offset as usize
                         } else {
                             0
                         }
@@ -545,10 +545,10 @@ impl ModuleData {
                         std::cmp::min(section.p_filesz as usize, section.p_memsz as usize)
                     };
 
-                    println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_paddr);
+                    println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
                     println!("virtual size is {:#x}", section_data.len());
                     for i in 0..copy_size {
-                        section_data[i] = data[(section.p_paddr as usize) + i];
+                        section_data[i] = data[(section.p_offset as usize) + i];
                     }
 
                     let new_section = Segment {
