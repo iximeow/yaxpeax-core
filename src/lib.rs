@@ -22,6 +22,7 @@ pub mod arch;
 pub mod analyses;
 pub mod data;
 pub mod debug;
+pub mod display;
 pub mod memory;
 pub mod parts;
 pub mod comment;

@@ -28,6 +28,7 @@ use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
 use data::Direction;
 use data::types::{Typed, TypeAtlas, TypeSpec};
+use display::location::{LocationHighlighter, NoHighlights};
 use arch::display::function::FunctionInstructionDisplay;
 use arch::display::function::FunctionView;
 
@@ -90,12 +91,13 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
     }
 }
 
-pub struct InstructionContext<'a, 'b, 'c, 'd, Context: AddressNamer<<x86_64Arch as Arch>::Address>> {
+pub struct InstructionContext<'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>> {
     instr: &'a Instruction,
     addr: <x86_64Arch as Arch>::Address,
     contexts: Option<&'b Context>,
     ssa: Option<&'c SSA<x86_64Arch>>,
-    colors: Option<&'d ColorSettings>
+    colors: Option<&'d ColorSettings>,
+    highlight: &'e Highlighter,
 }
 
 pub struct RegValueDisplay<'a, 'b, 'c> {
@@ -211,14 +213,424 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum Use {
     Read,
     Write,
     ReadWrite
 }
 
+fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
+    match inst.opcode {
+        Opcode::CALL |
+        Opcode::JMP |
+        Opcode::Jcc(_) => {
+            // we can assume op_idx is valid (so, 0), and as a result...
+            debug_assert!(op_idx == 0);
+            Use::Read
+        }
+        Opcode::LEA |
+        Opcode::MOVDDUP |
+        Opcode::MOVSLDUP |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTTSS2SI |
+        Opcode::CVTSS2SI |
+        Opcode::CVTSS2SD |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
+        Opcode::MOVZX_b |
+        Opcode::MOVZX_w |
+        Opcode::MOVSX |
+        Opcode::MOVSXD |
+        Opcode::MOV => {
+            [Use::Write, Use::Read][op_idx as usize]
+        }
+        Opcode::XADD |
+        Opcode::XCHG => {
+            [Use::ReadWrite, Use::ReadWrite][op_idx as usize]
+        }
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::ADDSS |
+        Opcode::SUBSS |
+        Opcode::MULSS |
+        Opcode::DIVSS |
+        Opcode::MINSS |
+        Opcode::MAXSS |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS |
+        Opcode::SAR |
+        Opcode::SAL |
+        Opcode::SHR |
+        Opcode::SHL |
+        Opcode::RCR |
+        Opcode::RCL |
+        Opcode::ROR |
+        Opcode::ROL |
+        Opcode::ADC |
+        Opcode::SBB |
+        Opcode::ADD |
+        Opcode::SUB |
+        Opcode::AND |
+        Opcode::XOR |
+        Opcode::OR => {
+            [Use::ReadWrite, Use::Read][op_idx as usize]
+        }
 
-impl <'a, 'b, 'c, 'd, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address>> Display for InstructionContext<'a, 'b, 'c, 'd, Context> {
+        Opcode::SQRTSD |
+        Opcode::SQRTSS |
+        Opcode::MOVcc(_) => {
+            [Use::Write, Use::Read][op_idx as usize]
+        }
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF |
+        Opcode::CMP |
+        Opcode::TEST => {
+            [Use::Read, Use::Read][op_idx as usize]
+        }
+        Opcode::CMPXCHG => {
+            [Use::ReadWrite, Use::Read][op_idx as usize]
+        }
+        Opcode::LSL => {
+            [Use::Write, Use::Write][op_idx as usize]
+        }
+        Opcode::LAR => {
+            [Use::Write, Use::Read][op_idx as usize]
+        }
+        Opcode::SETcc(_) => {
+            debug_assert!(op_idx == 0);
+            Use::Write
+        }
+        Opcode::NOP => {
+            panic!("Logic error: requested operands of nop");
+        }
+        Opcode::RETURN => {
+            // this is either not called (no-arg return) or called for the first operand in return
+            // (so op_idx == 0)
+            debug_assert!(op_idx == 0);
+            Use::Read
+        }
+        Opcode::INC |
+        Opcode::DEC |
+        Opcode::NEG |
+        Opcode::NOT => {
+            debug_assert!(op_idx == 0);
+            Use::ReadWrite
+        }
+        Opcode::CALLF | // TODO: this is wrong.
+        Opcode::JMPF => { // TODO: this is wrong.
+            Use::Read
+        }
+        Opcode::PUSH => {
+            debug_assert!(op_idx == 0);
+            Use::Read
+        }
+        Opcode::POP => {
+            debug_assert!(op_idx == 0);
+            Use::Write
+        }
+        Opcode::RETF | // TODO: this is wrong.
+        Opcode::CMPS |
+        Opcode::SCAS |
+        Opcode::MOVS |
+        Opcode::LODS |
+        Opcode::STOS |
+        Opcode::JMPE |
+        Opcode::INS |
+        Opcode::OUTS => {
+            // this is... wrong? ?? TODO: ????
+            Use::Read
+        },
+        Opcode::INVLPG |
+        Opcode::FXSAVE |
+        Opcode::FXRSTOR |
+        Opcode::STMXCSR |
+        Opcode::XSAVE |
+        Opcode::XSTOR |
+        Opcode::XSAVEOPT |
+        Opcode::SMSW |
+        Opcode::SLDT |
+        Opcode::STR |
+        Opcode::SGDT |
+        Opcode::SIDT => {
+            Use::Write
+        }
+        Opcode::VERR |
+        Opcode::VERW |
+        Opcode::LDMXCSR |
+        Opcode::LMSW |
+        Opcode::LLDT |
+        Opcode::LTR |
+        Opcode::LGDT |
+        Opcode::LIDT => {
+            Use::Read
+        }
+        Opcode::RDMSR |
+        Opcode::WRMSR |
+        Opcode::RDTSC |
+        Opcode::RDPMC |
+        Opcode::LFENCE |
+        Opcode::MFENCE |
+        Opcode::SFENCE |
+        Opcode::CLFLUSH |
+        Opcode::SWAPGS |
+        Opcode::RDTSCP |
+        Opcode::ENTER |
+        Opcode::LEAVE |
+        Opcode::PUSHF |
+        Opcode::POPF |
+        Opcode::CBW |
+        Opcode::CDW |
+        Opcode::LAHF |
+        Opcode::SAHF |
+        Opcode::IRET |
+        Opcode::INTO |
+        Opcode::INT |
+        Opcode::SYSCALL |
+        Opcode::SYSRET |
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::CLTS |
+        Opcode::UD2 |
+        Opcode::HLT |
+        Opcode::WAIT |
+        Opcode::CLC |
+        Opcode::STC |
+        Opcode::CLI |
+        Opcode::STI |
+        Opcode::CLD |
+        Opcode::STD |
+        Opcode::Invalid => {
+            // TODO: this is wrong.
+            Use::Read
+        }
+        Opcode::DIV |
+        Opcode::MUL => {
+            // TODO: questionable.
+            Use::Read
+        },
+        Opcode::IMUL |
+        Opcode::IDIV => {
+            // TODO: questionable.
+            Use::Read
+        }
+    }
+}
+
+use arch::x86_64::analyses;
+fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec<(analyses::data_flow::Location, Direction)> {
+    let mut locs: Vec<(analyses::data_flow::Location, Direction)> = vec![];
+    let op = &inst.operands[op_idx as usize];
+    let usage = operand_use(inst, op_idx);
+    match op {
+        Operand::Register(reg) => {
+            match usage {
+                Use::Read => {
+                    locs.push((Location::Register(*reg), Direction::Read));
+                },
+                Use::Write => {
+                    locs.push((Location::Register(*reg), Direction::Read));
+                }
+                Use::ReadWrite => {
+                    locs.push((Location::Register(*reg), Direction::Read));
+                    locs.push((Location::Register(*reg), Direction::Write));
+                }
+            }
+        },
+        Operand::RegDeref(reg) => {
+            locs.push((Location::Register(*reg), Direction::Read));
+        },
+        Operand::RegDisp(reg, _) => {
+            locs.push((Location::Register(*reg), Direction::Read));
+        },
+        Operand::RegScale(reg, _) => {
+            locs.push((Location::Register(*reg), Direction::Read));
+        }
+        Operand::RegScaleDisp(base, _, _) => {
+            locs.push((Location::Register(*base), Direction::Read));
+        }
+        Operand::RegIndexBase(base, index) => {
+            locs.push((Location::Register(*base), Direction::Read));
+            locs.push((Location::Register(*index), Direction::Read));
+        }
+        Operand::RegIndexBaseDisp(base, index, _) => {
+            locs.push((Location::Register(*base), Direction::Read));
+            locs.push((Location::Register(*index), Direction::Read));
+        }
+        Operand::RegIndexBaseScale(base, index, _) => {
+            locs.push((Location::Register(*base), Direction::Read));
+            locs.push((Location::Register(*index), Direction::Read));
+        }
+        Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+            locs.push((Location::Register(*base), Direction::Read));
+            locs.push((Location::Register(*index), Direction::Read));
+        }
+        Operand::Many(_) => {
+            unreachable!("x86 Many operand is not currently used");
+        }
+        Operand::Nothing => {
+            panic!("Logical error: requested locations present in a Nothing operand");
+        }
+        _ => {
+            // this is an immediate, displacement, or Nothing. no locations.
+        }
+    }
+    locs
+}
+
+use display::location::{OperandScroll, OperandCursor};
+impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)> for OperandCursor {
+    fn first(instr: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> OperandCursor {
+        OperandCursor {
+            operand: 0,
+            location: None,
+            implicit: false
+        }
+    }
+
+    // TODO: neither of these handle the register operand == register location equivalence i'd like
+    // to see
+    fn next(&mut self, inst_data: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> bool {
+        let (inst, ssa) = inst_data;
+
+        if let Some(ssa) = ssa {
+            // some instructions have no operands, so we can just bail early:
+            if inst.operands[0] == Operand::Nothing {
+                // nope, not scrolling!
+                false
+            } else {
+                // instruction has operands. we can assume here that 'operand' selects an actual
+                // operand.
+                let curr_op = &inst.operands[self.operand as usize];
+
+                let mut locations = locations_of(inst, self.operand);
+
+                if let Some(location) = self.location.clone() {
+                    let mut next_loc = location + 1;
+                    let mut next_operand = self.operand;
+                    let curr_loc = locations[location as usize];
+                    while locations[next_loc as usize] == curr_loc {
+                        next_loc += 1;
+                        if next_loc as usize >= locations.len() {
+                            // try to advance operands..
+                            next_operand += 1;
+                            if next_operand as usize >= inst.operands.len() || inst.operands[next_operand as usize] == Operand::Nothing {
+                                // we've hit the end! no more locations!
+                                return false;
+                            }
+                            locations = locations_of(inst, next_operand);
+                            next_loc = 0;
+                        }
+                    }
+
+                    self.operand = next_operand;
+                    self.location = Some(next_loc);
+
+                    true
+                } else {
+                    if locations.len() > 0 {
+                        self.location = Some(0);
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+
+        } else {
+            let next_operand = self.operand + 1;
+            if inst.operands.len() > next_operand as usize && inst.operands[next_operand as usize] != Operand::Nothing {
+                self.operand = next_operand;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    // TODO: neither of these handle the register operand == register location equivalence i'd like
+    // to see
+    fn prev(&mut self, inst_data: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> bool {
+        let (inst, ssa) = inst_data;
+
+        if let Some(ssa) = ssa {
+            // some instructions have no operands, so we can just bail early:
+            if inst.operands[0] == Operand::Nothing {
+                // nope, not scrolling!
+                false
+            } else {
+                // instruction has operands. we can assume here that 'operand' selects an actual
+                // operand.
+                let curr_op = &inst.operands[self.operand as usize];
+
+                let mut locations = locations_of(inst, self.operand);
+
+                if let Some(location) = self.location.clone() {
+                    let mut next_loc = location;
+                    let mut next_operand = self.operand;
+                    let curr_loc = locations[location as usize];
+                    while locations[next_loc as usize] == curr_loc {
+                        if next_loc == 0 {
+                            // try to advance operands..
+                            if next_operand == 0 {
+                                return false;
+                            }
+                            next_operand -= 1;
+                            if inst.operands[next_operand as usize] == Operand::Nothing {
+                                // we've hit the end! no more locations!
+                                return false;
+                            }
+                            locations = locations_of(inst, next_operand);
+                            next_loc = locations.len() as u8 - 1;
+                        } else {
+                            next_loc -= 1;
+                        }
+                    }
+
+                    self.operand = next_operand;
+                    self.location = Some(next_loc);
+
+                    true
+                } else {
+                    if locations.len() > 0 {
+                        self.location = Some(0);
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+
+
+        } else {
+            if self.operand == 0 {
+                false
+            } else {
+                self.operand -= 1;
+                true
+            }
+        }
+    }
+}
+
+impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>> Display for InstructionContext<'a, 'b, 'c, 'd, 'e, Context, Highlighter> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fn colorize_i8(num: i8, colors: Option<&ColorSettings>) -> String {
             match num {
@@ -292,8 +704,8 @@ impl <'a, 'b, 'c, 'd, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + Func
             }
         }
 
-        fn contextualize_operand<'a, 'b, 'c, 'd, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd, C>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
-            fn numbered_register_name<'a, 'b, 'c, 'd, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd, C>, direction: Direction) -> Colored<String> {
+        fn contextualize_operand<'a, 'b, 'c, 'd, 'e, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
+            fn numbered_register_name<'a, 'b, 'c, 'd, 'e, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>, direction: Direction) -> Colored<String> {
                 let text = context.ssa.map(|ssa| {
                     let num = ssa.get_value(address, Location::Register(reg), direction)
                         .map(|data| data.borrow().version());
@@ -846,7 +1258,8 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
             addr: address,
             contexts: Some(ctx),
             ssa: ssa,
-            colors: colors
+            colors: colors,
+            highlight: &NoHighlights,
         });
         use analyses::control_flow::Determinant;
         writeln!(instr_string, "Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
@@ -876,7 +1289,8 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
                 addr: address,
                 contexts: Some(ctx),
                 ssa: None,
-                colors: colors
+                colors: colors,
+                highlight: &NoHighlights,
             });
         },
         None => {
@@ -910,7 +1324,8 @@ impl <
             addr: address,
             contexts: Some(context),
             ssa: ssa,
-            colors: colors
+            colors: colors,
+            highlight: &NoHighlights,
         });
         if let Some(ssa) = ssa {
             if is_conditional_op(instr.opcode) {
