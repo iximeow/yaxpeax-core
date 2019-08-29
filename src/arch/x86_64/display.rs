@@ -446,7 +446,7 @@ fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec<(an
                     locs.push((Location::Register(*reg), Direction::Read));
                 },
                 Use::Write => {
-                    locs.push((Location::Register(*reg), Direction::Read));
+                    locs.push((Location::Register(*reg), Direction::Write));
                 }
                 Use::ReadWrite => {
                     locs.push((Location::Register(*reg), Direction::Read));
