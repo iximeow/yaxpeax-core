@@ -15,11 +15,10 @@ yaxpeax-msp430-mc = { path = "../arch/msp430", features = ["use-serde"] }
 yaxpeax-pic17 = { path = "../arch/pic17", features = ["use-serde"] }
 yaxpeax-pic18 = { path = "../arch/pic18", features = ["use-serde"] }
 yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }
-# "goblin" = "0.0.20"
-goblin = { path = "/toy/rust/goblin" }
+"goblin" = "0.0.20"
 "num-traits" = "0.2"
 "termios" = "0.2.2"
-"termion" = "1.4.0"
+"termion" = "1.5.0"
 "serde" = { version = "*", features = ["rc"] }
 "serde_json" = "*"
 "serde_derive" = "*"
