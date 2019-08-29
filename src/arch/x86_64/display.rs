@@ -896,9 +896,9 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                                         drawn = true;
                                         let val_rc = use_val.as_rc();
                                         if let Some(name) = field.name.as_ref() {
-                                            write!(fmt, "[{}_{}.{}]", reg, val_rc.borrow().version().unwrap_or(0xffffffff), name)?;
+                                            write!(fmt, "[{}.{}]", reg, name)?;
                                         } else {
-                                            write!(fmt, "[{}_{} + {:#x}]", reg, val_rc.borrow().version().unwrap_or(0xffffffff), offset)?;
+                                            write!(fmt, "[{} + {:#x}]", reg, offset)?;
                                         }
                                     }
                                 }
