@@ -8,6 +8,7 @@ use analyses::control_flow::ControlFlowGraph;
 use memory::MemoryRepr;
 use memory::MemoryRange;
 use data::Direction;
+use display::location::{NoHighlights, HighlightList, LocationHighlighter};
 use arch::FunctionQuery;
 use arch::SymbolQuery;
 use arch::FunctionRepr;
@@ -57,13 +58,14 @@ pub trait FunctionDisplay<A: Arch + SSAValues> {
 }
 
 pub trait FunctionInstructionDisplay<A: Arch + SSAValues, Context: SymbolQuery<A::Address> + FunctionQuery<A::Address>> {
-    fn display_instruction_in_function<W: fmt::Write>(
+    fn display_instruction_in_function<W: fmt::Write, Highlighter: LocationHighlighter<A::Location>>(
         dest: &mut W,
         instr: &A::Instruction,
         address: A::Address,
         context: &Context,
         ssa: Option<&SSA<A>>,
         colors: Option<&ColorSettings>,
+        highlight: &Highlighter
     ) -> fmt::Result;
 }
 
@@ -135,23 +137,35 @@ impl <
                     Some(self.ctx),
                 ).unwrap();
                 // ok come back to this
-                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
-                    write!(instr_string, ">").unwrap()
-                } else {
-                    write!(instr_string, " ").unwrap();
-                }
+                write!(instr_string, " ").unwrap();
                 if self.highlight_instrs.contains(&address) {
                     write!(instr_string, "{}", termion::style::Invert).unwrap();
                 }
-                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
-                    write!(instr_string, "{}", termion::style::Underline).unwrap();
+                let highlights: Vec<(A::Location, Direction)> = self.highlight_locs.iter().filter_map(|(highlight_addr, loc, dir)| {
+                    Some((*loc, *dir)).filter(|_| highlight_addr == &address)
+                }).collect();
+                if highlights.len() == 0 {
+                    A::display_instruction_in_function(
+                        &mut instr_string,
+                        &instr,
+                        address,
+                        self.ctx, self.ssa, self.colors,
+                        &NoHighlights
+                    ).unwrap();
+                } else {
+                    A::display_instruction_in_function(
+                        &mut instr_string,
+                        &instr,
+                        address,
+                        self.ctx, self.ssa, self.colors,
+                        &HighlightList {
+                            operands_bits: 0,
+                            location_highlights: highlights
+                        }
+                    ).unwrap();
                 }
-                A::display_instruction_in_function(&mut instr_string, &instr, address, self.ctx, self.ssa, self.colors).unwrap();
                 if self.highlight_instrs.contains(&address) {
                     write!(instr_string, "{}", termion::style::NoInvert).unwrap();
-                }
-                if self.highlight_locs.iter().map(|(addr, loc, dir)| *addr).find(|x| *x == address).is_some() {
-                    write!(instr_string, "{}", termion::style::NoUnderline).unwrap();
                 }
                 if address.wrapping_add(&instr.len()) > span_end {
                     write!(instr_string ,"\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄").unwrap();

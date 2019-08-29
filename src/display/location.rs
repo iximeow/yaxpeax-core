@@ -1,6 +1,11 @@
 use yaxpeax_arch::Arch;
 use data::ValueLocations;
 use arch::x86_64::display::Use;
+use data::Direction;
+
+use std::fmt::Display;
+use std::fmt;
+use termion::style::*;
 
 /// `OperandCursor` is a struct to select some operand and location in an instruction. for some
 /// architectures, an operand may be the composition of multiple locations - consider the x86_64
@@ -41,44 +46,83 @@ pub trait OperandScroll<A> {
     fn first(instr: &A) -> Self where Self: Sized;
 }
 
+pub struct StyledDisplay<'a, T: ?Sized> {
+    style: bool,
+    data: &'a T,
+    entry: &'static str,
+    exit: &'static str,
+}
+
+impl <'a, T: ?Sized> StyledDisplay<'a, T> {
+    fn none(t: &'a T) -> StyledDisplay<'a, T> {
+        StyledDisplay {
+            style: false,
+            data: t,
+            entry: "",
+            exit: ""
+        }
+    }
+}
+
+impl <'a, T: Display + ?Sized> Display for StyledDisplay<'a, T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.style {
+            fmt.write_str(self.entry)?;
+        }
+        write!(fmt, "{}", self.data)?;
+        if self.style {
+            fmt.write_str(self.exit)?;
+        }
+        Ok(())
+    }
+}
+
 pub trait LocationHighlighter<Loc> {
     // TODO: this could return an option of styling rules for the location?
-    fn operand_style(&self, operand_number: u8) -> Option<()>;
-    fn location_style(&self, loc: &(Loc, Use)) -> Option<()>;
+    fn operand<'a, T: Display + ?Sized>(&self, operand_number: u8, data: &'a T) -> StyledDisplay<'a, T>;
+    fn location<'a, T: Display + ?Sized>(&self, loc: &(Loc, Direction), data: &'a T) -> StyledDisplay<'a, T>;
 }
 
 pub struct NoHighlights;
 
 impl <L> LocationHighlighter<L> for NoHighlights {
-    fn operand_style(&self, operand_number: u8) -> Option<()> { None }
-    fn location_style(&self, loc: &(L, Use)) -> Option<()> { None }
+    fn operand<'a, T: Display + ?Sized>(&self, operand_number: u8, data: &'a T) -> StyledDisplay<'a, T> {
+        StyledDisplay::none(data)
+    }
+    fn location<'a, T: Display + ?Sized>(&self, loc: &(L, Direction), data: &'a T) -> StyledDisplay<'a, T> {
+        StyledDisplay::none(data)
+    }
 }
 
 pub struct HighlightList<L: PartialEq> {
     // use the u8 as a bitmask of operands to highlight or not
-    operands_bits: u8,
+    pub operands_bits: u8,
     // this might also be bitmask-able in some form? eventually??
     // this would be |L| * 2 bits, which might just be prohibitive to construct? or not. who knows.
     // for x86 this is already a u64 worth of bits. maybe something like a u64 bitmask for common
-    // regs and an Option<Box<&[(L, Use)]>> for extras? that should turn into a pointer for the Box
+    // regs and an Option<Box<&[(L, Direction)]>> for extras? that should turn into a pointer for the Box
     // and a pair of usize-sized values for the slice/length.
-    location_highlights: Vec<(L, Use)>
+    pub location_highlights: Vec<(L, Direction)>
 }
 
 impl <L: PartialEq> LocationHighlighter<L> for HighlightList<L> {
-    fn operand_style(&self, operand_number: u8) -> Option<()> {
-        if (self.operands_bits & (1 << operand_number)) != 0 {
-            Some(())
-        } else {
-            None
+    fn operand<'a, T: Display + ?Sized>(&self, operand_number: u8, data: &'a T) -> StyledDisplay<'a, T> {
+        let style = (self.operands_bits & (1 << operand_number)) != 0;
+        StyledDisplay {
+            style,
+            data,
+            entry: Underline.as_ref(),
+            exit: NoUnderline.as_ref()
         }
     }
 
-    fn location_style(&self, loc: &(L, Use)) -> Option<()> {
-        if self.location_highlights.contains(loc) {
-            Some(())
-        } else {
-            None
+    fn location<'a, T: Display + ?Sized>(&self, loc: &(L, Direction), data: &'a T) -> StyledDisplay<'a, T> {
+        let style = self.location_highlights.contains(loc);
+        StyledDisplay {
+            style,
+            data,
+            entry: Invert.as_ref(),
+            exit: NoInvert.as_ref()
         }
     }
 }

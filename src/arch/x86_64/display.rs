@@ -100,6 +100,27 @@ pub struct InstructionContext<'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<x86_64A
     highlight: &'e Highlighter,
 }
 
+impl <'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>> InstructionContext<'a, 'b, 'c, 'd, 'e, Context, Highlighter> {
+    pub fn numbered_register_name(
+        &self,
+        reg: RegSpec,
+        direction: Direction
+    ) -> Colored<String> {
+        let text = self.ssa.map(|ssa| {
+            let num = ssa.get_value(self.addr, Location::Register(reg), direction)
+                .map(|data| data.borrow().version());
+            format!("{}_{}",
+                reg,
+                num.map(|n| n.map(|v| v.to_string()).unwrap_or("input".to_string())).unwrap_or_else(|| {
+                    format!("ERR_{:?}", direction)
+                })
+            )
+        }).unwrap_or_else(|| { reg.to_string() });
+
+        self.colors.register(text)
+    }
+}
+
 pub struct RegValueDisplay<'a, 'b, 'c> {
     pub reg: &'a RegSpec,
     pub value: &'b Option<DFGRef<x86_64Arch>>,
@@ -435,7 +456,7 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
 }
 
 use arch::x86_64::analyses;
-fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec<(analyses::data_flow::Location, Direction)> {
+pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec<(analyses::data_flow::Location, Direction)> {
     let mut locs: Vec<(analyses::data_flow::Location, Direction)> = vec![];
     let op = &inst.operands[op_idx as usize];
     let usage = operand_use(inst, op_idx);
@@ -522,8 +543,14 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
 
                 let mut locations = locations_of(inst, self.operand);
 
+                if locations.len() == 0 {
+                    // TODO: this is wrong - would prohibit seeking over an immediate as the first
+                    // argument?
+                    return false;
+                }
+
                 if let Some(location) = self.location.clone() {
-                    let mut next_loc = location + 1;
+                    let mut next_loc = location;
                     let mut next_operand = self.operand;
                     let curr_loc = locations[location as usize];
                     while locations[next_loc as usize] == curr_loc {
@@ -536,6 +563,13 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
                                 return false;
                             }
                             locations = locations_of(inst, next_operand);
+
+                            if locations.len() == 0 {
+                                // TODO: this is wrong - would prohibit seeking over an immediate as the first
+                                // argument?
+                                return false;
+                            }
+
                             next_loc = 0;
                         }
                     }
@@ -704,22 +738,18 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
             }
         }
 
-        fn contextualize_operand<'a, 'b, 'c, 'd, 'e, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(op: &Operand, op_idx: u8, ctx: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>, usage: Use, fmt: &mut fmt::Formatter) -> fmt::Result {
-            fn numbered_register_name<'a, 'b, 'c, 'd, 'e, C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(address: <x86_64Arch as Arch>::Address, reg: RegSpec, context: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>, direction: Direction) -> Colored<String> {
-                let text = context.ssa.map(|ssa| {
-                    let num = ssa.get_value(address, Location::Register(reg), direction)
-                        .map(|data| data.borrow().version());
-                    format!("{}_{}",
-                        reg,
-                        num.map(|n| n.map(|v| v.to_string()).unwrap_or("input".to_string())).unwrap_or_else(|| {
-                            format!("ERR_{:?}", direction)
-                        })
-                    )
-                }).unwrap_or_else(|| { reg.to_string() });
-
-                context.colors.register(text)
-            }
-
+        fn contextualize_operand<
+            'a, 'b, 'c, 'd, 'e,
+            C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>,
+            Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>
+        >(
+            op: &Operand,
+            op_idx: u8,
+            ctx: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>,
+            usage: Use,
+            fmt: &mut fmt::Formatter
+        ) -> fmt::Result {
+            let op_highlight = ctx.highlight.operand(op_idx, "TODO");
             match op {
                 Operand::ImmediateI8(i) => {
                     write!(fmt, "{}", colorize_i8(*i, ctx.colors))
@@ -751,21 +781,27 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                             let value = ctx.ssa.map(|ssa| {
                                 ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()
                             });
-                            write!(fmt, "{}", RegValueDisplay {
-                                reg: spec,
-                                value: &value,
-                                colors: ctx.colors,
-                            })
+                            write!(fmt, "{}", ctx.highlight.location(
+                                &(Location::Register(*spec), Direction::Read),
+                                &RegValueDisplay {
+                                    reg: spec,
+                                    value: &value,
+                                    colors: ctx.colors,
+                                }
+                            ))
                         },
                         Use::Write => {
                             let value = ctx.ssa.map(|ssa| {
                                 ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()
                             });
-                            write!(fmt, "{}", RegValueDisplay {
-                                reg: spec,
-                                value: &value,
-                                colors: ctx.colors,
-                            })
+                            write!(fmt, "{}", ctx.highlight.location(
+                                &(Location::Register(*spec), Direction::Write),
+                                &RegValueDisplay {
+                                    reg: spec,
+                                    value: &value,
+                                    colors: ctx.colors,
+                                }
+                            ))
                         },
                         Use::ReadWrite => {
                             let read = ctx.ssa.map(|ssa| {
@@ -775,16 +811,22 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                                 ssa.get_def(ctx.addr, Location::Register(*spec)).as_rc()
                             });
                             write!(fmt, "{} (-> {})",
-                                RegValueDisplay {
-                                    reg: spec,
-                                    value: &read,
-                                    colors: ctx.colors,
-                                },
-                                RegValueDisplay {
-                                    reg: spec,
-                                    value: &write,
-                                    colors: ctx.colors,
-                                },
+                                ctx.highlight.location(
+                                    &(Location::Register(*spec), Direction::Read),
+                                    &RegValueDisplay {
+                                        reg: spec,
+                                        value: &read,
+                                        colors: ctx.colors,
+                                    }
+                                ),
+                                ctx.highlight.location(
+                                    &(Location::Register(*spec), Direction::Write),
+                                    &RegValueDisplay {
+                                        reg: spec,
+                                        value: &write,
+                                        colors: ctx.colors,
+                                    }
+                                ),
                             )
                         }
                     }
@@ -805,12 +847,16 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let value = ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc());
                     write!(fmt, "[{}]",
-                        RegValueDisplay {
-                            reg: spec,
-                            value: &ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()),
-                            colors: ctx.colors
-                        }
+                        ctx.highlight.location(
+                            &(Location::Register(*spec), Direction::Read),
+                            &RegValueDisplay {
+                                reg: spec,
+                                value: &value,
+                                colors: ctx.colors,
+                            }
+                        ),
                     )
                 }
                 Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
@@ -822,12 +868,22 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                         .and_then(|ctx| ctx.symbol_for(addr))
                         .map(|sym| { ctx.colors.symbol(format!("&{}", sym)) })
                         .unwrap_or_else(|| { ctx.colors.address(addr.stringy()) });
+                    let text = ctx.highlight.location(
+                        &(Location::Register(RegSpec::RIP()), Direction::Read),
+                        &text
+                    );
                     write!(fmt, "[{}]", text)
                 }
                 Operand::RegDisp(spec, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let value = ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc());
+                    let reg_text = ctx.numbered_register_name(*spec, Direction::Read);
+                    let reg = ctx.highlight.location(
+                        &(Location::Register(*spec), Direction::Read),
+                        &reg_text,
+                    );
                     // HACK: support writing memory operands like `reg.field` if possible:
                     let mut drawn = false;
                     if let Some(ssa) = ctx.ssa.as_ref() {
@@ -840,9 +896,9 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                                         drawn = true;
                                         let val_rc = use_val.as_rc();
                                         if let Some(name) = field.name.as_ref() {
-                                            write!(fmt, "[{}_{}.{}]", spec, val_rc.borrow().version().unwrap_or(0xffffffff), name)?;
+                                            write!(fmt, "[{}_{}.{}]", reg, val_rc.borrow().version().unwrap_or(0xffffffff), name)?;
                                         } else {
-                                            write!(fmt, "[{}_{} + {:#x}]", spec, val_rc.borrow().version().unwrap_or(0xffffffff), offset)?;
+                                            write!(fmt, "[{}_{} + {:#x}]", reg, val_rc.borrow().version().unwrap_or(0xffffffff), offset)?;
                                         }
                                     }
                                 }
@@ -853,11 +909,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
 
                     if !drawn {
                         write!(fmt, "[{} {}]",
-                            RegValueDisplay {
-                                reg: spec,
-                                value: &ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc()),
-                                colors: ctx. colors
-                            },
+                            reg,
                             format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                         )?;
                     }
@@ -868,17 +920,24 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    write!(fmt, "[{} * {}]",
-                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
-                        scale
-                    )
+                    let reg_text = ctx.numbered_register_name(*spec, Direction::Read);
+                    let reg = ctx.highlight.location(
+                        &(Location::Register(*spec), Direction::Read),
+                        &reg_text,
+                    );
+                    write!(fmt, "[{} * {}]", reg, scale)
                 },
                 Operand::RegScaleDisp(spec, scale, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let reg_text = ctx.numbered_register_name(*spec, Direction::Read);
+                    let reg = ctx.highlight.location(
+                        &(Location::Register(*spec), Direction::Read),
+                        &reg_text
+                    );
                     write!(fmt, "[{} * {} {}]",
-                        numbered_register_name(ctx.addr, *spec, &ctx, Direction::Read),
+                        reg,
                         scale,
                         format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                     )
@@ -887,18 +946,35 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    write!(fmt, "[{} + {}]",
-                        numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
-                        numbered_register_name(ctx.addr, *index, &ctx, Direction::Read)
-                    )
+                    let base_text = ctx.numbered_register_name(*base, Direction::Read);
+                    let base = ctx.highlight.location(
+                        &(Location::Register(*base), Direction::Read),
+                        &base_text,
+                    );
+                    let index_text = ctx.numbered_register_name(*index, Direction::Read);
+                    let index = ctx.highlight.location(
+                        &(Location::Register(*index), Direction::Read),
+                        &index_text,
+                    );
+                    write!(fmt, "[{} + {}]", base, index)
                 },
                 Operand::RegIndexBaseDisp(base, index, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let base_text = ctx.numbered_register_name(*base, Direction::Read);
+                    let base = ctx.highlight.location(
+                        &(Location::Register(*base), Direction::Read),
+                        &base_text,
+                    );
+                    let index_text = ctx.numbered_register_name(*index, Direction::Read);
+                    let index = ctx.highlight.location(
+                        &(Location::Register(*index), Direction::Read),
+                        &index_text,
+                    );
                     write!(fmt, "[{} + {} {}]",
-                        numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
-                        numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
+                        base,
+                        index,
                         format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                     )
                 }
@@ -906,9 +982,19 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let base_text = ctx.numbered_register_name(*base, Direction::Read);
+                    let base = ctx.highlight.location(
+                        &(Location::Register(*base), Direction::Read),
+                        &base_text,
+                    );
+                    let index_text = ctx.numbered_register_name(*index, Direction::Read);
+                    let index = ctx.highlight.location(
+                        &(Location::Register(*index), Direction::Read),
+                        &index_text,
+                    );
                     write!(fmt, "[{} + {} * {}]",
-                        numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
-                        numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
+                        base,
+                        index,
                         scale
                     )
                 }
@@ -916,9 +1002,19 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
+                    let base_text = ctx.numbered_register_name(*base, Direction::Read);
+                    let base = ctx.highlight.location(
+                        &(Location::Register(*base), Direction::Read),
+                        &base_text,
+                    );
+                    let index_text = ctx.numbered_register_name(*index, Direction::Read);
+                    let index = ctx.highlight.location(
+                        &(Location::Register(*index), Direction::Read),
+                        &index_text,
+                    );
                     write!(fmt, "[{} + {} * {} {}]",
-                        numbered_register_name(ctx.addr, *base, &ctx, Direction::Read),
-                        numbered_register_name(ctx.addr, *index, &ctx, Direction::Read),
+                        base,
+                        index,
                         scale,
                         format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
                     )
@@ -929,7 +1025,9 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                 Operand::Many(_) => {
                     panic!("asdf");
                 }
-            }
+            }?;
+
+            Ok(())
         }
         /*
          * if self.ssa.is_some() {
@@ -1310,14 +1408,16 @@ fn is_conditional_op(op: Opcode) -> bool {
 
 impl <
     Context: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>,
+    
 > FunctionInstructionDisplay<x86_64Arch, Context> for x86_64Arch {
-    fn display_instruction_in_function<W: fmt::Write>(
+    fn display_instruction_in_function<W: fmt::Write, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(
         dest: &mut W,
         instr: &<x86_64Arch as Arch>::Instruction,
         address: <x86_64Arch as Arch>::Address,
         context: &Context,
         ssa: Option<&SSA<x86_64Arch>>,
         colors: Option<&ColorSettings>,
+        highlight: &Highlighter,
     ) -> fmt::Result {
         write!(dest, "{}", InstructionContext {
             instr: &instr,
@@ -1325,7 +1425,7 @@ impl <
             contexts: Some(context),
             ssa: ssa,
             colors: colors,
-            highlight: &NoHighlights,
+            highlight: highlight,
         });
         if let Some(ssa) = ssa {
             if is_conditional_op(instr.opcode) {
