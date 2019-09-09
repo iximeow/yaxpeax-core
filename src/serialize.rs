@@ -1,7 +1,11 @@
+use serde::de;
+use std::fmt;
+use serde::de::{MapAccess, SeqAccess, Deserialize, Deserializer, Visitor};
 use std::cell::Cell;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeStruct;
 
+use yaxpeax_arch::Address;
 use petgraph::graphmap::{GraphMap, NodeTrait};
 
 use std::hash::Hash;
@@ -25,6 +29,108 @@ impl <'a, A: NodeTrait + Hash + Serialize> Serialize for GraphSerializer<'a, A> 
         let nodevec: Vec<A> = self.graph.nodes().map(|n| n.to_owned()).collect();
         struc.serialize_field("nodes", &nodevec)?;
         struc.end()
+    }
+}
+
+pub struct GraphDeserializer<A> {
+    graph: GraphMap<A, (), petgraph::Directed>
+}
+
+impl <A> GraphDeserializer<A> {
+    pub fn into_inner(self) -> GraphMap<A, (), petgraph::Directed> {
+        self.graph
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(field_identifier, rename_all = "lowercase")]
+enum Field { Edges, Nodes }
+
+struct GraphVisitor<A> {
+    _marker: std::marker::PhantomData<A>
+}
+
+impl <A: Hash + Ord + Copy + Clone> GraphVisitor<A> {
+    pub fn new() -> Self {
+        GraphVisitor {
+            _marker: std::marker::PhantomData
+        }
+    }
+}
+
+impl <'de, A: Address + Hash> Visitor<'de> for GraphVisitor<A> {
+    type Value = GraphDeserializer<A>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct GraphMap<A, (), Directed>")
+    }
+
+    fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+    where
+        V: SeqAccess<'de>
+    {
+        let mut graph = GraphMap::new();
+        let edges: Vec<(A, A)> = seq.next_element()?
+            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        for (start, end) in edges.into_iter() {
+            graph.add_edge(start, end, ());
+        }
+        let nodes: Vec<A> = seq.next_element()?
+            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+        for node in nodes.into_iter() {
+            graph.add_node(node);
+        }
+
+        Ok(GraphDeserializer { graph })
+    }
+
+    fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let mut graph = GraphMap::new();
+        let mut edges = None;
+        let mut nodes = None;
+        while let Some(key) = map.next_key()? {
+            match key {
+                Field::Edges => {
+                    if edges.is_some() {
+                        return Err(de::Error::duplicate_field("edges"));
+                    }
+                    edges = Some(map.next_value()?);
+                },
+                Field::Nodes => {
+                    if nodes.is_some() {
+                        return Err(de::Error::duplicate_field("nodes"));
+                    }
+                    nodes = Some(map.next_value()?);
+                }
+            }
+        }
+        let edges: Vec<(A, A)> = edges.ok_or_else(|| de::Error::missing_field("edges"))?;
+        for (start, end) in edges.into_iter() {
+            graph.add_edge(start, end, ());
+        }
+        let nodes: Vec<A> = nodes.ok_or_else(|| de::Error::missing_field("nodes"))?;
+        for node in nodes.into_iter() {
+            graph.add_node(node);
+        }
+
+        Ok(GraphDeserializer { graph })
+    }
+}
+
+impl<'de, A: Address + Hash> Deserialize<'de> for GraphDeserializer<A> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        const FIELDS: &'static [&'static str] = &["edges", "nodes"];
+        deserializer.deserialize_struct(
+            "GraphMap<A, (), Directed>",
+            FIELDS,
+            GraphVisitor::new()
+        )
     }
 }
 

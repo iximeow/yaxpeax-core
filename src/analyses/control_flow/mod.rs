@@ -15,6 +15,8 @@ use yaxpeax_arch::AddressDisplay;
 
 use memory::MemoryRange;
 
+pub mod deserialize;
+
 use serialize::GraphSerializer;
 
 use serde::Serialize;
@@ -85,6 +87,7 @@ impl <Addr> BasicBlock<Addr> where Addr: Copy + Clone {
     }
 }
 
+#[derive(Default)]
 pub struct ControlFlowGraph<A> where A: Address {
     pub entrypoint: A,
     pub blocks: Vec<BasicBlock<A>>,
@@ -93,7 +96,8 @@ pub struct ControlFlowGraph<A> where A: Address {
 
 impl <A: Address + Hash> Serialize for ControlFlowGraph<A> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut struc = serializer.serialize_struct("CFG<A>", 2)?;
+        let mut struc = serializer.serialize_struct("CFG<A>", 3)?;
+        struc.serialize_field("entrypoint", &self.entrypoint)?;
         struc.serialize_field("blocks", &self.blocks)?;
         struc.serialize_field("graph", &GraphSerializer::from(&self.graph))?;
         struc.end()
