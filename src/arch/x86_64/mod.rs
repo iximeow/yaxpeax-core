@@ -20,12 +20,13 @@ pub mod cpu;
 pub mod debug;
 pub mod display;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
+#[serde(skip)]
     pub ssa: HashMap<<x86_64 as Arch>::Address, (
         control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
         SSA<x86_64>
@@ -110,7 +111,7 @@ pub enum ModifierExpression {
 /// The `Vec<ModifierExpression>` are _conjunctions_. This differs from `ValueSet`, which uses a
 /// sequence of values as disjunctions. This means there's no way to express a sparseset of values
 /// as ModifierExpression, for the time being.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct InstructionModifiers {
     before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
     after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
@@ -207,11 +208,12 @@ impl ModifierCollection<x86_64> for InstructionModifiers {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub comments: HashMap<<x86_64 as Arch>::Address, String>,
+    #[serde(skip)]
     pub xrefs: xrefs::XRefCollection<<x86_64 as Arch>::Address>,
     pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
     #[serde(skip)]

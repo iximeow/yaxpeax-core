@@ -25,7 +25,7 @@ pub mod display;
 pub mod syntaxed_render;
 pub mod analyses;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PIC17Data {
     pub preferred_addr: <PIC17 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -425,7 +425,7 @@ pub fn compute_state(instr: &yaxpeax_pic17::Instruction, merged: &MergedContext)
     result
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<PIC17 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: Vec<Option<Rc<ComputedContext>>>
@@ -538,7 +538,7 @@ pub struct PartialContext {
 }
 
 // for PIC17, W is just a memory location
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComputedContext {
     pub memory: HashMap<u16, u8>, // map: Address <-> value. This is hilariously insufficient.
     pub bsr_sfr: Option<u8>,

@@ -35,6 +35,14 @@ pub struct XRefCollection<A: Address> {
     xrefs: GraphMap<(A, RefType, RefAction), (), petgraph::Directed>
 }
 
+impl <A: Address + std::hash::Hash> Default for XRefCollection<A> {
+    fn default() -> Self {
+        XRefCollection {
+            xrefs: GraphMap::new()
+        }
+    }
+}
+
 use serde::ser::SerializeStruct;
 impl <A: Address + NodeTrait> serde::Serialize for XRefCollection<A> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

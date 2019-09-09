@@ -15,7 +15,7 @@ use ContextWrite;
 
 mod display;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ARMv8Data {
     pub preferred_addr: <ARMv8 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -83,7 +83,7 @@ impl <T> control_flow::Determinant<T, <ARMv8 as Arch>::Address> for Instruction
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<ARMv8 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: HashMap<<ARMv8 as Arch>::Address, Rc<ComputedContext>>
@@ -129,7 +129,7 @@ impl PartialInstructionContext for MergedContext {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ComputedContext {
 
 }

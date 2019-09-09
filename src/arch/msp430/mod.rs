@@ -24,7 +24,7 @@ use analyses::static_single_assignment::SSA;
 use analyses::static_single_assignment::{DFGRef, HashedValue};
 use analyses::xrefs;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MSP430Data {
     pub preferred_addr: <MSP430 as Arch>::Address,
     pub contexts: MergedContextTable,
@@ -202,7 +202,7 @@ impl PartialInstructionContext for PartialContext {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ComputedContext {
     pub address: Option<u16>,
     pub comment: Option<String>
@@ -229,14 +229,16 @@ pub struct MergedContext {
     pub computed: Option<Rc<ComputedContext>>
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<MSP430 as Arch>::Address, Rc<PartialContext>>,
     pub computed_contexts: HashMap<<MSP430 as Arch>::Address, Rc<ComputedContext>>,
+    #[serde(skip)]
     pub xrefs: xrefs::XRefCollection<<MSP430 as Arch>::Address>,
     pub symbols: HashMap<<MSP430 as Arch>::Address, Symbol>,
     pub functions: HashMap<<MSP430 as Arch>::Address, Function>,
     pub function_hints: Vec<<MSP430 as Arch>::Address>,
+    #[serde(skip)]
     pub ssa: HashMap<
         <MSP430 as Arch>::Address,
         (control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>, SSA<MSP430>)
