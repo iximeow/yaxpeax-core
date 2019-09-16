@@ -6,6 +6,7 @@ use termion::color;
 
 use num_traits::Zero;
 
+use arch::FunctionImpl;
 use memory::MemoryRepr;
 use yaxpeax_arch::{ColorSettings, Colorize, Colored};
 use yaxpeax_arch::{AddressDisplay, Arch, Decodable, LengthedInstruction, YaxColors};
@@ -48,7 +49,7 @@ impl <T: std::fmt::Write> ShowContextual<u64, MergedContextTable, T> for Instruc
     }
 }
 
-impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<x86_64::Function, T> for x86_64Arch {
+impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<FunctionImpl<<x86_64Arch as ValueLocations>::Location>, T> for x86_64Arch {
     fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
         dest: &mut W,
         addr: <x86_64Arch as Arch>::Address,
@@ -68,7 +69,8 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
                     color::Fg(&color::LightYellow as &color::Color),
-                    fn_dec.decl_string(),
+                    // TODO: configurable? show iff non-default?
+                    fn_dec.decl_string(true),
                     color::Fg(&color::Reset as &color::Color)
                 )?;
             }
@@ -1449,7 +1451,7 @@ pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<<x86_64Arch as Arch>::Add
     ssa: Option<&'d SSA<x86_64Arch>>,
     fn_graph: &'c ControlFlowGraph<<x86_64Arch as Arch>::Address>,
     colors: Option<&'e ColorSettings>
-) -> FunctionView<'a, 'b, 'c, 'd, 'e, x86_64::Function, MergedContextTable, x86_64Arch, M> {
+) -> FunctionView<'a, 'b, 'c, 'd, 'e, FunctionImpl<<x86_64Arch as ValueLocations>::Location>, MergedContextTable, x86_64Arch, M> {
     FunctionView {
         _function_type: PhantomData,
         data,

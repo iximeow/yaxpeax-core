@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use num_traits::Zero;
 
-use arch::{BaseUpdate, CommentQuery, Function, FunctionQuery, Symbol, SymbolQuery, Library};
+use arch::{BaseUpdate, CommentQuery, FunctionImpl, FunctionAbi, FunctionQuery, Symbol, SymbolQuery, Library};
 use data::{Direction, ValueLocations};
 
 use ContextRead;
@@ -34,8 +34,8 @@ pub struct x86_64Data {
 }
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
-    type Function = Function;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Function> {
+    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
         self.contexts.function_at(addr)
     }
 }
@@ -56,8 +56,8 @@ impl SymbolQuery<<x86_64 as Arch>::Address> for x86_64Data {
 }
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
-    type Function = Function;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Function> {
+    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
         self.functions.get(&addr)
     }
 }
@@ -218,9 +218,11 @@ pub struct MergedContextTable {
     pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
     #[serde(skip)]
     pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
-    pub functions: HashMap<<x86_64 as Arch>::Address, Function>,
+    pub functions: HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>,
     pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
+    #[serde(skip)]
+    pub default_abi: Option<Box<dyn FunctionAbi<x86_64>>>,
 }
 
 #[derive(Debug)]
@@ -247,6 +249,7 @@ impl MergedContextTable {
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
             function_data: HashMap::new(),
+            default_abi: None,
         }
     }
 }
@@ -308,7 +311,12 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 //println!("address of {:?} recorded at {}", sym, address.stringy());
                 match Symbol::to_function(&sym) {
                     Some(f) => {
-                        self.functions.insert(address, f);
+                        if let Some(abi) = self.default_abi.as_ref() {
+                            self.functions.insert(address, f.implement_for(abi));
+                        } else {
+                            // TODO: indicate that the function should have been defined, but
+                            // was not because we don't know an ABI to map it to?
+                        }
                     }
                     None => { }
                 }
@@ -316,9 +324,14 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 self.reverse_symbols.insert(sym, address);
             }
             BaseUpdate::DefineFunction(f) => {
-                self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
-                self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
-                self.functions.insert(address, f.clone());
+                if let Some(abi) = self.default_abi.as_ref() {
+                    self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
+                    self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
+                    self.functions.insert(address, f.implement_for(&*abi));
+                } else {
+                    // TODO: indicate that the function should have been defined, but was not
+                    // because we don't know an ABI to map it to?
+                }
             }
             BaseUpdate::AddCodeComment(comment) => {
                 self.comments.insert(address, comment);

@@ -37,7 +37,8 @@ impl <T: FunctionQuery<<ARMv7 as Arch>::Address> + CommentQuery<<ARMv7 as Arch>:
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
                     color::Fg(&color::LightYellow as &color::Color),
-                    fn_dec.decl_string(),
+                    // TODO: show values?
+                    fn_dec.decl_string(false),
                     color::Fg(&color::Reset as &color::Color)
                 );
             }

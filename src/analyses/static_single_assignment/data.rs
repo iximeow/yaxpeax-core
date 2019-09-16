@@ -62,7 +62,7 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
 }
 
 #[derive(Debug)]
-pub struct Value<A: SSAValues> {
+pub struct Value<A: SSAValues> where A::Data: Typed {
     pub name: Option<String>,
     pub location: A::Location,
     // None indicates "not written anywhere in this dfg", which indicates this value can

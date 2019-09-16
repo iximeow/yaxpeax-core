@@ -608,7 +608,8 @@ impl FunctionRepr for Function {
         &self.name
     }
 
-    fn decl_string(&self) -> String {
+    // TODO: actually show locations defined by this function
+    fn decl_string(&self, _show_locations: bool) -> String {
         format!(
             "{}({})",
             self.name,

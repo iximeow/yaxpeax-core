@@ -9,8 +9,11 @@ pub mod x86_64;
 pub mod display;
 pub mod interface;
 
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 use std::collections::HashMap;
+
+use crate::data::types;
+use data::ValueLocations;
 
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
@@ -42,19 +45,135 @@ pub trait CommentQuery<A: Address> {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Parameter {
+    name: Option<String>,
+    ty: Option<types::TypeSpec>
+}
+
+impl Default for Parameter {
+    fn default() -> Self {
+        Parameter {
+            name: None,
+            ty: None
+        }
+    }
+}
+
+impl Parameter {
+    pub fn of(name: &str) -> Self {
+        Parameter {
+            name: Some(name.to_owned()),
+            ty: None
+        }
+    }
+
+    pub fn typed(mut self, ty: types::TypeSpec) -> Self {
+        self.ty = Some(ty);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Function {
     name: String,
-    arguments: Vec<String>,
-    returns: Vec<String>
+    arguments: Vec<Parameter>,
+    returns: Vec<Parameter>,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionImpl<Loc> {
+    name: String,
+    arguments: Vec<(Loc, Parameter)>,
+    returns: Vec<(Loc, Parameter)>,
+    return_address: Option<Loc>,
+}
+
+// TODO:
+// impl <T: Display> FunctionRepr for FunctionImpl<T> {
+impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
+    fn decl_string(&self, show_locations: bool) -> String {
+        let mut res = self.name.clone();
+        res.push('(');
+        for (i, (loc, param)) in self.arguments.iter().enumerate() {
+            if i > 0 {
+                res.push_str(", ");
+            }
+            // TODO: figure out default naming strategy better than arg_n?
+            if let Some(name) = param.name.as_ref() {
+                res.push_str(name);
+            } else {
+                res.push_str(&format!("arg_{}", i));
+            }
+            if show_locations {
+                res.push_str(" -> ");
+                write!(res, "{:?}", loc);
+            }
+        }
+        res.push(')');
+        match self.returns.len() {
+            0 => {},
+            1 => {
+                if show_locations {
+                    write!(res, "{:?}", self.returns[0].0);
+                    res.push_str(" -> ");
+                }
+                if let Some(name) = self.returns[0].1.name.as_ref() {
+                    res.push_str(name);
+                } else {
+                    res.push_str("return_0");
+                }
+            },
+            _ => {
+                res.push_str(" -> ");
+                for (i, (loc, ret)) in self.returns.iter().enumerate() {
+                    if i > 0 {
+                        res.push_str(", ");
+                    }
+                    if show_locations {
+                        write!(res, "{:?}", loc).unwrap();
+                        res.push_str(" -> ");
+                    }
+                    if let Some(name) = ret.name.as_ref() {
+                        res.push_str(name);
+                    } else {
+                        res.push_str(&format!("return_{}", i));
+                    }
+                }
+            }
+        }
+        res
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+trait FunctionAbi<A: ValueLocations> {
+    fn argument_loc(&self, idx: usize) -> A::Location;
+    fn return_loc(&self, idx: usize) -> A::Location;
+    fn return_address(&self) -> A::Location;
+}
+
+impl Function {
+    fn implement_for<A: ValueLocations>(&self, abi: &Box<dyn FunctionAbi<A>>) -> FunctionImpl<A::Location> {
+        let arguments = self.arguments.iter().enumerate().map(|(idx, arg)| (abi.argument_loc(idx), arg.to_owned())).collect();
+        let returns = self.returns.iter().enumerate().map(|(idx, arg)| (abi.return_loc(idx), arg.to_owned())).collect();
+        FunctionImpl {
+            name: self.name.clone(),
+            arguments,
+            returns,
+            return_address: Some(abi.return_address()),
+        }
+    }
 }
 
 pub trait FunctionRepr {
-    fn decl_string(&self) -> String;
+    fn decl_string(&self, show_locations: bool) -> String;
     fn name(&self) -> &str;
 }
 
 impl Function {
-    pub fn of(name: String, args: Vec<String>, rets: Vec<String>) -> Function {
+    pub fn of(name: String, args: Vec<Parameter>, rets: Vec<Parameter>) -> Function {
         Function {
             name: name,
             arguments: args,
@@ -64,16 +183,44 @@ impl Function {
 }
 
 impl FunctionRepr for Function {
-    fn decl_string(&self) -> String {
-        format!("{}({}){}",
-            self.name,
-            self.arguments.join(", "),
-            match self.returns.len() {
-                0 => "".to_string(),
-                1 => format!(" -> {}", self.returns[0]),
-                _ => format!(" -> ({})", self.returns.join(", "))
+    // TODO: is there a way to sho locations for abstract functions? don't think so..
+    fn decl_string(&self, _show_locations: bool) -> String {
+        let mut res = self.name.clone();
+        res.push('(');
+        for (i, param) in self.arguments.iter().enumerate() {
+            if i > 0 {
+                res.push_str(", ");
             }
-        )
+            if let Some(name) = param.name.as_ref() {
+                res.push_str(name);
+            } else {
+                res.push_str(&format!("arg_{}", i));
+            }
+        }
+        res.push(')');
+        match self.returns.len() {
+            0 => {},
+            1 => {
+                if let Some(name) = self.returns[0].name.as_ref() {
+                    res.push_str(name);
+                } else {
+                    res.push_str("return_0");
+                }
+            },
+            _ => {
+                for (i, ret) in self.returns.iter().enumerate() {
+                    if i > 0 {
+                        res.push_str(", ");
+                    }
+                    if let Some(name) = ret.name.as_ref() {
+                        res.push_str(name);
+                    } else {
+                        res.push_str(&format!("return_{}", i));
+                    }
+                }
+            }
+        }
+        res
     }
     fn name(&self) -> &str {
         &self.name
@@ -90,12 +237,38 @@ pub enum Library {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Symbol(pub Library, pub String);
 
+/*
+ * FARPROC GetProcAddress(
+ *   HMODULE hModule,
+ *   LPCSTR  lpProcName
+ * )
+ */
 impl Symbol {
     fn to_function(sym: &Symbol) -> Option<Function> {
         match sym {
             Symbol(Library::Name(library), f) if library == "kernel32.dll" && f == "GetProcAddress" => {
 //                Some(Function::of("kernel32.dll!GetProcAddress", vec![Types::ptr, Types::ptr], vec![Types::ptr]))
-                Some(Function::of("kernel32.dll!GetProcAddress".to_string(), vec!["void*".to_string(), "void*".to_string()], vec!["void*".to_string()]))
+                Some(
+                    Function::of(
+                        "GetProcAddress".to_string(),
+                        vec![
+                            Parameter::of("hModule").typed(
+//                                Types::by_name("HMODULE")
+                                types::TypeSpec::Top
+                            ),
+                            Parameter::of("lpProcName").typed(
+//                                Types::by_name("LPCSTR")
+                                types::TypeSpec::Top
+                            ),
+                        ],
+                        vec![
+                            Parameter::of("proc").typed(
+//                                Types::by_name("FARPROC")
+                                types::TypeSpec::Top
+                            )
+                        ]
+                    )
+                )
             }
             _ => {
                 None

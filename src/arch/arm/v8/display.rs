@@ -29,7 +29,8 @@ impl <T: FunctionQuery<<ARMv8 as Arch>::Address>> BaseDisplay<arm::v8::Function,
             if let Some(fn_dec) = ctx.function_at(addr) {
                 write!(dest, "      {}{}{}",
                     color::Fg(&color::LightYellow as &color::Color),
-                    fn_dec.decl_string(),
+                    // TODO: show locations?
+                    fn_dec.decl_string(false),
                     color::Fg(&color::Reset as &color::Color)
                 )?;
             }
