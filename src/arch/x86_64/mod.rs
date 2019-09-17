@@ -316,6 +316,7 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                         } else {
                             // TODO: indicate that the function should have been defined, but
                             // was not because we don't know an ABI to map it to?
+                            self.functions.insert(address, f.unimplemented::<x86_64>());
                         }
                     }
                     None => { }
@@ -324,13 +325,14 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 self.reverse_symbols.insert(sym, address);
             }
             BaseUpdate::DefineFunction(f) => {
+                self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
+                self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
                 if let Some(abi) = self.default_abi.as_ref() {
-                    self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
-                    self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
                     self.functions.insert(address, f.implement_for(&*abi));
                 } else {
                     // TODO: indicate that the function should have been defined, but was not
                     // because we don't know an ABI to map it to?
+                    self.functions.insert(address, f.unimplemented::<x86_64>());
                 }
             }
             BaseUpdate::AddCodeComment(comment) => {

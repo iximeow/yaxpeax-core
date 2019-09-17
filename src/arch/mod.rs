@@ -165,6 +165,17 @@ impl Function {
             return_address: Some(abi.return_address()),
         }
     }
+
+    fn unimplemented<A: ValueLocations>(&self) -> FunctionImpl<A::Location> {
+        // TODO: include aref to self? or something else to eventually map this function to real
+        // locations in the program?
+        FunctionImpl {
+            name: self.name.clone(),
+            arguments: vec![],
+            returns: vec![],
+            return_address: None
+        }
+    }
 }
 
 pub trait FunctionRepr {
