@@ -16,7 +16,7 @@ use memory::MemoryRange;
 
 use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations};
 use analyses::static_single_assignment::data::PhiOp;
-use data::{AliasInfo, Direction};
+use data::{AliasInfo, Direction, LocIterator};
 use data::modifier::ModifierCollection;
 
 #[test]
@@ -100,13 +100,13 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>>(
+pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>, D: std::ops::Deref<Target = U>>(
     data: &M,
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
-    value_modifiers: impl std::ops::Deref<Target = U>
-) -> SSA<A> {
+    value_modifiers: D,
+) -> SSA<A> where for<'a> &'a <A as Arch>::Instruction: LocIterator<A::Location, Item=(Option<A::Location>, Direction)> {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
     let dominance_frontiers = compute_dominance_frontiers_from_idom(cfg, entry, &idom);
@@ -128,7 +128,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in A::decompose(&instr).into_iter() {
+            for (maybeloc, direction) in instr.iter_locs() {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
                         let widening = loc.maximal_alias_of();
@@ -266,7 +266,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         C: &mut HashMap<A::Location, u32>,
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>,
         value_modifiers: &impl std::ops::Deref<Target = U>
-    ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
+    ) where for<'a> &'a <A as Arch>::Instruction: LocIterator<A::Location, Item=(Option<A::Location>, Direction)> {
         fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
             let widening = loc.maximal_alias_of();
             use std::collections::hash_map::Entry;
@@ -299,7 +299,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         }
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in A::decompose(&instr).into_iter().zip(std::iter::repeat(DefSource::Instruction)) {
+            for (maybeloc, direction) in instr.iter_locs().zip(std::iter::repeat(DefSource::Instruction)) {
                 match (maybeloc, direction) {
                     ((Some(loc), Direction::Read), _) => {
                         let widening = loc.maximal_alias_of();

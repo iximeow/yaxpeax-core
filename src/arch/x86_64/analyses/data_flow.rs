@@ -41,8 +41,7 @@ pub const FLAGS: [Location; 10] = [
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
-    Memory(u64, u8),
-    MemoryAny,
+    Memory,
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL
 }
@@ -63,8 +62,7 @@ impl AliasInfo for Location {
             Location::IOPL => {
                 vec![Location::Register(RegSpec::rflags())]
             },
-            Location::Memory(_, _) |
-            Location::MemoryAny => vec![Location::MemoryAny],
+            Location::Memory => vec![Location::Memory],
             Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
@@ -134,8 +132,7 @@ impl AliasInfo for Location {
             Location::IOPL => {
                 Location::Register(RegSpec::rflags())
             },
-            Location::Memory(_, _) |
-            Location::MemoryAny => Location::MemoryAny,
+            Location::Memory => Location::Memory,
             Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
@@ -586,6 +583,1330 @@ fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>, Direction)
     }
 }
 
+#[derive(PartialEq, Eq, Copy, Clone)]
+enum Use {
+    Read, Write, ReadWrite
+}
+
+impl Use {
+    pub fn first_use(&self) -> Direction {
+        match self {
+            Use::Read | Use::ReadWrite => {
+                Direction::Read
+            },
+            Use::Write => {
+                Direction::Write
+            }
+        }
+    }
+}
+
+pub struct LocationIter<'a> {
+    inst: &'a yaxpeax_x86::Instruction,
+    op_count: u8,
+    op_idx: u8,
+    loc_count: u8,
+    loc_idx: u8,
+    curr_op: Option<&'a yaxpeax_x86::Operand>,
+    curr_use: Option<Use>
+}
+
+fn operands_in(op: yaxpeax_x86::Opcode) -> u8 {
+    match op {
+        Opcode::SQRTSD |
+        Opcode::SQRTSS |
+        Opcode::MOVDDUP |
+        Opcode::MOVSLDUP |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTTSS2SI |
+        Opcode::CVTSS2SI |
+        Opcode::CVTSS2SD |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
+        Opcode::LEA |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
+        Opcode::MOVZX_b |
+        Opcode::MOVZX_w |
+        Opcode::MOVSX |
+        Opcode::MOVSXD |
+        Opcode::MOV => {
+            3
+        }
+        Opcode::XADD |
+        Opcode::XCHG => {
+            3
+        }
+        Opcode::STI |
+        Opcode::CLI |
+        Opcode::STD |
+        Opcode::CLD |
+        Opcode::STC |
+        Opcode::CLC => {
+            1
+        }
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF |
+        Opcode::SAR |
+        Opcode::SAL |
+        Opcode::SHR |
+        Opcode::SHL |
+        Opcode::RCR |
+        Opcode::RCL |
+        Opcode::ROR |
+        Opcode::ROL |
+        Opcode::ADC |
+        Opcode::SBB |
+        Opcode::ADD |
+        Opcode::SUB |
+        Opcode::AND |
+        Opcode::XOR |
+        Opcode::OR => {
+            3
+        }
+
+        Opcode::IMUL => {
+            // TODO: this.
+            //if let Operand::Nothing = instr.operands[1] {
+                2
+            //} else {
+            //    3
+            //}
+        },
+        Opcode::IDIV |
+        Opcode::DIV => {
+            // TODO: this is lazy and assumes writes of all flags
+            // this may not be true
+            // TODO: this may not read *dx (if this is idiv r/m 8)
+            //if let Operand::Nothing = instr.operands[1] {
+                2
+            //} else {
+            //    3
+            //}
+        }
+        Opcode::MUL => {
+            2
+        }
+
+        Opcode::PUSH |
+        Opcode::POP => {
+            2
+        },
+        Opcode::INC |
+        Opcode::DEC => {
+            2
+        }
+        Opcode::ENTER |
+        Opcode::LEAVE |
+        Opcode::POPF |
+        Opcode::PUSHF |
+        Opcode::CBW |
+        Opcode::CDW |
+        Opcode::LAHF |
+        Opcode::SAHF => {
+            1
+        }
+        Opcode::TEST |
+        Opcode::CMP => {
+            3
+        }
+        Opcode::NEG |
+        Opcode::NOT => {
+            2
+        }
+        Opcode::CMPXCHG => {
+            3
+        },
+        Opcode::CALLF | // TODO: this is wrong
+        Opcode::CALL => {
+            2
+        }
+        Opcode::JMP => {
+            2
+        },
+        Opcode::JMPF => { // TODO: this is wrong.
+            0
+        },
+        Opcode::IRET | // TODO: this is wrong
+        Opcode::RETF | // TODO: this is wrong
+        Opcode::RETURN => {
+            1
+        }
+        Opcode::LFENCE |
+        Opcode::MFENCE |
+        Opcode::SFENCE |
+        Opcode::NOP |
+        Opcode::WAIT => { 0 }
+        Opcode::CLFLUSH |
+        Opcode::FXSAVE |
+        Opcode::FXRSTOR |
+        Opcode::XSAVE |
+        Opcode::XSTOR |
+        Opcode::XSAVEOPT |
+        Opcode::STMXCSR |
+        Opcode::SGDT |
+        Opcode::SIDT => {
+            2
+        }
+        Opcode::LDMXCSR |
+        Opcode::LGDT |
+        Opcode::LIDT => {
+            2
+        }
+        // TODO: this is wrong
+        Opcode::SMSW => {
+            2
+        }
+        // TODO: this is wrong
+        Opcode::LMSW => {
+            2
+        }
+        Opcode::SWAPGS |
+        Opcode::RDTSCP |
+        Opcode::WRMSR |
+        Opcode::RDMSR |
+        Opcode::RDTSC |
+        Opcode::RDPMC => {
+            1
+        }
+        Opcode::VERR |
+        Opcode::VERW => {
+            2
+        }
+        Opcode::SLDT |
+        Opcode::STR |
+        Opcode::INVLPG => {
+            2
+        }
+        Opcode::LLDT |
+        Opcode::LTR => {
+            2
+        }
+        // these are immediate-only or have no operands
+        Opcode::JMPE |
+        Opcode::UD2 |
+        Opcode::INT |
+        Opcode::INTO |
+        Opcode::HLT |
+        Opcode::Invalid => {
+            0
+        },
+        Opcode::Jcc(cond) => {
+            2
+        }
+
+        Opcode::MOVcc(cond) => {
+            3
+        }
+        Opcode::SETcc(cond) => {
+            3
+        }
+        Opcode::LSL => {
+            3
+        }
+        Opcode::LAR => {
+            3
+        }
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::ADDSS |
+        Opcode::SUBSS |
+        Opcode::MULSS |
+        Opcode::DIVSS |
+        Opcode::MINSS |
+        Opcode::MAXSS |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS => {
+            3
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL |
+        Opcode::CMPS |
+        Opcode::SCAS |
+        Opcode::MOVS |
+        Opcode::LODS |
+        Opcode::STOS |
+        Opcode::INS |
+        Opcode::OUTS => {
+            0
+            /* TODO: these. */
+            // vec![]
+        }
+
+    }
+}
+
+fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
+    (if usage == Use::ReadWrite { 1 } else { 0 }) + match op {
+        Operand::Register(spec) => {
+            // reg
+            1
+        },
+        Operand::DisplacementU32(_) |
+        Operand::DisplacementU64(_) => {
+            // mem
+            1
+        },
+        Operand::RegDeref(spec) |
+        Operand::RegDisp(spec, _) |
+        Operand::RegScale(spec, _) |
+        Operand::RegScaleDisp(spec, _, _) => {
+            // reg, mem
+            2
+        },
+        Operand::RegIndexBase(base, index) |
+        Operand::RegIndexBaseDisp(base, index, _) |
+        Operand::RegIndexBaseScale(base, index, _) |
+        Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+            // reg, reg, mem
+            3
+        },
+        Operand::Many(_) => {
+            unreachable!()
+        },
+        _ => {
+            0
+        }
+    }
+}
+
+impl <'a> LocationIter<'a> {
+    pub fn new(inst: &'a yaxpeax_x86::Instruction) -> Self {
+        LocationIter {
+            inst,
+            op_count: operands_in(inst.opcode),
+            op_idx: 0,
+            loc_count: implicit_locs(inst.opcode),
+            loc_idx: 0,
+            curr_op: None,
+            curr_use: None,
+        }
+    }
+}
+
+fn use_of(op: yaxpeax_x86::Opcode, idx: u8) -> Use {
+    match op {
+        Opcode::SQRTSD |
+        Opcode::SQRTSS |
+        Opcode::MOVDDUP |
+        Opcode::MOVSLDUP |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTTSS2SI |
+        Opcode::CVTSS2SI |
+        Opcode::CVTSS2SD |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
+        Opcode::LEA |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
+        Opcode::MOVZX_b |
+        Opcode::MOVZX_w |
+        Opcode::MOVSX |
+        Opcode::MOVSXD |
+        Opcode::MOV => {
+            [Use::Write, Use::Read][idx as usize]
+        }
+        Opcode::XADD |
+        Opcode::XCHG => {
+            [Use::ReadWrite, Use::ReadWrite][idx as usize]
+        }
+        Opcode::STI |
+        Opcode::CLI |
+        Opcode::STD |
+        Opcode::CLD |
+        Opcode::STC |
+        Opcode::CLC => {
+            Use::Read
+        }
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF => {
+            Use::Read
+        }
+        Opcode::SAR |
+        Opcode::SAL |
+        Opcode::SHR |
+        Opcode::SHL |
+        Opcode::RCR |
+        Opcode::RCL |
+        Opcode::ROR |
+        Opcode::ROL |
+        Opcode::ADC |
+        Opcode::SBB |
+        Opcode::ADD |
+        Opcode::SUB |
+        Opcode::AND |
+        Opcode::XOR |
+        Opcode::OR => {
+            [Use::ReadWrite, Use::Read][idx as usize]
+        }
+        Opcode::IMUL => {
+            // TODO: this.
+            Use::Read
+        },
+        Opcode::IDIV |
+        Opcode::DIV => {
+            // TODO: this is lazy and assumes writes of all flags
+            // this may not be true
+            // TODO: this may not read *dx (if this is idiv r/m 8)
+            Use::Read
+        }
+        Opcode::MUL => {
+            Use::Read
+        }
+
+        Opcode::PUSH => {
+            Use::Read
+        },
+        Opcode::POP => {
+            Use::Write
+        },
+        Opcode::INC |
+        Opcode::DEC => {
+            Use::ReadWrite
+        }
+        Opcode::ENTER |
+        Opcode::LEAVE |
+        Opcode::POPF |
+        Opcode::PUSHF |
+        Opcode::CBW |
+        Opcode::CDW |
+        Opcode::LAHF |
+        Opcode::SAHF => {
+            Use::Read
+        }
+        Opcode::TEST |
+        Opcode::CMP => {
+            Use::Read
+        }
+        Opcode::NEG => {
+            Use::ReadWrite
+        }
+        Opcode::NOT => {
+            Use::ReadWrite
+        }
+        Opcode::CMPXCHG => {
+            [Use::ReadWrite, Use::Read][idx as usize]
+        },
+        Opcode::CALLF | // TODO: this is wrong
+        Opcode::CALL => {
+            Use::Read
+        }
+        Opcode::JMP => {
+            Use::Read
+        },
+        Opcode::JMPF => { // TODO: this is wrong.
+            Use::Read
+        },
+        Opcode::IRET | // TODO: this is wrong
+        Opcode::RETF | // TODO: this is wrong
+        Opcode::RETURN => {
+            Use::Read
+        }
+        Opcode::LFENCE |
+        Opcode::MFENCE |
+        Opcode::SFENCE |
+        Opcode::NOP |
+        Opcode::WAIT => { Use::Read }
+        Opcode::CLFLUSH |
+        Opcode::FXSAVE |
+        Opcode::FXRSTOR |
+        Opcode::XSAVE |
+        Opcode::XSTOR |
+        Opcode::XSAVEOPT |
+        Opcode::STMXCSR |
+        Opcode::SGDT |
+        Opcode::SIDT => {
+            Use::Write
+        }
+        Opcode::LDMXCSR |
+        Opcode::LGDT |
+        Opcode::LIDT => {
+            Use::Read
+        }
+        // TODO: this is wrong
+        Opcode::SMSW => {
+            Use::Write
+        }
+        // TODO: this is wrong
+        Opcode::LMSW => {
+            Use::Read
+        }
+        Opcode::SWAPGS |
+        Opcode::RDTSCP |
+        Opcode::WRMSR |
+        Opcode::RDMSR |
+        Opcode::RDTSC |
+        Opcode::RDPMC => {
+            Use::Read
+        }
+        Opcode::VERR |
+        Opcode::VERW => {
+            Use::Read
+        }
+        Opcode::SLDT |
+        Opcode::STR |
+        Opcode::INVLPG => {
+            Use::Write
+        }
+        Opcode::LLDT |
+        Opcode::LTR => {
+            Use::Read
+        }
+        // these are immediate-only or have no operands
+        Opcode::JMPE |
+        Opcode::UD2 |
+        Opcode::INT |
+        Opcode::INTO |
+        Opcode::HLT |
+        Opcode::Invalid => {
+            Use::Read
+        },
+        Opcode::Jcc(cond) => {
+            Use::Read
+        }
+
+        Opcode::MOVcc(cond) => {
+            [Use::Write, Use::Read][idx as usize]
+        }
+        Opcode::SETcc(cond) => {
+            Use::Write
+        }
+        Opcode::LSL => {
+            [Use::Write, Use::Read][idx as usize]
+        }
+        Opcode::LAR => {
+            [Use::Write, Use::Read][idx as usize]
+        }
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::ADDSS |
+        Opcode::SUBSS |
+        Opcode::MULSS |
+        Opcode::DIVSS |
+        Opcode::MINSS |
+        Opcode::MAXSS |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS => {
+            [Use::ReadWrite, Use::Read][idx as usize]
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL |
+        Opcode::CMPS |
+        Opcode::SCAS |
+        Opcode::MOVS |
+        Opcode::LODS |
+        Opcode::STOS |
+        Opcode::INS |
+        Opcode::OUTS => {
+            Use::Read
+        }
+    }
+}
+
+fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction) {
+    match op {
+        Opcode::SQRTSD |
+        Opcode::SQRTSS |
+        Opcode::MOVDDUP |
+        Opcode::MOVSLDUP |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTTSS2SI |
+        Opcode::CVTSS2SI |
+        Opcode::CVTSS2SD |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
+        Opcode::LEA |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
+        Opcode::MOVZX_b |
+        Opcode::MOVZX_w |
+        Opcode::MOVSX |
+        Opcode::MOVSXD |
+        Opcode::MOV |
+        Opcode::XADD |
+        Opcode::XCHG => {
+            unreachable!();
+        }
+        Opcode::STI |
+        Opcode::CLI => {
+            (Some(Location::IF), Direction::Write)
+        }
+        Opcode::STD |
+        Opcode::CLD => {
+            (Some(Location::DF), Direction::Write)
+        }
+        Opcode::STC |
+        Opcode::CLC => {
+            (Some(Location::CF), Direction::Write)
+        }
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF => {
+            (Some(Location::ZF), Direction::Write)
+        }
+        Opcode::SAR |
+        Opcode::SAL |
+        Opcode::SHR |
+        Opcode::SHL => {
+            // TODO: inspect imm8 and CL if context permits to decide
+            // flags more granularly
+            [
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+        }
+        Opcode::RCR |
+        Opcode::RCL |
+        Opcode::ROR |
+        Opcode::ROL => {
+            // TODO: inspect imm8 and CL if context permits to decide
+            // flags more granularly
+            [
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+            ][i as usize]
+        }
+        Opcode::ADC |
+        Opcode::SBB => {
+            // TODO: this is lazy and assumes writes of all flags
+            // this may not be true
+            [
+                (Some(Location::CF), Direction::Read),
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+        },
+        Opcode::ADD |
+        Opcode::SUB |
+        Opcode::AND |
+        Opcode::XOR |
+        Opcode::OR => {
+            // TODO: this is lazy and assumes writes of all flags
+            // this may not be true
+            [
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+        }
+
+        Opcode::IMUL => {
+            // TODO: this.
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write),
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+        },
+        Opcode::IDIV |
+        Opcode::DIV => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Read),
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+
+        }
+        Opcode::MUL => {
+            // TODO: this is lazy and assumes writes of all flags
+            // this may not be true
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write),
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+            ][i as usize]
+        }
+
+        Opcode::PUSH => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Write),
+            ][i as usize]
+        },
+        Opcode::POP => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Read),
+            ][i as usize]
+        },
+        Opcode::INC |
+        Opcode::DEC => {
+            [
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+            ][i as usize]
+        }
+        Opcode::ENTER => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Register(RegSpec::rbp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rbp())), Direction::Write),
+                (Some(Location::Memory), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::LEAVE => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Register(RegSpec::rbp())), Direction::Write),
+                (Some(Location::Memory), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::POPF => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Read),
+                (Some(Location::Register(RegSpec::rflags())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::PUSHF => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Write),
+                (Some(Location::Register(RegSpec::rflags())), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::CBW |
+        Opcode::CDW => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rax())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::LAHF => {
+            [
+                (Some(Location::Register(RegSpec::ax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rflags())), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::SAHF => {
+            [
+                (Some(Location::Register(RegSpec::ax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rflags())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::TEST |
+        Opcode::CMP => {
+            /* not strictly correct for either */
+            (Some(Location::Register(RegSpec::rflags())), Direction::Write)
+        }
+        Opcode::NEG => {
+            (Some(Location::CF), Direction::Write)
+        }
+        Opcode::NOT => {
+            panic!();
+        }
+        Opcode::CMPXCHG => {
+            (Some(Location::ZF), Direction::Write)
+        },
+        Opcode::CALLF | // TODO: this is wrong
+        Opcode::CALL => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Write),
+            ][i as usize]
+        }
+        Opcode::JMP => {
+            panic!();
+        },
+        Opcode::JMPF => { // TODO: this is wrong.
+            panic!();
+        },
+        Opcode::IRET | // TODO: this is wrong
+        Opcode::RETF | // TODO: this is wrong
+        Opcode::RETURN => {
+            [
+                (Some(Location::Register(RegSpec::rsp())), Direction::Read),
+                (Some(Location::Register(RegSpec::rsp())), Direction::Write),
+                (Some(Location::Memory), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::LFENCE |
+        Opcode::MFENCE |
+        Opcode::SFENCE |
+        Opcode::NOP |
+        Opcode::WAIT => { panic!() }
+        Opcode::CLFLUSH |
+        Opcode::FXSAVE |
+        Opcode::FXRSTOR |
+        Opcode::XSAVE |
+        Opcode::XSTOR |
+        Opcode::XSAVEOPT |
+        Opcode::STMXCSR |
+        Opcode::SGDT |
+        Opcode::SIDT => {
+            panic!()
+        }
+        Opcode::LDMXCSR |
+        Opcode::LGDT |
+        Opcode::LIDT => {
+            panic!()
+        }
+        // TODO: this is wrong
+        Opcode::SMSW => {
+            panic!()
+        }
+        // TODO: this is wrong
+        Opcode::LMSW => {
+            panic!()
+        }
+        Opcode::SWAPGS => {
+            [
+                (Some(Location::Register(RegSpec::gs())), Direction::Read),
+                (Some(Location::Register(RegSpec::gs())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::RDTSCP => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rcx())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::WRMSR => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::RDMSR => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write),
+                (Some(Location::Register(RegSpec::rcx())), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::RDTSC => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write)
+            ][i as usize]
+        }
+        Opcode::RDPMC => {
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
+                (Some(Location::Register(RegSpec::rdx())), Direction::Write),
+                (Some(Location::Register(RegSpec::rcx())), Direction::Read)
+            ][i as usize]
+        }
+        Opcode::VERR |
+        Opcode::VERW => {
+            (Some(Location::ZF), Direction::Write)
+        }
+        Opcode::SLDT |
+        Opcode::STR |
+        Opcode::INVLPG => {
+            panic!()
+        }
+        Opcode::LLDT |
+        Opcode::LTR => {
+            panic!()
+        }
+        // these are immediate-only or have no operands
+        Opcode::JMPE |
+        Opcode::UD2 |
+        Opcode::INT |
+        Opcode::INTO |
+        Opcode::HLT |
+        Opcode::Invalid => {
+            panic!()
+        },
+        Opcode::Jcc(cond) => {
+            cond_to_flags(cond)[i as usize]
+        }
+
+        Opcode::MOVcc(cond) => {
+            cond_to_flags(cond)[i as usize]
+        }
+        Opcode::SETcc(cond) => {
+            cond_to_flags(cond)[i as usize]
+        }
+        Opcode::LSL => {
+            (Some(Location::ZF), Direction::Write)
+        }
+        Opcode::LAR => {
+            (Some(Location::ZF), Direction::Read)
+        }
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::ADDSS |
+        Opcode::SUBSS |
+        Opcode::MULSS |
+        Opcode::DIVSS |
+        Opcode::MINSS |
+        Opcode::MAXSS |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS => {
+            panic!()
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL |
+        Opcode::CMPS |
+        Opcode::SCAS |
+        Opcode::MOVS |
+        Opcode::LODS |
+        Opcode::STOS |
+        Opcode::INS |
+        Opcode::OUTS => {
+            /* TODO: these. */
+            panic!()
+        }
+
+    }
+}
+
+fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
+    match op {
+        Opcode::SQRTSD |
+        Opcode::SQRTSS |
+        Opcode::MOVDDUP |
+        Opcode::MOVSLDUP |
+        Opcode::MOVSD |
+        Opcode::MOVSS |
+        Opcode::CVTSI2SS |
+        Opcode::CVTTSS2SI |
+        Opcode::CVTSS2SI |
+        Opcode::CVTSS2SD |
+        Opcode::CVTSI2SD |
+        Opcode::CVTTSD2SI |
+        Opcode::CVTSD2SI |
+        Opcode::CVTSD2SS |
+        Opcode::LDDQU |
+        Opcode::LEA |
+        Opcode::MOVSX_b |
+        Opcode::MOVSX_w |
+        Opcode::MOVZX_b |
+        Opcode::MOVZX_w |
+        Opcode::MOVSX |
+        Opcode::MOVSXD |
+        Opcode::MOV => {
+            0
+        }
+        Opcode::XADD |
+        Opcode::XCHG => {
+            0
+        }
+        Opcode::STI |
+        Opcode::CLI |
+        Opcode::STD |
+        Opcode::CLD |
+        Opcode::STC |
+        Opcode::CLC |
+        Opcode::BT |
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR |
+        Opcode::BSF => {
+            1
+        }
+        Opcode::SAR |
+        Opcode::SAL |
+        Opcode::SHR |
+        Opcode::SHL => {
+            5
+        }
+        Opcode::RCR |
+        Opcode::RCL |
+        Opcode::ROR |
+        Opcode::ROL => {
+            2
+        }
+        Opcode::ADC |
+        Opcode::SBB => {
+            7
+        },
+        Opcode::ADD |
+        Opcode::SUB |
+        Opcode::AND |
+        Opcode::XOR |
+        Opcode::OR => {
+            6
+        }
+
+        Opcode::IMUL => {
+            9
+        },
+        Opcode::IDIV |
+        Opcode::DIV => {
+            9
+        }
+        Opcode::MUL => {
+            9
+        }
+        Opcode::PUSH => {
+            3
+        },
+        Opcode::POP => {
+            3
+        },
+        Opcode::INC |
+        Opcode::DEC => {
+            5
+        }
+        Opcode::ENTER => {
+            5
+        }
+        Opcode::LEAVE => {
+            4
+        }
+        Opcode::POPF => {
+            4
+        }
+        Opcode::PUSHF => {
+            4
+        }
+        Opcode::CBW |
+        Opcode::CDW => {
+            2
+        }
+        Opcode::LAHF => {
+            2
+        }
+        Opcode::SAHF => {
+            2
+        }
+        Opcode::TEST |
+        Opcode::CMP => {
+            1
+        }
+        Opcode::NEG => {
+            1
+        }
+        Opcode::NOT => {
+            0
+        }
+        Opcode::CMPXCHG => { // TODO: this is wrong
+            1
+        },
+        Opcode::CALLF | // TODO: this is wrong
+        Opcode::CALL => {
+            3
+        }
+        Opcode::JMP => {
+            0
+        },
+        Opcode::JMPF => { // TODO: this is wrong.
+            0
+        },
+        Opcode::IRET | // TODO: this is wrong
+        Opcode::RETF | // TODO: this is wrong
+        Opcode::RETURN => {
+            3
+        }
+        Opcode::LFENCE |
+        Opcode::MFENCE |
+        Opcode::SFENCE |
+        Opcode::NOP |
+        Opcode::WAIT => { 0 }
+        Opcode::CLFLUSH |
+        Opcode::FXSAVE |
+        Opcode::FXRSTOR |
+        Opcode::XSAVE |
+        Opcode::XSTOR |
+        Opcode::XSAVEOPT |
+        Opcode::STMXCSR |
+        Opcode::SGDT |
+        Opcode::SIDT => {
+            0
+        }
+        Opcode::LDMXCSR |
+        Opcode::LGDT |
+        Opcode::LIDT => {
+            0
+        }
+        // TODO: this is wrong
+        Opcode::SMSW => {
+            0
+        }
+        // TODO: this is wrong
+        Opcode::LMSW => {
+            0
+        }
+        Opcode::SWAPGS => {
+            2
+        }
+        Opcode::RDTSCP => {
+            3
+        }
+        Opcode::WRMSR => {
+            2
+        }
+        Opcode::RDMSR => {
+            3
+        }
+        Opcode::RDTSC => {
+            2
+        }
+        Opcode::RDPMC => {
+            3
+        }
+        Opcode::VERR |
+        Opcode::VERW => {
+            1
+        }
+        Opcode::SLDT |
+        Opcode::STR |
+        Opcode::INVLPG |
+        Opcode::LLDT |
+        Opcode::LTR => {
+            0
+        }
+        // these are immediate-only or have no operands
+        Opcode::JMPE |
+        Opcode::UD2 |
+        Opcode::INT |
+        Opcode::INTO |
+        Opcode::HLT |
+        Opcode::Invalid => {
+            0
+        },
+        Opcode::Jcc(cond) => {
+            cond_to_flags(cond).len() as u8
+        }
+
+        Opcode::MOVcc(cond) => {
+            cond_to_flags(cond).len() as u8
+        }
+        Opcode::SETcc(cond) => {
+            cond_to_flags(cond).len() as u8
+        }
+        Opcode::LSL |
+        Opcode::LAR => {
+            1
+        }
+        Opcode::ADDSD |
+        Opcode::SUBSD |
+        Opcode::MULSD |
+        Opcode::DIVSD |
+        Opcode::MINSD |
+        Opcode::MAXSD |
+        Opcode::ADDSS |
+        Opcode::SUBSS |
+        Opcode::MULSS |
+        Opcode::DIVSS |
+        Opcode::MINSS |
+        Opcode::MAXSS |
+        Opcode::HADDPS |
+        Opcode::HSUBPS |
+        Opcode::ADDSUBPS => {
+            0
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL |
+        Opcode::CMPS |
+        Opcode::SCAS |
+        Opcode::MOVS |
+        Opcode::LODS |
+        Opcode::STOS |
+        Opcode::INS |
+        Opcode::OUTS => {
+            0
+        }
+
+    }
+}
+
+impl <'a> Iterator for LocationIter<'a> {
+    type Item = (Option<Location>, Direction);
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.loc_count == self.loc_idx {
+            // advance op
+            self.op_idx += 1;
+
+            if self.op_idx >= self.op_count {
+                // but we're at the last op, so we're actually done...
+                return None;
+            }
+//            println!("opc: {}", self.inst.opcode);
+
+            let op = &self.inst.operands[self.op_idx as usize - 1];
+            let op_use = use_of(self.inst.opcode, self.op_idx - 1);
+            self.loc_count = locations_in(op, op_use);
+            self.loc_idx = 0;
+            self.curr_op = Some(op);
+            self.curr_use = Some(op_use);
+        }
+
+        if self.op_idx == 0 {
+            self.loc_idx += 1;
+            return Some(implicit_loc(self.inst.opcode, self.loc_idx - 1));
+        }
+
+        if let Some(op) = &self.curr_op {
+            self.loc_idx += 1;
+            match op {
+                Operand::Register(spec) => {
+                    if self.loc_idx == 1 {
+                        Some((Some(Location::Register(*spec)), self.curr_use.unwrap().first_use()))
+                    } else {
+                        Some((Some(Location::Register(*spec)), Direction::Write))
+                    }
+                },
+                Operand::DisplacementU32(_) |
+                Operand::DisplacementU64(_) => {
+                    if self.loc_idx == 1 {
+                        Some((Some(Location::Memory), self.curr_use.unwrap().first_use()))
+                    } else {
+                        Some((Some(Location::Memory), Direction::Write))
+                    }
+                },
+                Operand::RegDeref(spec) |
+                Operand::RegDisp(spec, _) |
+                Operand::RegScale(spec, _) |
+                Operand::RegScaleDisp(spec, _, _) => {
+                    match self.loc_idx {
+                        1 => {
+                            Some((Some(Location::Register(*spec)), Direction::Read))
+                        },
+                        2 => {
+                            Some((Some(Location::Memory), self.curr_use.unwrap().first_use()))
+                        },
+                        3 => {
+                            Some((Some(Location::Memory), Direction::Write))
+                        }
+                        _ => {
+                            unreachable!();
+                        }
+                    }
+                },
+                Operand::RegIndexBase(base, index) |
+                Operand::RegIndexBaseDisp(base, index, _) |
+                Operand::RegIndexBaseScale(base, index, _) |
+                Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+                    match self.loc_idx {
+                        1 => {
+                            Some((Some(Location::Register(*base)), Direction::Read))
+                        },
+                        2 => {
+                            Some((Some(Location::Register(*index)), Direction::Read))
+                        },
+                        3 => {
+                            Some((Some(Location::Memory), self.curr_use.unwrap().first_use()))
+                        },
+                        4 => {
+                            Some((Some(Location::Memory), Direction::Write))
+                        }
+                        _ => {
+                            unreachable!()
+                        }
+                    }
+                },
+                Operand::Many(_) => {
+                    unreachable!()
+                },
+                _ => {
+                    unreachable!()
+                }
+            }
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl <'a> crate::data::LocIterator<Location> for &'a yaxpeax_x86::Instruction {
+    type Item = (Option<Location>, Direction);
+    type Iter = LocationIter<'a>;
+    fn iter_locs(self) -> Self::Iter {
+        LocationIter::new(self)
+    }
+}
+
 impl ValueLocations for x86_64 {
     type Location = Location;
 
@@ -609,58 +1930,58 @@ impl ValueLocations for x86_64 {
                 Operand::DisplacementU32(_) |
                 Operand::DisplacementU64(_) => {
                     // TODO: lazy
-                    vec![(Some(Location::MemoryAny), Direction::Write)]
+                    vec![(Some(Location::Memory), Direction::Write)]
                 },
                 Operand::RegDeref(spec) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegDisp(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegScale(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBase(base, index) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseDisp(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegScaleDisp(base, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseScale(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::Many(_) => {
@@ -689,58 +2010,58 @@ impl ValueLocations for x86_64 {
                 Operand::DisplacementU32(_) |
                 Operand::DisplacementU64(_) => {
                     // TODO: lazy
-                    vec![(Some(Location::MemoryAny), Direction::Read)]
+                    vec![(Some(Location::Memory), Direction::Read)]
                 },
                 Operand::RegDeref(spec) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegDisp(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegScale(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegIndexBase(base, index) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegIndexBaseDisp(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegScaleDisp(base, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegIndexBaseScale(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read)
+                        (Some(Location::Memory), Direction::Read)
                     ]
                 },
                 Operand::Many(_) => {
@@ -774,68 +2095,68 @@ impl ValueLocations for x86_64 {
                 Operand::DisplacementU64(_) => {
                     // TODO: lazy
                     vec![
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write),
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write),
                     ]
                 },
                 Operand::RegDeref(spec) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegDisp(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegScale(spec, _) => {
                     vec![
                         (Some(Location::Register(*spec)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBase(base, index) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseDisp(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegScaleDisp(base, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseScale(base, index, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                     vec![
                         (Some(Location::Register(*base)), Direction::Read),
                         (Some(Location::Register(*index)), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Read),
-                        (Some(Location::MemoryAny), Direction::Write)
+                        (Some(Location::Memory), Direction::Read),
+                        (Some(Location::Memory), Direction::Write)
                     ]
                 },
                 Operand::Many(_) => {
@@ -1034,14 +2355,14 @@ impl ValueLocations for x86_64 {
                 let mut locs = decompose_read(&instr.operands[0]);
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
-                locs.push((Some(Location::MemoryAny), Direction::Write));
+                locs.push((Some(Location::Memory), Direction::Write));
                 locs
             },
             Opcode::POP => {
                 let mut locs = decompose_write(&instr.operands[0]);
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
-                locs.push((Some(Location::MemoryAny), Direction::Read));
+                locs.push((Some(Location::Memory), Direction::Read));
                 locs
             },
             Opcode::INC |
@@ -1060,7 +2381,7 @@ impl ValueLocations for x86_64 {
                     (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                     (Some(Location::Register(RegSpec::rbp())), Direction::Read),
                     (Some(Location::Register(RegSpec::rbp())), Direction::Write),
-                    (Some(Location::MemoryAny), Direction::Write)
+                    (Some(Location::Memory), Direction::Write)
                 ]
             }
             Opcode::LEAVE => {
@@ -1068,14 +2389,14 @@ impl ValueLocations for x86_64 {
                     (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                     (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                     (Some(Location::Register(RegSpec::rbp())), Direction::Write),
-                    (Some(Location::MemoryAny), Direction::Read)
+                    (Some(Location::Memory), Direction::Read)
                 ]
             }
             Opcode::POPF => {
                 vec![
                     (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                     (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                    (Some(Location::MemoryAny), Direction::Read),
+                    (Some(Location::Memory), Direction::Read),
                     (Some(Location::Register(RegSpec::rflags())), Direction::Write)
                 ]
             }
@@ -1083,7 +2404,7 @@ impl ValueLocations for x86_64 {
                 vec![
                     (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                     (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                    (Some(Location::MemoryAny), Direction::Write),
+                    (Some(Location::Memory), Direction::Write),
                     (Some(Location::Register(RegSpec::rflags())), Direction::Read)
                 ]
             }
@@ -1165,7 +2486,7 @@ impl ValueLocations for x86_64 {
                 let mut locs = decompose_read(&instr.operands[0]);
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
-                locs.push((Some(Location::MemoryAny), Direction::Write));
+                locs.push((Some(Location::Memory), Direction::Write));
                 locs
             }
             Opcode::JMP => {
@@ -1180,7 +2501,7 @@ impl ValueLocations for x86_64 {
                 vec![
                     (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                     (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                    (Some(Location::MemoryAny), Direction::Read)
+                    (Some(Location::Memory), Direction::Read)
                 ]
             }
             Opcode::LFENCE |

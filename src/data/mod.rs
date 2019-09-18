@@ -23,3 +23,9 @@ pub trait ValueLocations: Arch {
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }
+
+pub trait LocIterator<Location> {
+    type Item;
+    type Iter: Iterator<Item = Self::Item>;
+    fn iter_locs(self) -> Self::Iter;
+}
