@@ -269,9 +269,14 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
     ) where <A as Arch>::Address: Copy + Ord + Hash + Eq, <A as Arch>::Instruction: Debug + LengthedInstruction<Unit=<A as Arch>::Address> {
         fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
             let widening = loc.maximal_alias_of();
-            let i = C[&widening];
-            C.entry(widening).and_modify(|x| *x += 1);
-            Value::new(loc, Some(i))
+            use std::collections::hash_map::Entry;
+            if let Entry::Occupied(mut e) = C.entry(widening) {
+                let i = *e.get();
+                *e.get_mut() += 1;
+                Value::new(loc, Some(i))
+            } else {
+                unreachable!();
+            }
         }
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {
