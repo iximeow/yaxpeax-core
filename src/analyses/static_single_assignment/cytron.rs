@@ -16,7 +16,7 @@ use memory::MemoryRange;
 
 use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations};
 use analyses::static_single_assignment::data::PhiOp;
-use data::{AliasInfo, Direction, LocIterator};
+use data::{AliasInfo, Direction, Disambiguator, LocIterator};
 use data::modifier::ModifierCollection;
 
 #[test]
@@ -100,21 +100,64 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>, D: std::ops::Deref<Target = U>>(
+struct UseDefTracker<A: crate::data::ValueLocations> {
+    pub all_locations: HashSet<A::Location>,
+    pub assignments: HashMap<A::Location, HashSet<A::Address>>,
+    pub aliases: HashMap<A::Location, HashSet<A::Location>>,
+}
+
+impl <A: crate::data::ValueLocations> UseDefTracker<A> {
+    pub fn new() -> Self {
+        UseDefTracker {
+            all_locations: HashSet::new(),
+            assignments: HashMap::new(),
+            aliases: HashMap::new(),
+        }
+    }
+
+    pub fn track_use(&mut self, loc: A::Location) {
+        self.all_locations.insert(loc);
+        for alias in loc.aliases_of() {
+            self.track_alias(alias, loc);
+        }
+    }
+
+    pub fn track_def(&mut self, loc: A::Location, addr: A::Address) {
+        self.assignments.entry(loc).or_insert_with(|| HashSet::new()).insert(addr);
+        self.track_use(loc);
+    }
+
+    pub fn track_alias(&mut self, alias: A::Location, loc: A::Location) {
+        self.all_locations.insert(alias);
+        self.aliases.entry(alias).or_insert_with(|| HashSet::new())
+            .insert(loc);
+    }
+}
+
+pub fn generate_ssa<
+    A: SSAValues,
+    M: MemoryRange<A::Address>,
+    U: ModifierCollection<A>,
+    D: std::ops::Deref<Target = U>,
+    LocSpec,
+    Disam: Disambiguator<A::Location, LocSpec>,
+>(
     data: &M,
     entry: A::Address,
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
     value_modifiers: D,
-) -> SSA<A> where for<'a> &'a <A as Arch>::Instruction: LocIterator<A::Location, Item=(Option<A::Location>, Direction)> {
+    disambiguator: &mut Disam,
+) -> SSA<A> where
+    for<'a, 'disam> &'a <A as Arch>::Instruction: LocIterator<'disam, A::Location, Disam, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+{
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
     let dominance_frontiers = compute_dominance_frontiers_from_idom(cfg, entry, &idom);
 
     // extract out dominance frontiers .... one day...
 
-    let mut all_locations: HashSet<A::Location> = HashSet::new();
-    let mut assignments: HashMap<A::Location, HashSet<A::Address>> = HashMap::new();
+    let mut use_tracker = UseDefTracker::<A>::new();
 
     use arch::InstructionSpan;
 
@@ -128,20 +171,20 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            for (maybeloc, direction) in instr.iter_locs() {
+            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
-                        let widening = loc.maximal_alias_of();
-                        all_locations.insert(widening);
-                        assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(block.start);
+                        // TODO: this us the cause of some inaccuracies f.ex on x86:
+                        // cl and ch both have a widest alias of ecx (or rcx) so a write to ch may
+                        // clobber a prior write of cl.
+                        use_tracker.track_def(loc, block.start);
                     }
                     (None, Direction::Write) => {
                         // TODO: this is a write to something, we don't know what
                         // this should set a bit to indicate potential all-clobber or something
                     }
                     (Some(loc), Direction::Read) => {
-                        let widening = loc.maximal_alias_of();
-                        all_locations.insert(widening);
+                        use_tracker.track_use(loc);
                     }
                     (None, Direction::Read) => {
                         // TODO: this is a read from something, but we don't know what
@@ -169,17 +212,14 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
             for modifier in value_modifiers.between(block.start, next) {
                 match modifier {
                     (Some(loc), Direction::Write) => {
-                        let widening = loc.maximal_alias_of();
-                        all_locations.insert(widening);
-                        assignments.entry(widening).or_insert_with(|| HashSet::new()).insert(block.start);
+                        use_tracker.track_def(loc, block.start);
                     }
                     (None, Direction::Write) => {
                         // TODO: this is a write to something, we don't know what
                         // this should set a bit to indicate potential all-clobber or something
                     }
                     (Some(loc), Direction::Read) => {
-                        let widening = loc.maximal_alias_of();
-                        all_locations.insert(widening);
+                        use_tracker.track_use(loc);
                     }
                     (None, Direction::Read) => {
                         // TODO: this is a read from something, but we don't know what
@@ -204,14 +244,14 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
 
 
 //    for each variable in vars {
-    for loc in all_locations.iter() {
+    for loc in use_tracker.all_locations.iter() {
         iter_count += 1;
 //        for each X in A(variable) {
-        if ! assignments.contains_key(loc) {
+        if ! use_tracker.assignments.contains_key(loc) {
             continue;
         }
         #[allow(non_snake_case)]
-        for X in assignments[loc].iter() {
+        for X in use_tracker.assignments[loc].iter() {
             work.insert(*X, iter_count);
             W.push_back(*X);
         }
@@ -252,7 +292,13 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
      */
 
     #[allow(non_snake_case)]
-    fn search<A: Arch + SSAValues, M: MemoryRange<A::Address>, U: ModifierCollection<A>>(
+    fn search<
+        A: Arch + SSAValues,
+        M: MemoryRange<A::Address>,
+        U: ModifierCollection<A>,
+        LocSpec,
+        Disam: Disambiguator<A::Location, LocSpec>,
+    >(
         data: &M,
         block: &BasicBlock<A::Address>,
         values: &mut HashMap<A::Address, RWMap<A>>,
@@ -265,12 +311,14 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         C: &mut HashMap<A::Location, u32>,
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>,
-        value_modifiers: &impl std::ops::Deref<Target = U>
-    ) where for<'a> &'a <A as Arch>::Instruction: LocIterator<A::Location, Item=(Option<A::Location>, Direction)> {
+        value_modifiers: &impl std::ops::Deref<Target = U>,
+        disambiguator: &mut Disam,
+    ) where
+        for<'a, 'disam> &'a <A as Arch>::Instruction: LocIterator<'disam, A::Location, Disam, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    {
         fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
-            let widening = loc.maximal_alias_of();
             use std::collections::hash_map::Entry;
-            if let Entry::Occupied(mut e) = C.entry(widening) {
+            if let Entry::Occupied(mut e) = C.entry(loc) {
                 let i = *e.get();
                 *e.get_mut() += 1;
                 Value::new(loc, Some(i))
@@ -284,65 +332,109 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         if let Some(phis) = phi.get(&block.start) {
             for (loc, _data) in phis {
                 // these are very clear reads vs assignments:
-                let widening = loc.maximal_alias_of();
                 let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
                 phi_dest.replace(new_value(*loc, C));
                 defs.insert(HashedValue {
                     value: Rc::clone(&phi_dest)
                 }, (block.start, DefSource::Phi));
-                S.get_mut(&widening).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
+                S.get_mut(&loc).expect("S should have entries for all locations.").push(Rc::clone(&phi_dest));
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                 // eg is it faster to store this and pop it back or is it faster to just
                 // decode again..?
-                assignments.push(widening); // ???
+                assignments.push(*loc); // ???
             }
         }
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
             let mut writelog: HashSet<A::Location> = HashSet::new();
-            for (maybeloc, direction) in instr.iter_locs().zip(std::iter::repeat(DefSource::Instruction)) {
-                match (maybeloc, direction) {
-                    ((Some(loc), Direction::Read), _) => {
-                        let widening = loc.maximal_alias_of();
-                        let at_address = values.entry(address).or_insert_with(||
-                            HashMap::new()
-                        );
-                        let s_idx = {
-                            S[&widening].len() - 1 - if writelog.contains(&widening) {
-                                1
+            let def_source = DefSource::Instruction;
+            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
+                if let Some(loc) = maybeloc {
+                    match direction {
+                        Direction::Read => {
+                            let at_address = values.entry(address).or_insert_with(||
+                                HashMap::new()
+                            );
+                            let s_idx = {
+                                S[&loc].len() - 1 - if writelog.contains(&loc) {
+                                    1
+                                } else {
+                                    0
+                                }
+                            };
+                            at_address.insert((loc, Direction::Read), Rc::clone(&S[&loc][s_idx]));
+                        },
+                        Direction::Write => {
+                            if writelog.contains(&loc) {
+                                continue;
                             } else {
-                                0
+                                writelog.insert(loc.clone());
                             }
-                        };
-                        at_address.insert((loc, Direction::Read), Rc::clone(&S[&widening][s_idx]));
-                    },
-                    ((None, Direction::Read), _) => {
-                        // it's a read of something, but we don't know what, 
-                    },
-                    ((Some(loc), Direction::Write), def_source) => {
-                        let widening = loc.maximal_alias_of();
-                        if writelog.contains(&widening) {
-                            continue;
-                        } else {
-                            writelog.insert(widening.clone());
+                            let new_value = Rc::new(RefCell::new(new_value(loc, C)));
+                            defs.insert(HashedValue {
+                                value: Rc::clone(&new_value)
+                            }, (address, def_source));
+                            let at_address = values.entry(address).or_insert_with(||
+                                HashMap::new()
+                            );
+                            at_address.insert((loc, Direction::Write), Rc::clone(&new_value));
+                            S.get_mut(&loc).expect("S should have entries for all locations.").push(new_value);
+                            // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
+                            // eg is it faster to store this and pop it back or is it faster to just
+                            // decode again..?
+                            assignments.push(loc); // ???
+                        },
+                    }
+                } else {
+                    match direction {
+                        Direction::Read => {
+                            // it's a read of something, but we don't know what, 
+                        },
+                        Direction::Write => {
+                            // a write to somewhere, we don't know where, this should def ...
+                            // everything
                         }
-                        let new_value = Rc::new(RefCell::new(new_value(loc, C)));
-                        defs.insert(HashedValue {
-                            value: Rc::clone(&new_value)
-                        }, (address, def_source));
-                        let at_address = values.entry(address).or_insert_with(||
-                            HashMap::new()
-                        );
-                        at_address.insert((loc, Direction::Write), Rc::clone(&new_value));
-                        S.get_mut(&widening).expect("S should have entries for all locations.").push(new_value);
-                        // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
-                        // eg is it faster to store this and pop it back or is it faster to just
-                        // decode again..?
-                        assignments.push(widening); // ???
-                    },
-                    ((None, Direction::Write), _) => {
-                        // a write to somewhere, we don't know where, this should def ...
-                        // everything
+                    }
+                }
+            }
+            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
+                if let Some(loc) = maybeloc {
+                    for alias in loc.aliases_of() {
+                        match direction {
+                            Direction::Read => {
+                                let at_address = values.entry(address).or_insert_with(||
+                                    HashMap::new()
+                                );
+                                let s_idx = {
+                                    S[&alias].len() - 1 - if writelog.contains(&alias) {
+                                        1
+                                    } else {
+                                        0
+                                    }
+                                };
+                                at_address.insert((alias, Direction::Read), Rc::clone(&S[&alias][s_idx]));
+                            },
+                            Direction::Write => {
+                                if writelog.contains(&alias) {
+                                    continue;
+                                } else {
+                                    writelog.insert(alias.clone());
+                                }
+                                let new_value = Rc::new(RefCell::new(new_value(alias, C)));
+                                defs.insert(HashedValue {
+                                    value: Rc::clone(&new_value)
+                                }, (address, def_source));
+                                let at_address = values.entry(address).or_insert_with(||
+                                    HashMap::new()
+                                );
+                                at_address.insert((alias, Direction::Write), Rc::clone(&new_value));
+                                S.get_mut(&alias).expect("S should have entries for all locations.").push(new_value);
+                                // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
+                                // eg is it faster to store this and pop it back or is it faster to just
+                                // decode again..?
+                                assignments.push(alias); // ???
+                            },
+                        }
                     }
                 }
             }
@@ -445,7 +537,8 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                     idom,
                     C,
                     S,
-                    value_modifiers
+                    value_modifiers,
+                    disambiguator,
                 );
                     // this shouldn't be modified in recursive calls (we won't visit the same block
                     // [so, same bounds] twice), but it's clumsy to express that to rustc. might
@@ -473,7 +566,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
 
     // all_locations should be the widest aliases ONLY
 //    for each variable in vars {
-    for loc in all_locations {
+    for loc in use_tracker.all_locations {
         C.insert(loc, 0);
         S.insert(loc, vec![Rc::new(RefCell::new(Value::new(loc, None)))]);
     }
@@ -491,7 +584,8 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         &idom,
         &mut C,
         &mut S,
-        &value_modifiers
+        &value_modifiers,
+        disambiguator,
     );
 
     SSA { instruction_values: values, modifier_values: HashMap::new(), control_dependent_values: between_block_bounds, defs: defs, phi: phi }
