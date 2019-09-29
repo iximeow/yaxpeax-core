@@ -299,6 +299,7 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
         }
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
+            let mut writelog: HashSet<A::Location> = HashSet::new();
             for (maybeloc, direction) in instr.iter_locs().zip(std::iter::repeat(DefSource::Instruction)) {
                 match (maybeloc, direction) {
                     ((Some(loc), Direction::Read), _) => {
@@ -306,13 +307,25 @@ pub fn generate_ssa<A: SSAValues, M: MemoryRange<A::Address>, U: ModifierCollect
                         let at_address = values.entry(address).or_insert_with(||
                             HashMap::new()
                         );
-                        at_address.insert((loc, Direction::Read), Rc::clone(&S[&widening][S[&widening].len() - 1]));
+                        let s_idx = {
+                            S[&widening].len() - 1 - if writelog.contains(&widening) {
+                                1
+                            } else {
+                                0
+                            }
+                        };
+                        at_address.insert((loc, Direction::Read), Rc::clone(&S[&widening][s_idx]));
                     },
                     ((None, Direction::Read), _) => {
                         // it's a read of something, but we don't know what, 
                     },
                     ((Some(loc), Direction::Write), def_source) => {
                         let widening = loc.maximal_alias_of();
+                        if writelog.contains(&widening) {
+                            continue;
+                        } else {
+                            writelog.insert(widening.clone());
+                        }
                         let new_value = Rc::new(RefCell::new(new_value(loc, C)));
                         defs.insert(HashedValue {
                             value: Rc::clone(&new_value)
