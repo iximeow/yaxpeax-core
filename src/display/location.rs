@@ -105,7 +105,7 @@ pub struct HighlightList<L: PartialEq> {
     pub location_highlights: Vec<(L, Direction)>
 }
 
-impl <L: PartialEq> LocationHighlighter<L> for HighlightList<L> {
+impl <L: PartialEq + crate::data::AliasInfo> LocationHighlighter<L> for HighlightList<L> {
     fn operand<'a, T: Display + ?Sized>(&self, operand_number: u8, data: &'a T) -> StyledDisplay<'a, T> {
         let style = (self.operands_bits & (1 << operand_number)) != 0;
         StyledDisplay {
@@ -118,11 +118,27 @@ impl <L: PartialEq> LocationHighlighter<L> for HighlightList<L> {
 
     fn location<'a, T: Display + ?Sized>(&self, loc: &(L, Direction), data: &'a T) -> StyledDisplay<'a, T> {
         let style = self.location_highlights.contains(loc);
-        StyledDisplay {
-            style,
-            data,
-            entry: Invert.as_ref(),
-            exit: NoInvert.as_ref()
+        if style {
+            StyledDisplay {
+                style,
+                data,
+                entry: Invert.as_ref(),
+                exit: NoInvert.as_ref()
+            }
+        } else {
+            let mut alias_style = false;
+            for alias in loc.0.aliases_of() {
+                if self.location_highlights.contains(&(alias, loc.1)) {
+                    alias_style = true;
+                    break;
+                }
+            }
+            StyledDisplay {
+                style: alias_style,
+                data,
+                entry: Invert.as_ref(),
+                exit: NoInvert.as_ref()
+            }
         }
     }
 }
