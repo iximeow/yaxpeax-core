@@ -7,7 +7,7 @@ use petgraph::graphmap::{GraphMap, Nodes};
 
 use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
 
-use num_traits::{Bounded, WrappingAdd, Zero, One};
+use num_traits::{WrappingAdd, Zero, One};
 
 use ContextRead;
 use ContextWrite;

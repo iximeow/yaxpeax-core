@@ -5,7 +5,6 @@ use termion::color;
 
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual};
-use arch;
 use arch::display::BaseDisplay;
 use arch::CommentQuery;
 use arch::FunctionQuery;
@@ -224,17 +223,17 @@ impl <T> BaseDisplay<(), T> for MSP430 where T: FunctionQuery<<MSP430 as Arch>::
             if let Some(comment) = ctx.comment_for(addr) {
                 writeln!(dest, "{:04x}: {}{}{}",
                     addr,
-                    color::Fg(&color::Blue as &color::Color),
+                    color::Fg(&color::Blue as &dyn color::Color),
                     comment,
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
-                    color::Fg(&color::LightYellow as &color::Color),
+                    color::Fg(&color::LightYellow as &dyn color::Color),
                     // TODO: show values?
                     fn_dec.decl_string(false),
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
         }
@@ -270,14 +269,14 @@ pub fn render_instruction_with_ssa_values<T>(
 }
 
 pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
-    data: &M,
-    ctx: &msp430::MergedContextTable, //HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
+    _data: &M,
+    _ctx: &msp430::MergedContextTable, //HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     start_addr: <MSP430 as Arch>::Address,
     end_addr: <MSP430 as Arch>::Address,
-    function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
-    colors: Option<&ColorSettings>) {
-    let mut continuation = start_addr;
+    _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
+    _colors: Option<&ColorSettings>) {
+    let continuation = start_addr;
     while continuation < end_addr {
         // Do we have a block here?
         let block = cfg.get_block(continuation);
@@ -286,7 +285,7 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
         if cfg.graph.contains_node(block.start) {
         }
 
-        let end = if block.end < end_addr {
+        let _end = if block.end < end_addr {
             block.end
         } else {
             end_addr
@@ -302,10 +301,14 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
         ");
 
         // and continue on right after this block
+        /*
+         * TODO: these handle continuting on or not to the next basic block
+         *
         if block.end == 0xffff {
             break;
         }
         continuation = block.end + <MSP430 as Arch>::Address::from(1u16);
+        */
     }
 }
 
@@ -350,7 +353,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
-            let user = user_infos.get(&address);
+            let _user = user_infos.get(&address);
             let mut instr_text = String::new();
             MSP430::render_frame(
                 &mut instr_text,
@@ -358,7 +361,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Option::<&msp430::MergedContextTable>::None
-            );
+            ).unwrap();
             print!("{}", instr_text);
             render_instruction_with_ssa_values(
                 address,
@@ -379,7 +382,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
 
 pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
     data: &M,
-    user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
+    _user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     addr: <MSP430 as Arch>::Address,
     colors: Option<&ColorSettings>) {
@@ -405,7 +408,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Option::<&msp430::MergedContextTable>::None,
-            );
+            ).unwrap();
             instr.contextualize(colors, address, None::<&[Option<String>]>, &mut instr_text).unwrap();
             println!(" {}", instr_text);
            //println!("{:#04x}: {}", address, instr);

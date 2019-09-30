@@ -2,8 +2,6 @@ use yaxpeax_arch::Address;
 use memory::repr::FlatMemoryRepr;
 use memory::{MemoryRange, MemoryRepr, Named};
 use debug::Peek;
-use debug::gdb_remote::GDBRemote;
-use std::fmt::Display;
 use std::ops::Range;
 use memory::repr::process::ModuleInfo;
 use memory::repr::cursor::{UnboundedCursor, ReadCursor};
@@ -30,7 +28,7 @@ impl <A: Address, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
     }
     // TODO: read a ModuleInfo out of the remote process
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, _addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, _addr: A) -> Option<&dyn MemoryRepr<A>> {
         /*
         for module in self.modules.iter() {
             if module.contains(addr) {

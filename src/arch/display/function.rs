@@ -13,7 +13,6 @@ use arch::FunctionQuery;
 use arch::SymbolQuery;
 use arch::FunctionRepr;
 use yaxpeax_arch::ColorSettings;
-use yaxpeax_arch::Decodable;
 
 use std::fmt;
 use std::fmt::Write;

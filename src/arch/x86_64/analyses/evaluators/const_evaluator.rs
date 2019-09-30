@@ -1,6 +1,5 @@
 use yaxpeax_arch::Arch;
 use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
-use arch::x86_64::x86_64Data;
 use arch::x86_64::ModifierExpression;
 use arch::x86_64::analyses::data_flow::{Data, Location};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
@@ -128,7 +127,7 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
         }
     }
 
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &(), data: &U) {
+    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &(), _data: &U) {
         //TODO: handle prefixes like at all
         match instr {
             Instruction { opcode: Opcode::XOR, operands: [Operand::Register(l), Operand::Register(r)], .. } => {

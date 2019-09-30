@@ -37,7 +37,7 @@ impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for ReadCursor<'a, A, T> {
         Some(FlatMemoryRepr::of(self.collect()))
     }
     fn module_info(&self) -> Option<&ModuleInfo> { self.data.module_info() }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
         self.data.module_for(self.start + addr)
     }
     fn size(&self) -> Option<u64> {
@@ -86,7 +86,7 @@ impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for UnboundedCursor<'a, A,
         Some(FlatMemoryRepr::of(self.collect()))
     }
     fn module_info(&self) -> Option<&ModuleInfo> { self.data.module_info() }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
         self.data.module_for(self.addr + addr)
     }
     fn size(&self) -> Option<u64> {

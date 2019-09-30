@@ -75,6 +75,7 @@ pub trait LocIterator<'disambiguator, Location, D: Disambiguator<Location, Self:
     fn iter_locs(self, _: &'disambiguator mut D) -> Self::Iter;
 }
 
+#[allow(unused)]
 macro_rules! impl_loc_iterator_transition {
     ($arch:ty) => {
         impl <'a> LocIterator<$arch::Location> for &'a $arch::Instruction {

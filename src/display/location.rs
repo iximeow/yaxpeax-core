@@ -1,6 +1,3 @@
-use yaxpeax_arch::Arch;
-use data::ValueLocations;
-use arch::x86_64::display::Use;
 use data::Direction;
 
 use std::fmt::Display;
@@ -86,10 +83,10 @@ pub trait LocationHighlighter<Loc> {
 pub struct NoHighlights;
 
 impl <L> LocationHighlighter<L> for NoHighlights {
-    fn operand<'a, T: Display + ?Sized>(&self, operand_number: u8, data: &'a T) -> StyledDisplay<'a, T> {
+    fn operand<'a, T: Display + ?Sized>(&self, _operand_number: u8, data: &'a T) -> StyledDisplay<'a, T> {
         StyledDisplay::none(data)
     }
-    fn location<'a, T: Display + ?Sized>(&self, loc: &(L, Direction), data: &'a T) -> StyledDisplay<'a, T> {
+    fn location<'a, T: Display + ?Sized>(&self, _loc: &(L, Direction), data: &'a T) -> StyledDisplay<'a, T> {
         StyledDisplay::none(data)
     }
 }

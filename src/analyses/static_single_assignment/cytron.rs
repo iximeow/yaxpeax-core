@@ -1,3 +1,5 @@
+use yaxpeax_arch::Arch;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::cmp::Eq;
@@ -10,7 +12,6 @@ use std::rc::Rc;
 
 use std::fmt::Debug;
 
-use yaxpeax_arch::{Arch, LengthedInstruction};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
 
@@ -170,7 +171,7 @@ pub fn generate_ssa<
         has_already.insert(k, 0);
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
-        while let Some((address, instr)) = iter.next() {
+        while let Some((_address, instr)) = iter.next() {
             for (maybeloc, direction) in instr.iter_locs(disambiguator) {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
@@ -332,7 +333,7 @@ pub fn generate_ssa<
         if let Some(phis) = phi.get(&block.start) {
             for (loc, _data) in phis {
                 // these are very clear reads vs assignments:
-                let mut phi_dest = Rc::clone(&phi[&block.start][loc].out);
+                let phi_dest = Rc::clone(&phi[&block.start][loc].out);
                 phi_dest.replace(new_value(*loc, C));
                 defs.insert(HashedValue {
                     value: Rc::clone(&phi_dest)
@@ -544,7 +545,7 @@ pub fn generate_ssa<
                     // [so, same bounds] twice), but it's clumsy to express that to rustc. might
                     // revisit in the future.
                     if let Some(adjustments) = between_block_bounds[&block.start].get(&u) {
-                        for ((loc, direction), value) in adjustments {
+                        for ((loc, direction), _value) in adjustments {
                             if *direction == Direction::Write {
                                 S.get_mut(&loc.maximal_alias_of()).expect("S has entries for locations").pop();
                             }

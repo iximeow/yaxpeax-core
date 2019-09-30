@@ -640,7 +640,7 @@ impl MCU for CPU {
                     Opcode::TABLWTL => {
                         let source_file = self.debank(instr.operands[0].file_value());
                         self.tablat[0] = self.get_byte(source_file).unwrap();
-                        let mut tblptr = self.tblptr();
+                        let tblptr = self.tblptr();
                         self.program[(tblptr * 2) as usize] = self.tablat[0];
                         self.program[(tblptr * 2 + 1) as usize] = self.tablat[1];
                     },
@@ -656,7 +656,7 @@ impl MCU for CPU {
                     Opcode::TABLWTH => {
                         let source_file = self.debank(instr.operands[0].file_value());
                         self.tablat[1] = self.get_byte(source_file).unwrap();
-                        let mut tblptr = self.tblptr();
+                        let tblptr = self.tblptr();
                         self.program[(tblptr * 2) as usize] = self.tablat[0];
                         self.program[(tblptr * 2 + 1) as usize] = self.tablat[1];
                     },
@@ -905,7 +905,7 @@ impl MCU for CPU {
                         let source_file = self.debank(instr.operands[0].file_value());
                         let bit = self.debank(instr.operands[1].imm8_value());
 
-                        let mut value = self.get_byte(source_file).unwrap();
+                        let value = self.get_byte(source_file).unwrap();
                         let read = value & (1 << bit);
 
                         if read != 0 {
@@ -916,7 +916,7 @@ impl MCU for CPU {
                         let source_file = self.debank(instr.operands[0].file_value());
                         let bit = self.debank(instr.operands[1].imm8_value());
 
-                        let mut value = self.get_byte(source_file).unwrap();
+                        let value = self.get_byte(source_file).unwrap();
                         let read = value & (1 << bit);
 
                         if read == 0 {

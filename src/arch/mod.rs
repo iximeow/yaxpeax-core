@@ -10,7 +10,6 @@ pub mod display;
 pub mod interface;
 
 use std::fmt::{Display, Write};
-use std::collections::HashMap;
 
 use crate::data::types;
 use data::ValueLocations;
@@ -106,7 +105,7 @@ impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
             }
             if show_locations {
                 res.push_str(" -> ");
-                write!(res, "{:?}", loc);
+                write!(res, "{:?}", loc).unwrap();
             }
         }
         res.push(')');
@@ -114,7 +113,7 @@ impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
             0 => {},
             1 => {
                 if show_locations {
-                    write!(res, "{:?}", self.returns[0].0);
+                    write!(res, "{:?}", self.returns[0].0).unwrap();
                     res.push_str(" -> ");
                 }
                 if let Some(name) = self.returns[0].1.name.as_ref() {
@@ -148,7 +147,7 @@ impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
     }
 }
 
-trait FunctionAbi<A: ValueLocations> {
+pub trait FunctionAbi<A: ValueLocations> {
     fn argument_loc(&self, idx: usize) -> A::Location;
     fn return_loc(&self, idx: usize) -> A::Location;
     fn return_address(&self) -> A::Location;

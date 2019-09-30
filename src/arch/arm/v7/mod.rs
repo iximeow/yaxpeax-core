@@ -3,7 +3,6 @@ use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operands, ConditionCode};
 
 use arch::{Symbol, SymbolQuery};
 use arch::Function;
-use arch::FunctionRepr;
 use arch::FunctionQuery;
 use arch::BaseUpdate;
 use arch::CommentQuery;

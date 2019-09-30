@@ -33,7 +33,7 @@ impl FunctionSignatory<x86_64> for FunctionByteSignatory {
         data: &Self::Data,
         memory: &M
     ) -> SignatureResult<Self::Signature> {
-        let mut hasher = SipHasher13::new();
+        let _hasher = SipHasher13::new();
     }
 }
 */
@@ -48,11 +48,11 @@ impl <A: Arch> FunctionSignatory<A> for FunctionMnemonicSignatory {
     /// with a particular depth ordered by start address. This, subsequently, is not
     /// robust in the face of basic block reordering.
     fn signature_of<M: MemoryRepr<A::Address>>(
-        cfg: &ControlFlowGraph<A::Address>,
-        data: &Self::Data,
-        memory: &M
+        _cfg: &ControlFlowGraph<A::Address>,
+        _data: &Self::Data,
+        _memory: &M
     ) -> SignatureResult<Self::Signature> {
-        let mut hasher = SipHasher13::new();
+        let _hasher = SipHasher13::new();
         Err(IncompleteSignature::Uncomputable)
     }
 }
@@ -67,11 +67,11 @@ impl <A: Arch> FunctionSignatory<A> for FunctionBlockSignatory {
     /// topologically ordered from the function entry point. This should be robust to
     /// basic block reordering, and also permits an edit distance style fuzzy equivalence
     fn signature_of<M: MemoryRepr<A::Address>>(
-        cfg: &ControlFlowGraph<A::Address>,
-        data: &Self::Data,
-        memory: &M
+        _cfg: &ControlFlowGraph<A::Address>,
+        _data: &Self::Data,
+        _memory: &M
     ) -> SignatureResult<Self::Signature> {
-        let mut hasher = SipHasher13::new();
+        let _hasher = SipHasher13::new();
         Err(IncompleteSignature::Uncomputable)
     }
 }
@@ -114,11 +114,11 @@ impl <A: Arch> FunctionSignatory<A> for FunctionOrderFreeSignatory {
     ///
     /// by virtue of nulling the jb/jae.
     fn signature_of<M: MemoryRepr<A::Address>>(
-        cfg: &ControlFlowGraph<A::Address>,
-        data: &Self::Data,
-        memory: &M
+        _cfg: &ControlFlowGraph<A::Address>,
+        _data: &Self::Data,
+        _memory: &M
     ) -> SignatureResult<Self::Signature> {
-        let mut hasher = SipHasher13::new();
+        let _hasher = SipHasher13::new();
         Err(IncompleteSignature::Uncomputable)
     }
 }

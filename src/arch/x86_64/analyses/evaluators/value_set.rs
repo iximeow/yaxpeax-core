@@ -1,6 +1,5 @@
 use yaxpeax_arch::{AddressDisplay, Arch};
 use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
-use arch::x86_64::x86_64Data;
 use arch::x86_64::analyses::data_flow::{Data, Location, ValueRange};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
@@ -15,14 +14,14 @@ impl Domain for ValueSetDomain {
     type Modifier = ModifierExpression;
     type Value = Vec<ValueRange>;
 
-    fn join(l: Option<Self::Value>, r: Option<Self::Value>) -> Option<Self::Value> {
+    fn join(_l: Option<Self::Value>, _r: Option<Self::Value>) -> Option<Self::Value> {
         // TODO ... haha
         panic!("implement value set domain join");
-        None
+        // None
     }
 }
 
-fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &()) -> Option<Data> {
+fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Data> {
     match mem_op {
         Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, _) |
         Operand::DisplacementU32(_) |
@@ -182,10 +181,10 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     /// v_2 = transient ModifierExpression::Below(20) .
     ///       transient ModifierExpression::Above(5) . v_1
     /// -> v_2 == Data::ValueSet(vec![ValueRange::Between(5, 20)])
-    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<ValueSetDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, contexts: &()) {
+    fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<ValueSetDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, _contexts: &()) {
         if let Some(loc) = location {
             for expr in exprs {
-                let new_value = dfg.get_transient_value(from, to, loc, Direction::Read).and_then(|lvalue| {
+                let new_value = dfg.get_transient_value(from, to, loc, Direction::Read).and_then(|_lvalue| {
                     // TODO
 //                    lvalue.get_data().and_then(|data| data.merge_modifier(expr))
                     None
@@ -229,7 +228,6 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     }
 
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
-        use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr {
             Instruction { opcode: Opcode::MOVSXD, operands: [Operand::Register(l), Operand::Register(r)], .. } => {

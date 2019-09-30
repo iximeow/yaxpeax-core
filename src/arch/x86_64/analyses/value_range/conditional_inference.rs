@@ -1,4 +1,4 @@
-use yaxpeax_arch::{AddressDisplay, Arch, LengthedInstruction};
+use yaxpeax_arch::{Arch, LengthedInstruction};
 use yaxpeax_x86::{x86_64, Opcode, Instruction, Operand, ConditionCode};
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::{ModifierExpression, InstructionModifiers};
@@ -37,7 +37,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
             }
         });
 
-        let mut def_site: Option<(<x86_64 as Arch>::Address, DefSource<<x86_64 as Arch>::Address>)> = uses.next().map(|loc| {
+        let def_site: Option<(<x86_64 as Arch>::Address, DefSource<<x86_64 as Arch>::Address>)> = uses.next().map(|loc| {
             dfg.get_def_site(dfg.get_use(addr, *loc).value)
         });
 
@@ -56,8 +56,8 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
         test_addr: <x86_64 as Arch>::Address,
         conditional_instr: &<x86_64 as Arch>::Instruction,
         conditional_addr: <x86_64 as Arch>::Address,
-        cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>,
-        dfg: &SSA<x86_64>,
+        _cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>,
+        _dfg: &SSA<x86_64>,
         aux_data: &mut InstructionModifiers,
     ) -> bool {
         if test_addr == 0x140486bad {
@@ -105,7 +105,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::Z |
                 ConditionCode::NZ => {
                     match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         }
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -116,11 +116,6 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU32(imm)], .. } => {
                             aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as i64 as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as i64 as u64));
                             true
                         },
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
@@ -147,11 +142,6 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
                             true
                         },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
                         Instruction { opcode: Opcode::ADD, operands: [Operand::Register(result), _], .. } |
                         Instruction { opcode: Opcode::SUB, operands: [Operand::Register(result), _], .. } |
                         Instruction { opcode: Opcode::AND, operands: [Operand::Register(result), _], .. } |
@@ -167,7 +157,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::G |
                 ConditionCode::LE => {
                     match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -180,7 +170,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below((*imm as i64).wrapping_sub(1) as u64));
                             true
                         },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -194,7 +184,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::L |
                 ConditionCode::GE => {
                     match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -207,7 +197,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as i64).wrapping_sub(1) as u64));
                             true
                         },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -221,7 +211,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::A |
                 ConditionCode::NA => {
                     match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -234,7 +224,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as i64 as u64));
                             true
                         },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -248,7 +238,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::B |
                 ConditionCode::NB => {
                     match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
@@ -261,7 +251,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as i64).wrapping_sub(1) as u64));
                             true
                         },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
+                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
                             false
                         },
                         Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {

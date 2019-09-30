@@ -159,7 +159,7 @@ impl <A: Address> MemoryRepr<A> for Segment {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
         if self.contains(addr) {
             Some(self)
         } else {
@@ -534,7 +534,7 @@ impl ModuleData {
                     let mut section_data = vec![0; section.p_memsz as usize];
 //                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
 //                    println!("{:?}", section);
-                    let mut physical_copy_end = (section.p_offset as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
+                    let physical_copy_end = (section.p_offset as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.p_offset as usize) < data.len() {
                             data.len() - section.p_offset as usize
@@ -585,7 +585,7 @@ impl ModuleData {
                     let mut section_data = vec![0; section.virtual_size as usize];
 //                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.virtual_size, section.size_of_raw_data);
 //                    println!("{:?}", section);
-                    let mut physical_copy_end = (section.pointer_to_raw_data as usize) + std::cmp::min(section.size_of_raw_data as usize, section.virtual_size as usize);
+                    let physical_copy_end = (section.pointer_to_raw_data as usize) + std::cmp::min(section.size_of_raw_data as usize, section.virtual_size as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.pointer_to_raw_data as usize) < data.len() {
                             data.len() - section.pointer_to_raw_data as usize
@@ -616,7 +616,7 @@ impl ModuleData {
                 }
                 match &module.module_info {
                     ModuleInfo::PE(_, _, _, _, _, ref imports, ref _exports, _) => {
-                        for i in imports.iter() {
+                        for _i in imports.iter() {
 //                            println!("import: {:?}", i);
                         }
                     }
@@ -662,7 +662,7 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { Some(&self.module_info) }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
         if self.segment_for(addr).is_some() {
             Some(self)
         } else {
@@ -721,7 +721,7 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { /* TODO: how to get one specific moduleinfo? or should all of them get merged? */ None }
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>> {
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
         for module in self.modules.iter() {
             if module.segment_for(addr).is_some() {
                 return Some(module)

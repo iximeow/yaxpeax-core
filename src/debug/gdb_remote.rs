@@ -108,6 +108,7 @@ fn check_checksum(buf: &[u8]) -> Option<&[u8]> {
     }
 }
 
+#[allow(unused)]
 fn is_digit(b: u8) -> bool {
     b >= '0' as u8 && b <= '9' as u8
 }
@@ -164,6 +165,7 @@ impl Command {
             }
         }
     }
+    #[allow(unused)]
     fn response_size(&self) -> Option<usize> {
         match self {
             Command::MemoryRead(size, len) => {
@@ -234,7 +236,7 @@ impl GDBRemote {
         let mut result = vec![0; PACKET_SIZE];
         let mut offset = 0;
 
-        self.issue_request(cmd);
+        self.issue_request(cmd).unwrap();
 
         assert!(self.in_flight.is_some());
 

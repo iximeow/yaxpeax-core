@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 ///
 /// Note, some flags are inconsistently modeled.
 /// "inconsistently" here means that some instructions may correctly model them,
@@ -387,10 +388,10 @@ impl Data {
                 Some(Data::ValueSet(new_values))
             },
             _ => {
-                return None;
                 use arch::x86_64::display::DataDisplay;
                 println!("Adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
-                panic!("add!");
+                return None;
+                // panic!("add!");
             }
         }
     }
@@ -659,7 +660,7 @@ pub struct ContextualDisambiguation<'a> {
 }
 
 impl <'a> Disambiguator<Location, (u8, u8)> for ContextualDisambiguation<'a> {
-    fn disambiguate(&mut self, spec: (u8, u8)) -> Option<Location> {
+    fn disambiguate(&mut self, _spec: (u8, u8)) -> Option<Location> {
         // figure out if the location is sp-relative or rip-relative
         // .. or, has a relocation?
         None
@@ -866,14 +867,14 @@ fn operands_in(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::Invalid => {
             0
         },
-        Opcode::Jcc(cond) => {
+        Opcode::Jcc(_cond) => {
             2
         }
 
-        Opcode::MOVcc(cond) => {
+        Opcode::MOVcc(_cond) => {
             3
         }
-        Opcode::SETcc(cond) => {
+        Opcode::SETcc(_cond) => {
             3
         }
         Opcode::LSL => {
@@ -922,7 +923,7 @@ fn operands_in(op: yaxpeax_x86::Opcode) -> u8 {
 
 fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
     (if usage == Use::ReadWrite { 1 } else { 0 }) + match op {
-        Operand::Register(spec) => {
+        Operand::Register(_spec) => {
             // reg
             1
         },
@@ -931,17 +932,17 @@ fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
             // mem
             1
         },
-        Operand::RegDeref(spec) |
-        Operand::RegDisp(spec, _) |
-        Operand::RegScale(spec, _) |
-        Operand::RegScaleDisp(spec, _, _) => {
+        Operand::RegDeref(_spec) |
+        Operand::RegDisp(_spec, _) |
+        Operand::RegScale(_spec, _) |
+        Operand::RegScaleDisp(_spec, _, _) => {
             // reg, mem
             2
         },
-        Operand::RegIndexBase(base, index) |
-        Operand::RegIndexBaseDisp(base, index, _) |
-        Operand::RegIndexBaseScale(base, index, _) |
-        Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+        Operand::RegIndexBase(_base, _index) |
+        Operand::RegIndexBaseDisp(_base, _index, _) |
+        Operand::RegIndexBaseScale(_base, _index, _) |
+        Operand::RegIndexBaseScaleDisp(_base, _index, _, _) => {
             // reg, reg, mem
             3
         },
@@ -1158,14 +1159,14 @@ fn use_of(op: yaxpeax_x86::Opcode, idx: u8) -> Use {
         Opcode::Invalid => {
             Use::Read
         },
-        Opcode::Jcc(cond) => {
+        Opcode::Jcc(_cond) => {
             Use::Read
         }
 
-        Opcode::MOVcc(cond) => {
+        Opcode::MOVcc(_cond) => {
             [Use::Write, Use::Read][idx as usize]
         }
-        Opcode::SETcc(cond) => {
+        Opcode::SETcc(_cond) => {
             Use::Write
         }
         Opcode::LSL => {
@@ -1877,7 +1878,6 @@ fn test_xor_locations() {
     use data::LocIterator;
     let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
     panic!("{:?}", locs);
-    panic!("aaaa");
 }
 
 impl <'a, 'b, D: Disambiguator<Location, (u8, u8)>> Iterator for LocationIter<'a, 'b, D> {

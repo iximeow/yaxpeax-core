@@ -163,7 +163,7 @@ impl ProcessMemory {
 
 use std::fmt;
 impl fmt::Display for DebugeeX86_64 {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _fmt: &mut fmt::Formatter) -> fmt::Result {
         panic!("formatting rc.refcell.debugeex86_64");
     }
 }

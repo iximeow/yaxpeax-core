@@ -616,11 +616,11 @@ impl MCU for CPU {
             Ok(instr) => {
                 match instr.opcode {
                     Opcode::TBLWT_S => {
-                        let mut ptr = self.tblptr();
+                        let ptr = self.tblptr();
                         self.holding_registers[(ptr & 0x1f) as usize] = self.sfrs[SFRS::TABLAT as usize];
                     }
                     Opcode::TBLRD_S => {
-                        let mut ptr = self.tblptr();
+                        let ptr = self.tblptr();
                         self.sfrs[SFRS::TABLAT as usize] = self.program[ptr as usize];
                     }
                     Opcode::TBLRD_S_I => {
@@ -1247,7 +1247,7 @@ impl MCU for CPU {
                             _ => { unreachable!() }
                         };
 
-                        let mut value = self.get_byte(dest_file as u32).unwrap();
+                        let value = self.get_byte(dest_file as u32).unwrap();
                         let read = value & (1 << bit);
 
                         if read != 0 {
@@ -1267,7 +1267,7 @@ impl MCU for CPU {
                             _ => { unreachable!() }
                         };
 
-                        let mut value = self.get_byte(dest_file as u32).unwrap();
+                        let value = self.get_byte(dest_file as u32).unwrap();
                         let read = value & (1 << bit);
 
                         if read == 0 {

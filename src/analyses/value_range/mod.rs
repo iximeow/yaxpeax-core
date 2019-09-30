@@ -77,18 +77,19 @@ pub trait ConditionalBoundInference<A: Arch + SSAValues, U> {
 
 /// A struct that existes purely to have a non-effecting implementation of conditional bound
 /// inference.
+#[allow(dead_code)]
 struct NoConditionalInference { }
 
 impl <A: Arch + SSAValues, U> ConditionalBoundInference<A, U> for NoConditionalInference {
-    fn conditional_source_for(conditional_instr: &A::Instruction, conditional_addr: A::Address, dfg: &SSA<A>) -> Option<(A::Address, DefSource<A::Address>)> {
+    fn conditional_source_for(_conditional_instr: &A::Instruction, _conditional_addr: A::Address, _dfg: &SSA<A>) -> Option<(A::Address, DefSource<A::Address>)> {
         None
     }
 
-    fn infer_conditional_bounds(curr_block: A::Address, test_instr: &A::Instruction, test_addr: A::Address, conditional_instr: &A::Instruction, conditional_addr: A::Address, cfg: &ControlFlowGraph<A::Address>, dfg: &SSA<A>, aux_data: &mut U) -> bool {
+    fn infer_conditional_bounds(_curr_block: A::Address, _test_instr: &A::Instruction, _test_addr: A::Address, _conditional_instr: &A::Instruction, _conditional_addr: A::Address, _cfg: &ControlFlowGraph<A::Address>, _dfg: &SSA<A>, _aux_data: &mut U) -> bool {
         false
     }
 
-    fn inferrable_conditional(conditional_instr: &A::Instruction) -> bool {
+    fn inferrable_conditional(_conditional_instr: &A::Instruction) -> bool {
         false
     }
 }

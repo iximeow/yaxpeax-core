@@ -7,7 +7,6 @@ use arch::FunctionQuery;
 use arch::FunctionRepr;
 
 use std::fmt;
-use std::collections::HashMap;
 
 use arch::arm::v8::MergedContextTable;
 
@@ -28,10 +27,10 @@ impl <T: FunctionQuery<<ARMv8 as Arch>::Address>> BaseDisplay<arm::v8::Function,
         if let Some(ctx) = ctx {
             if let Some(fn_dec) = ctx.function_at(addr) {
                 write!(dest, "      {}{}{}",
-                    color::Fg(&color::LightYellow as &color::Color),
+                    color::Fg(&color::LightYellow as &dyn color::Color),
                     // TODO: show locations?
                     fn_dec.decl_string(false),
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
         }

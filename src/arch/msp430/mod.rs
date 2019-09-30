@@ -15,7 +15,6 @@ use ContextRead;
 use ContextWrite;
 
 use arch::{Function, Symbol, SymbolQuery};
-use arch::FunctionRepr;
 use arch::FunctionQuery;
 use arch::CommentQuery;
 

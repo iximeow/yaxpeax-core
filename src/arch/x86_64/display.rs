@@ -1,10 +1,7 @@
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
 use termion::color;
-
-use num_traits::Zero;
 
 use arch::FunctionImpl;
 use memory::MemoryRepr;
@@ -18,10 +15,9 @@ use arch::FunctionQuery;
 use arch::CommentQuery;
 use arch::SymbolQuery;
 use arch::AddressNamer;
-use arch::x86_64;
 use arch::x86_64::{ContextRead, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange};
-use analyses::static_single_assignment::SSAValues;
+use analyses::control_flow::Determinant;
 use yaxpeax_x86::{Instruction, Opcode, Operand};
 use yaxpeax_x86::{RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64 as x86_64Arch;
@@ -40,11 +36,10 @@ use data::ValueLocations;
 use std::fmt;
 use std::fmt::Write;
 use std::marker::PhantomData;
-use num_traits::WrappingAdd;
 
 use yaxpeax_arch::ShowContextual;
 impl <T: std::fmt::Write> ShowContextual<u64, MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
+    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, _context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Option::<&[Option<String>]>::None, out)
     }
 }
@@ -61,17 +56,17 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
             if let Some(comment) = ctx.comment_for(addr) {
                 writeln!(dest, "{}: {}{}{}",
                     addr.stringy(),
-                    color::Fg(&color::Blue as &color::Color),
+                    color::Fg(&color::Blue as &dyn color::Color),
                     comment,
-                    color::Fg(&color::Reset as &color::Color)
-                );
+                    color::Fg(&color::Reset as &dyn color::Color)
+                ).unwrap();
             }
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
-                    color::Fg(&color::LightYellow as &color::Color),
+                    color::Fg(&color::LightYellow as &dyn color::Color),
                     // TODO: configurable? show iff non-default?
                     fn_dec.decl_string(true),
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
         }
@@ -520,7 +515,7 @@ pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec
 
 use display::location::{OperandScroll, OperandCursor};
 impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)> for OperandCursor {
-    fn first(instr: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> OperandCursor {
+    fn first(_instr: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> OperandCursor {
         OperandCursor {
             operand: 0,
             location: None,
@@ -533,7 +528,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
     fn next(&mut self, inst_data: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> bool {
         let (inst, ssa) = inst_data;
 
-        if let Some(ssa) = ssa {
+        if let Some(_ssa) = ssa {
             // some instructions have no operands, so we can just bail early:
             if inst.operands[0] == Operand::Nothing {
                 // nope, not scrolling!
@@ -541,7 +536,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
             } else {
                 // instruction has operands. we can assume here that 'operand' selects an actual
                 // operand.
-                let curr_op = &inst.operands[self.operand as usize];
+                let _curr_op = &inst.operands[self.operand as usize];
 
                 let mut locations = locations_of(inst, self.operand);
 
@@ -606,7 +601,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
     fn prev(&mut self, inst_data: &(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_64Arch>>)) -> bool {
         let (inst, ssa) = inst_data;
 
-        if let Some(ssa) = ssa {
+        if let Some(_ssa) = ssa {
             // some instructions have no operands, so we can just bail early:
             if inst.operands[0] == Operand::Nothing {
                 // nope, not scrolling!
@@ -614,7 +609,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
             } else {
                 // instruction has operands. we can assume here that 'operand' selects an actual
                 // operand.
-                let curr_op = &inst.operands[self.operand as usize];
+                let _curr_op = &inst.operands[self.operand as usize];
 
                 let mut locations = locations_of(inst, self.operand);
 
@@ -751,7 +746,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
             usage: Use,
             fmt: &mut fmt::Formatter
         ) -> fmt::Result {
-            let op_highlight = ctx.highlight.operand(op_idx, "TODO");
+            let _op_highlight = ctx.highlight.operand(op_idx, "TODO");
             match op {
                 Operand::ImmediateI8(i) => {
                     write!(fmt, "{}", colorize_i8(*i, ctx.colors))
@@ -880,7 +875,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    let value = ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc());
+                    // let value = ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc());
                     let reg_text = ctx.numbered_register_name(*spec, Direction::Read);
                     let reg = ctx.highlight.location(
                         &(Location::Register(*spec), Direction::Read),
@@ -896,7 +891,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                                 if let SymbolicExpression::Add(base, offset) = expr.offset(*disp as i64 as u64) {
                                     if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
                                         drawn = true;
-                                        let val_rc = use_val.as_rc();
+                                        let _val_rc = use_val.as_rc();
                                         if let Some(name) = field.name.as_ref() {
                                             write!(fmt, "[{}.{}]", reg, name)?;
                                         } else {
@@ -1352,7 +1347,7 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
             instr,
             &mut data.range(address..(address + instr.len())).unwrap(),
             Some(ctx),
-        );
+        ).unwrap();
         writeln!(instr_string, " {}", InstructionContext {
             instr: &instr,
             addr: address,
@@ -1360,9 +1355,8 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
             ssa: ssa,
             colors: colors,
             highlight: &NoHighlights,
-        });
-        use analyses::control_flow::Determinant;
-        writeln!(instr_string, "Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address))));
+        }).unwrap();
+        writeln!(instr_string, "Control flow: {:?}", instr.control_flow(Some(&ctx.at(&address)))).unwrap();
         print!("{}", instr_string);
     }
 }
@@ -1382,7 +1376,7 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
                 &instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
-            );
+            ).unwrap();
             print!("{}", instr_text);
             println!(" {}", InstructionContext {
                 instr: &instr,
@@ -1428,7 +1422,7 @@ impl <
             ssa: ssa,
             colors: colors,
             highlight: highlight,
-        });
+        }).unwrap();
         if let Some(ssa) = ssa {
             if is_conditional_op(instr.opcode) {
                 for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {

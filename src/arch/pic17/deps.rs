@@ -182,7 +182,7 @@ pub fn dependencies_of<T: PartialInstructionContext>(instr: &Instruction, ctx: &
             })
         }
     }
-    fn register_deps(addr: u8, ctx: &PartialInstructionContext) -> Vec<Dependence> {
+    fn register_deps(addr: u8, ctx: &dyn PartialInstructionContext) -> Vec<Dependence> {
         if addr < 0x10 {
             if addr == 0x00 {
                 vec![Dependence::Memory(SFRS::FSR0), Dependence::BSR_GPR]

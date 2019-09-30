@@ -1,5 +1,5 @@
-use yaxpeax_arch::{Arch, LengthedInstruction};
-use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, Opcode, Operand};
+use yaxpeax_arch::Arch;
+use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, Opcode};
 
 use arch::{Symbol, SymbolQuery};
 use arch::{Function, FunctionQuery};
@@ -32,7 +32,7 @@ impl FunctionQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
 
 impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
     type Function = Function;
-    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
+    fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
         None
     }
 }

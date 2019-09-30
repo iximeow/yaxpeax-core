@@ -1,3 +1,4 @@
+#![allow(non_snake_case, non_upper_case_globals)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub size: u32,

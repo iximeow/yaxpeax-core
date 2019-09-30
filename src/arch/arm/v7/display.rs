@@ -3,7 +3,6 @@ use yaxpeax_arch::{Arch, ColorSettings, ShowContextual};
 
 use arch::display::BaseDisplay;
 use arch::arm;
-use std::collections::HashMap;
 use std::fmt;
 
 use arch::CommentQuery;
@@ -32,15 +31,15 @@ impl <T: FunctionQuery<<ARMv7 as Arch>::Address> + CommentQuery<<ARMv7 as Arch>:
                     color::Fg(color::Blue),
                     comment,
                     color::Fg(color::Reset)
-                );
+                ).unwrap();
             }
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
-                    color::Fg(&color::LightYellow as &color::Color),
+                    color::Fg(&color::LightYellow as &dyn color::Color),
                     // TODO: show values?
                     fn_dec.decl_string(false),
-                    color::Fg(&color::Reset as &color::Color)
-                );
+                    color::Fg(&color::Reset as &dyn color::Color)
+                ).unwrap();
             }
         }
         write!(

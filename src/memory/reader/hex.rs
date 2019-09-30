@@ -71,7 +71,7 @@ pub fn from_hex(data: &Vec<u8>) -> Result<HashMap<u8, FlatMemoryRepr>, String> {
                 match tag {
                     0 => {
                         // data
-                        let mut mem = repr.entry(section).or_insert_with(|| FlatMemoryRepr::empty("from_hex".to_string()));
+                        let mem = repr.entry(section).or_insert_with(|| FlatMemoryRepr::empty("from_hex".to_string()));
                         mem.add(data, address).unwrap();
                         Ok(())
                     },

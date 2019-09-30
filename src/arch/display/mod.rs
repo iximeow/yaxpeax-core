@@ -1,7 +1,6 @@
 use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decodable, LengthedInstruction, ShowContextual};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
-use ContextRead;
 use arch::InstructionSpan;
 use memory::{MemoryRepr, MemoryRange};
 use num_traits::Zero;
@@ -25,7 +24,7 @@ pub trait BaseDisplay<F, U> where
 pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
     data: &M,
     ctx: &Contexts,
-    function_table: &HashMap<A::Address, F>,
+    _function_table: &HashMap<A::Address, F>,
     cfg: &ControlFlowGraph<A::Address>,
     block: &BasicBlock<A::Address>,
     colors: Option<&ColorSettings>
@@ -46,7 +45,7 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>
             instr,
             &mut data.range(address..(address + instr.len())).unwrap(),
             Some(ctx),
-        );
+        ).unwrap();
         instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
         println!(" {}", instr_text);
         println!("Control flow: {:?}", instr.control_flow(Some(&ctx)));
@@ -57,7 +56,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
     data: &M,
     ctx: &Contexts,
     address: A::Address,
-    function_table: &HashMap<A::Address, F>,
+    _function_table: &HashMap<A::Address, F>,
     colors: Option<&ColorSettings>
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
@@ -71,7 +70,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
                 &instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
-            );
+            ).unwrap();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
         },
@@ -86,7 +85,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
     ctx: &Contexts,
     start_addr: A::Address,
     end_addr: A::Address,
-    function_table: &HashMap<A::Address, F>,
+    _function_table: &HashMap<A::Address, F>,
     colors: Option<&ColorSettings>
 ) -> Vec<(A::Address, Vec<String>)> where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
@@ -125,7 +124,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
-            );
+            ).unwrap();
             instr_text.push(' ');
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             result.push((
@@ -171,7 +170,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
-            );
+            ).unwrap();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
         }

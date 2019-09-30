@@ -24,7 +24,7 @@ pub trait MemoryRepr<A: Address>: Named {
     fn module_info(&self) -> Option<&ModuleInfo>;
     fn read(&self, addr: A) -> Option<u8>;
     fn to_flat(self) -> Option<FlatMemoryRepr>;
-    fn module_for(&self, addr: A) -> Option<&MemoryRepr<A>>;
+    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>>;
     fn size(&self) -> Option<u64>;
 }
 

@@ -1,7 +1,5 @@
 use yaxpeax_arch::Arch;
 
-use std::marker::PhantomData;
-
 use data::Direction;
 use data::ValueLocations;
 
@@ -32,13 +30,13 @@ pub trait ModifierCollection<A: Arch + ValueLocations> {
 pub struct NoModifiers;
 
 impl <A: Arch + ValueLocations> ModifierCollection<A> for NoModifiers {
-    fn before(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
+    fn before(&self, _addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
         vec![]
     }
-    fn after(&self, addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
+    fn after(&self, _addr: A::Address) -> Vec<(Option<A::Location>, Direction)> {
         vec![]
     }
-    fn between(&self, addr: A::Address, next: A::Address) -> Vec<(Option<A::Location>, Direction)> {
+    fn between(&self, _addr: A::Address, _next: A::Address) -> Vec<(Option<A::Location>, Direction)> {
         vec![]
     }
 }

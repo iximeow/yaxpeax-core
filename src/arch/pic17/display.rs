@@ -5,7 +5,6 @@ use termion::color;
 
 use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction};
-use arch;
 use arch::display::BaseDisplay;
 use arch::CommentQuery;
 use arch::FunctionQuery;
@@ -37,10 +36,10 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
             match function_table.get(&address) {
                 Some(fn_dec) => {
                     format!("{}{}{}",
-                        color::Fg(&color::LightYellow as &color::Color),
+                        color::Fg(&color::LightYellow as &dyn color::Color),
                         // TODO: show values
                         fn_dec.decl_string(false),
-                        color::Fg(&color::Reset as &color::Color)
+                        color::Fg(&color::Reset as &dyn color::Color)
                     )
                 },
                 None => { format!("#{:08x}", address) }
@@ -156,17 +155,17 @@ impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: FunctionQuery<<PIC17
             if let Some(comment) = ctx.comment_for(addr) {
                 writeln!(dest, "{:04x}: {}{}{}",
                     addr,
-                    color::Fg(&color::Blue as &color::Color),
+                    color::Fg(&color::Blue as &dyn color::Color),
                     comment,
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
             if let Some(fn_dec) = ctx.function_at(addr) {
                 writeln!(dest, "      {}{}{}",
-                    color::Fg(&color::LightYellow as &color::Color),
+                    color::Fg(&color::LightYellow as &dyn color::Color),
                     // TODO: show values
                     fn_dec.decl_string(false),
-                    color::Fg(&color::Reset as &color::Color)
+                    color::Fg(&color::Reset as &dyn color::Color)
                 )?;
             }
         }
@@ -198,14 +197,14 @@ pub fn render_instruction_with_ssa_values<T>(
 }
 
 pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
-    data: &M,
-    ctx: &pic17::MergedContextTable,
-    function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
+    _data: &M,
+    _ctx: &pic17::MergedContextTable,
+    _function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
     cfg: &ControlFlowGraph<<PIC17 as Arch>::Address>,
     start_addr: <PIC17 as Arch>::Address,
     end_addr: <PIC17 as Arch>::Address,
-    colors: Option<&ColorSettings>) {
-    let mut continuation = start_addr;
+    _colors: Option<&ColorSettings>) {
+    let continuation = start_addr;
     while continuation < end_addr {
         // Do we have a block here?
         let block = cfg.get_block(continuation);
@@ -214,7 +213,8 @@ pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
         if cfg.graph.contains_node(block.start) {
         }
 
-        let end = if block.end < end_addr {
+        // TODO:
+        let _end = if block.end < end_addr {
             block.end
         } else {
             end_addr
@@ -230,7 +230,8 @@ pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
         ");
 
         // and continue on right after this block
-        continuation = block.end + <PIC17 as Arch>::Address::from(1u16);
+
+        // continuation = block.end + <PIC17 as Arch>::Address::from(1u16);
     }
 }
 
@@ -282,7 +283,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
                 instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Some(ctx),
-            );
+            ).unwrap();
             print!("{}", instr_string);
             render_instruction_with_ssa_values(
                 address,

@@ -2,7 +2,7 @@ use termion::color;
 use yaxpeax_msp430_mc::{Opcode, Operand, Instruction, Width};
 use std::collections::HashMap;
 
-pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static color::Color> {
+pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Color> {
     match opcode {
         Opcode::Invalid(_) => { &color::Fg(&color::Red) }
         Opcode::CALL |

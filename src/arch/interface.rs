@@ -43,7 +43,7 @@ trait SSAAnalyses<A: Arch + SSAValues> {
 }
 */
 
-use yaxpeax_arch::{Arch, Address};
+use yaxpeax_arch::Arch;
 use arch;
 use arch::Symbol;
 
@@ -114,7 +114,7 @@ impl fmt::Display for DisplayHelp {
 
 pub enum ParseResult<A: Arch, T> {
     Operation(Operation<A, T>),
-    Help(&'static (fmt::Display)),
+    Help(&'static dyn fmt::Display),
     Err(OperationError)
 }
 
