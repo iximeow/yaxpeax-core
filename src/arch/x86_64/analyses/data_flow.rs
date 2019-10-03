@@ -1466,8 +1466,14 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         }
         Opcode::TEST |
         Opcode::CMP => {
-            /* not strictly correct for either */
-            (Some(Location::Register(RegSpec::rflags())), Direction::Write)
+            [
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+            ][i as usize]
         }
         Opcode::NEG => {
             (Some(Location::CF), Direction::Write)
@@ -1757,7 +1763,7 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         }
         Opcode::TEST |
         Opcode::CMP => {
-            1
+            6
         }
         Opcode::NEG => {
             1
@@ -2547,7 +2553,12 @@ impl ValueLocations for x86_64 {
                 /* not strictly correct for either */
                 let mut locs = decompose_read(&instr.operands[0]);
                 locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.push((Some(Location::Register(RegSpec::rflags())), Direction::Write));
+                locs.push((Some(Location::CF), Direction::Write));
+                locs.push((Some(Location::OF), Direction::Write));
+                locs.push((Some(Location::AF), Direction::Write));
+                locs.push((Some(Location::SF), Direction::Write));
+                locs.push((Some(Location::ZF), Direction::Write));
+                locs.push((Some(Location::PF), Direction::Write));
                 locs
             }
             Opcode::NEG => {
