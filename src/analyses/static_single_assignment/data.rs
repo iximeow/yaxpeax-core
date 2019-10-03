@@ -188,6 +188,10 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         DFGLValue { value: self.get_transient_value(from, to, loc, Direction::Read).unwrap() }
     }
 
+    pub fn try_get_def_site(&self, value: DFGRef<A>) -> Option<&(A::Address, DefSource<A::Address>)> {
+        self.defs.get(&HashedValue { value: Rc::clone(&value) })
+    }
+
     pub fn get_def_site(&self, value: DFGRef<A>) -> (A::Address, DefSource<A::Address>) {
         match self.defs.get(&HashedValue { value: Rc::clone(&value) }) {
             Some(site) => *site,
