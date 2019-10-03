@@ -462,14 +462,14 @@ pub fn generate_ssa<
             for between in value_modifiers.between(block.start, Y) {
                 match between {
                     (Some(loc), Direction::Read) => {
-                        let widening = loc.maximal_alias_of();
-                        edge_modifiers.insert((loc, Direction::Read), Rc::clone(&S[&widening][S[&widening].len() - 1]));
+//                        let widening = loc.maximal_alias_of();
+                        edge_modifiers.insert((loc, Direction::Read), Rc::clone(&S[&loc][S[&loc].len() - 1]));
                     },
                     (None, Direction::Read) => {
                         // it's a read of something, but we don't know what, 
                     },
                     (Some(loc), Direction::Write) => {
-                        let widening = loc.maximal_alias_of();
+//                        let widening = loc.maximal_alias_of();
                         let new_value = Rc::new(RefCell::new(new_value(loc, C)));
                         defs.insert(HashedValue {
                             value: Rc::clone(&new_value)
@@ -480,7 +480,7 @@ pub fn generate_ssa<
                         // This is replicated when working with immediate dominators as well.
                         // The value only exists in the context of one particular control flow
                         // path.
-                        S.get_mut(&widening).expect("S should have entries for all locations.").push(new_value);
+                        S.get_mut(&loc).expect("S should have entries for all locations.").push(new_value);
                         // this does not modify assignments because it does not need the same
                         // block-global assignment cleanup - it should be neutral w.r.t S in all
                         // cases.
