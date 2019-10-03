@@ -43,9 +43,9 @@ pub const FLAGS: [Location; 10] = [
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MemoryRegion(u16);
 
-const ANY: MemoryRegion = MemoryRegion(0);
-const STACK: MemoryRegion = MemoryRegion(1);
-const PROGRAM: MemoryRegion = MemoryRegion(2);
+pub const ANY: MemoryRegion = MemoryRegion(0);
+pub const STACK: MemoryRegion = MemoryRegion(1);
+pub const PROGRAM: MemoryRegion = MemoryRegion(2);
 const STATIC: MemoryRegion = MemoryRegion(3);
 
 impl fmt::Display for MemoryRegion {

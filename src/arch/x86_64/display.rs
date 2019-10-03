@@ -16,16 +16,16 @@ use arch::CommentQuery;
 use arch::SymbolQuery;
 use arch::AddressNamer;
 use arch::x86_64::{ContextRead, MergedContextTable};
-use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange};
+use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
 use analyses::control_flow::Determinant;
 use yaxpeax_x86::{Instruction, Opcode, Operand};
-use yaxpeax_x86::{RegSpec, RegisterBank};
+use yaxpeax_x86::{RegSpec, RegisterBank, Segment};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
 use data::Direction;
 use data::types::{Typed, TypeAtlas, TypeSpec};
-use display::location::{LocationHighlighter, NoHighlights};
+use display::location::{LocationHighlighter, NoHighlights, StyledDisplay};
 use arch::display::function::FunctionInstructionDisplay;
 use arch::display::function::FunctionView;
 
@@ -148,6 +148,37 @@ impl <'a, 'b, 'c> fmt::Display for RegValueDisplay<'a, 'b, 'c> {
             },
             None => {
                 write!(fmt, "{}", self.reg)
+            }
+        }
+    }
+}
+
+pub enum MemValueDisplay<'a, 'b, 'c, 'd> {
+    Address(Option<Segment>, u64),
+    Reg(Option<Segment>, StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd>>),
+    RegOffset(Option<Segment>, StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd>>, u64),
+}
+
+impl <'a, 'b, 'c, 'd> fmt::Display for MemValueDisplay<'a, 'b, 'c, 'd> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MemValueDisplay::Address(seg, disp) => {
+                if let Some(seg) = seg {
+                    write!(fmt, "{}:", seg)?;
+                }
+                write!(fmt, "[{}]", disp)
+            }
+            MemValueDisplay::Reg(seg, reg) => {
+                if let Some(seg) = seg {
+                    write!(fmt, "{}:", seg)?;
+                }
+                write!(fmt, "[{}]", reg)
+            }
+            MemValueDisplay::RegOffset(seg, reg, disp) => {
+                if let Some(seg) = seg {
+                    write!(fmt, "{}:", seg)?;
+                }
+                write!(fmt, "[{} + {:#x}]", reg, disp)
             }
         }
     }
@@ -829,32 +860,110 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     }
                 },
                 Operand::DisplacementU32(disp) => {
-                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
-                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    let mem_disp = MemValueDisplay::Address(
+                        ctx.instr.segment_override_for_op(op_idx),
+                        *disp as u64
+                    );
+                    let read_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Read),
+                            &mem_disp,
+                        )
+                    };
+                    let write_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Write),
+                            &mem_disp,
+                        )
+                    };
+                    match usage {
+                        Use::Read => {
+                            write!(fmt, "{}", read_thunk())
+                        },
+                        Use::Write => {
+                            write!(fmt, "{}", write_thunk())
+                        },
+                        Use::ReadWrite => {
+                            write!(fmt, "{} (-> {})",
+                                read_thunk(),
+                                write_thunk()
+                            )
+                        }
                     }
-                    write!(fmt, "[{}]", ctx.colors.address((*disp as u64).stringy()))
                 },
                 Operand::DisplacementU64(disp) => {
-                    if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
-                        write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
+                    let mem_disp = MemValueDisplay::Address(
+                        ctx.instr.segment_override_for_op(op_idx),
+                        *disp as u64
+                    );
+                    let read_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Read),
+                            &mem_disp,
+                        )
+                    };
+                    let write_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Write),
+                            &mem_disp,
+                        )
+                    };
+                    match usage {
+                        Use::Read => {
+                            write!(fmt, "{}", read_thunk())
+                        },
+                        Use::Write => {
+                            write!(fmt, "{}", write_thunk())
+                        },
+                        Use::ReadWrite => {
+                            write!(fmt, "{} (-> {})",
+                                read_thunk(),
+                                write_thunk()
+                            )
+                        }
                     }
-                    write!(fmt, "[{}]", ctx.colors.address((*disp as u64).stringy()))
                 },
                 Operand::RegDeref(spec) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
                     let value = ctx.ssa.map(|ssa| ssa.get_use(ctx.addr, Location::Register(*spec)).as_rc());
-                    write!(fmt, "[{}]",
+                    let reg_disp = RegValueDisplay {
+                        reg: spec,
+                        value: &value,
+                        colors: ctx.colors
+                    };
+                    let reg_disp = ctx.highlight.location(
+                        &(Location::Register(*spec), Direction::Read),
+                        &reg_disp,
+                    );
+                    let mem_disp = MemValueDisplay::Reg(
+                        ctx.instr.segment_override_for_op(op_idx),
+                        reg_disp,
+                    );
+                    let read_thunk = || {
                         ctx.highlight.location(
-                            &(Location::Register(*spec), Direction::Read),
-                            &RegValueDisplay {
-                                reg: spec,
-                                value: &value,
-                                colors: ctx.colors,
-                            }
-                        ),
-                    )
+                            &(Location::Memory(ANY), Direction::Read),
+                            &mem_disp,
+                        )
+                    };
+                    let write_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Write),
+                            &mem_disp,
+                        )
+                    };
+                    match usage {
+                        Use::Read => {
+                            write!(fmt, "{}", read_thunk())
+                        },
+                        Use::Write => {
+                            write!(fmt, "{}", write_thunk())
+                        }
+                        Use::ReadWrite => {
+                            write!(fmt, "{} (-> {})", read_thunk(), write_thunk())
+                        }
+                    }
                 }
                 Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
@@ -869,7 +978,30 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                         &(Location::Register(RegSpec::RIP()), Direction::Read),
                         &text
                     );
-                    write!(fmt, "[{}]", text)
+                    let text = format!("[{}]", text);
+                    let read_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Read),
+                            &text,
+                        )
+                    };
+                    let write_thunk = || {
+                        ctx.highlight.location(
+                            &(Location::Memory(ANY), Direction::Write),
+                            &text,
+                        )
+                    };
+                    match usage {
+                        Use::Read => {
+                            write!(fmt, "{}", read_thunk())
+                        },
+                        Use::Write => {
+                            write!(fmt, "{}", write_thunk())
+                        }
+                        Use::ReadWrite => {
+                            write!(fmt, "{} (-> {})", read_thunk(), write_thunk())
+                        }
+                    }
                 }
                 Operand::RegDisp(spec, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
@@ -892,10 +1024,27 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                                     if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
                                         drawn = true;
                                         let _val_rc = use_val.as_rc();
-                                        if let Some(name) = field.name.as_ref() {
-                                            write!(fmt, "[{}.{}]", reg, name)?;
+                                        let text = if let Some(name) = field.name.as_ref() {
+                                            format!("[{}.{}]", reg, name)
                                         } else {
-                                            write!(fmt, "[{} + {:#x}]", reg, offset)?;
+                                            format!("[{} + {:#x}]", reg, offset)
+                                        };
+                                        let read_thunk = || {
+                                            ctx.highlight.location(
+                                                &(Location::Memory(ANY), Direction::Read),
+                                                &text
+                                            )
+                                        };
+                                        let write_thunk = || {
+                                            ctx.highlight.location(
+                                                &(Location::Memory(ANY), Direction::Read),
+                                                &text
+                                            )
+                                        };
+                                        match usage {
+                                            Use::Read => { write!(fmt, "{}", read_thunk())?; },
+                                            Use::Write => { write!(fmt, "{}", write_thunk())?; },
+                                            Use::ReadWrite => { write!(fmt, "{} (-> {})", read_thunk(), write_thunk())?; },
                                         }
                                     }
                                 }
@@ -905,10 +1054,36 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                     }
 
                     if !drawn {
-                        write!(fmt, "[{} {}]",
+                        let text = format!("[{} {}]",
                             reg,
                             format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                        )?;
+                        );
+                        match usage {
+                            Use::Read => {
+                                write!(fmt, "{}", ctx.highlight.location(
+                                    &(Location::Memory(ANY), Direction::Read),
+                                    &text,
+                                ))?;
+                            },
+                            Use::Write => {
+                                write!(fmt, "{}", ctx.highlight.location(
+                                    &(Location::Memory(ANY), Direction::Write),
+                                    &text,
+                                ))?;
+                            },
+                            Use::ReadWrite => {
+                                write!(fmt, "{} (-> {})",
+                                    ctx.highlight.location(
+                                        &(Location::Memory(ANY), Direction::Read),
+                                        &text,
+                                    ),
+                                    ctx.highlight.location(
+                                        &(Location::Memory(ANY), Direction::Write),
+                                        &text,
+                                    ),
+                                )?;
+                            }
+                        }
                     }
 
                     Ok(())
