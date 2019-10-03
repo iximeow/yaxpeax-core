@@ -61,7 +61,6 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     pub phi: HashMap<A::Address, PhiLocations<A>>
 }
 
-#[derive(Debug)]
 pub struct Value<A: SSAValues> where A::Data: Typed {
     pub name: Option<String>,
     pub location: A::Location,
@@ -69,6 +68,26 @@ pub struct Value<A: SSAValues> where A::Data: Typed {
     // be considered an input from some enclosing control flow
     pub version: Option<u32>,
     pub data: Option<A::Data>
+}
+
+impl <A: SSAValues> fmt::Debug for Value<A> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Value {{ ")?;
+        write!(f, "{:?}", self.location)?;
+        if let Some(v) = self.version {
+            write!(f, "_{}", v)?;
+        } else {
+            write!(f, "_input")?;
+        }
+        if let Some(name) = self.name.as_ref() {
+            write!(f, ", \"{}\"", name)?;
+        }
+        if let Some(data) = self.data.as_ref() {
+            write!(f, ", data: {:?}", data)
+        } else {
+            write!(f, ", data: None")
+        }
+    }
 }
 
 impl <A: SSAValues> Hash for Value<A> where A::Location: Hash, A::Data: Hash {
