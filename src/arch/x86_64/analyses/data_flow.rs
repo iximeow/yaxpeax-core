@@ -59,13 +59,41 @@ impl fmt::Display for MemoryRegion {
     }
 }
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Location {
     Register(RegSpec),
     Memory(MemoryRegion),
     MemoryLocation(MemoryRegion, u16, i32),
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Location::Register(reg) => write!(f, "{}", reg),
+            Location::Memory(region) => write!(f, "(mem:{})", region),
+            Location::MemoryLocation(mem, size, offset) => {
+                write!(f, "(mem:{} + {}):{}", mem, offset, size)
+            },
+            Location::CF => write!(f, "cf"),
+            Location::PF => write!(f, "pf"),
+            Location::AF => write!(f, "af"),
+            Location::ZF => write!(f, "zf"),
+            Location::SF => write!(f, "sf"),
+            Location::TF => write!(f, "tf"),
+            Location::IF => write!(f, "if"),
+            Location::DF => write!(f, "df"),
+            Location::OF => write!(f, "of"),
+            Location::IOPL => write!(f, "iopl"),
+        }
+    }
+}
+
+impl fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 use data::AliasInfo;
