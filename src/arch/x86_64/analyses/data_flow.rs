@@ -125,20 +125,21 @@ impl AliasInfo for Location {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::W, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::B, num: *num })
+                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
                 ]
             },
             Location::Register(RegSpec { bank: RegisterBank::D, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
                     Location::Register(RegSpec { bank: RegisterBank::W, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::B, num: *num })
+                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
                 ]
             }
             Location::Register(RegSpec { bank: RegisterBank::W, num }) => {
                 vec![
                     Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num })
+                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
+                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
                 ]
             }
             Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
@@ -150,9 +151,9 @@ impl AliasInfo for Location {
             }
             Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
                 vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3 }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num & 0x3 }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num & 0x3 })
+                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
+                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
+                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num })
                 ]
             }
             Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
@@ -706,8 +707,8 @@ pub struct LocationIter<'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> {
     disambiguator: &'b mut D,
 }
 
-fn operands_in(op: yaxpeax_x86::Opcode) -> u8 {
-    match op {
+fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
+    match instr.opcode {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
         Opcode::MOVDDUP |
@@ -771,11 +772,11 @@ fn operands_in(op: yaxpeax_x86::Opcode) -> u8 {
 
         Opcode::IMUL => {
             // TODO: this.
-            //if let Operand::Nothing = instr.operands[1] {
+            if let Operand::Nothing = instr.operands[1] {
                 2
-            //} else {
-            //    3
-            //}
+            } else {
+                3
+            }
         },
         Opcode::IDIV |
         Opcode::DIV => {
@@ -974,8 +975,12 @@ fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
             // reg, reg, mem
             3
         },
-        Operand::Many(_) => {
-            unreachable!()
+        Operand::Many(ops) => {
+            let mut count = 0;
+            for op in ops {
+                count += locations_in(op, usage);
+            }
+            count
         },
         _ => {
             0
@@ -987,7 +992,7 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> LocationIter<'a, 'b
     pub fn new(inst: &'a yaxpeax_x86::Instruction, disambiguator: &'b mut D) -> Self {
         LocationIter {
             inst,
-            op_count: operands_in(inst.opcode),
+            op_count: operands_in(inst),
             op_idx: 0,
             loc_count: implicit_locs(inst.opcode),
             loc_idx: 0,
@@ -1001,8 +1006,8 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> LocationIter<'a, 'b
     }
 }
 
-fn use_of(op: yaxpeax_x86::Opcode, idx: u8) -> Use {
-    match op {
+fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
+    match instr.opcode {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
         Opcode::MOVDDUP |
@@ -1067,7 +1072,11 @@ fn use_of(op: yaxpeax_x86::Opcode, idx: u8) -> Use {
         }
         Opcode::IMUL => {
             // TODO: this.
-            Use::Read
+            if let Operand::Nothing = instr.operands[1] {
+                Use::Read
+            } else {
+                [Use::ReadWrite, Use::Read][idx as usize]
+            }
         },
         Opcode::IDIV |
         Opcode::DIV => {
@@ -1392,14 +1401,14 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             [
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Write),
+                (Some(Location::Memory(ANY)), Direction::Write),
             ][i as usize]
         },
         Opcode::POP => {
             [
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Read),
+                (Some(Location::Memory(ANY)), Direction::Read),
             ][i as usize]
         },
         Opcode::INC |
@@ -1418,7 +1427,7 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Register(RegSpec::rbp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rbp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Write)
+                (Some(Location::Memory(ANY)), Direction::Write)
             ][i as usize]
         }
         Opcode::LEAVE => {
@@ -1426,14 +1435,14 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Register(RegSpec::rbp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Read)
+                (Some(Location::Memory(ANY)), Direction::Read)
             ][i as usize]
         }
         Opcode::POPF => {
             [
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Read),
+                (Some(Location::Memory(ANY)), Direction::Read),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Write)
             ][i as usize]
         }
@@ -1441,7 +1450,7 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             [
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
-                (Some(Location::Memory(STACK)), Direction::Write),
+                (Some(Location::Memory(ANY)), Direction::Write),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Read)
             ][i as usize]
         }
@@ -1929,7 +1938,7 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)>> Iterator for LocationIter<'a
     //            println!("opc: {}", iter.inst.opcode);
 
                 let op = &iter.inst.operands[iter.op_idx as usize - 1];
-                let op_use = use_of(iter.inst.opcode, iter.op_idx - 1);
+                let op_use = use_of(iter.inst, iter.op_idx - 1);
                 iter.loc_count = locations_in(op, op_use);
                 iter.loc_idx = 0;
                 iter.curr_op = Some(op);
@@ -1943,70 +1952,7 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)>> Iterator for LocationIter<'a
 
             if let Some(op) = &iter.curr_op {
                 iter.loc_idx += 1;
-                match op {
-                    Operand::Register(spec) => {
-                        if iter.loc_idx == 1 {
-                            Some((Some(Location::Register(*spec)), iter.curr_use.unwrap().first_use()))
-                        } else {
-                            Some((Some(Location::Register(*spec)), Direction::Write))
-                        }
-                    },
-                    Operand::DisplacementU32(_) |
-                    Operand::DisplacementU64(_) => {
-                        if iter.loc_idx == 1 {
-                            Some((Some(Location::Memory(ANY)), iter.curr_use.unwrap().first_use()))
-                        } else {
-                            Some((Some(Location::Memory(ANY)), Direction::Write))
-                        }
-                    },
-                    Operand::RegDeref(spec) |
-                    Operand::RegDisp(spec, _) |
-                    Operand::RegScale(spec, _) |
-                    Operand::RegScaleDisp(spec, _, _) => {
-                        match iter.loc_idx {
-                            1 => {
-                                Some((Some(Location::Register(*spec)), Direction::Read))
-                            },
-                            2 => {
-                                Some((Some(Location::Memory(ANY)), iter.curr_use.unwrap().first_use()))
-                            },
-                            3 => {
-                                Some((Some(Location::Memory(ANY)), Direction::Write))
-                            }
-                            _ => {
-                                unreachable!();
-                            }
-                        }
-                    },
-                    Operand::RegIndexBase(base, index) |
-                    Operand::RegIndexBaseDisp(base, index, _) |
-                    Operand::RegIndexBaseScale(base, index, _) |
-                    Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
-                        match iter.loc_idx {
-                            1 => {
-                                Some((Some(Location::Register(*base)), Direction::Read))
-                            },
-                            2 => {
-                                Some((Some(Location::Register(*index)), Direction::Read))
-                            },
-                            3 => {
-                                Some((Some(Location::Memory(ANY)), iter.curr_use.unwrap().first_use()))
-                            },
-                            4 => {
-                                Some((Some(Location::Memory(ANY)), Direction::Write))
-                            }
-                            _ => {
-                                unreachable!()
-                            }
-                        }
-                    },
-                    Operand::Many(_) => {
-                        unreachable!()
-                    },
-                    _ => {
-                        unreachable!()
-                    }
-                }
+                loc_by_id(iter.loc_idx - 1, iter.curr_use.unwrap(), op)
             } else {
                 unreachable!()
             }
@@ -2016,6 +1962,82 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)>> Iterator for LocationIter<'a
             let loc_spec = (self.op_idx, self.loc_idx - 1);
             self.disambiguator.disambiguate(loc_spec).map(|new_loc| (Some(new_loc), loc.1)).unwrap_or(loc)
         })
+    }
+}
+
+fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Direction)> {
+    match op {
+        Operand::Register(spec) => {
+            if idx == 0 {
+                Some((Some(Location::Register(*spec)), usage.first_use()))
+            } else {
+                Some((Some(Location::Register(*spec)), Direction::Write))
+            }
+        },
+        Operand::DisplacementU32(_) |
+        Operand::DisplacementU64(_) => {
+            if idx == 0 {
+                Some((Some(Location::Memory(ANY)), usage.first_use()))
+            } else {
+                Some((Some(Location::Memory(ANY)), Direction::Write))
+            }
+        },
+        Operand::RegDeref(spec) |
+        Operand::RegDisp(spec, _) |
+        Operand::RegScale(spec, _) |
+        Operand::RegScaleDisp(spec, _, _) => {
+            match idx {
+                0 => {
+                    Some((Some(Location::Register(*spec)), Direction::Read))
+                },
+                1 => {
+                    Some((Some(Location::Memory(ANY)), usage.first_use()))
+                },
+                2 => {
+                    Some((Some(Location::Memory(ANY)), Direction::Write))
+                }
+                _ => {
+                    unreachable!();
+                }
+            }
+        },
+        Operand::RegIndexBase(base, index) |
+        Operand::RegIndexBaseDisp(base, index, _) |
+        Operand::RegIndexBaseScale(base, index, _) |
+        Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+            match idx {
+                0 => {
+                    Some((Some(Location::Register(*base)), Direction::Read))
+                },
+                1 => {
+                    Some((Some(Location::Register(*index)), Direction::Read))
+                },
+                2 => {
+                    Some((Some(Location::Memory(ANY)), usage.first_use()))
+                },
+                3 => {
+                    Some((Some(Location::Memory(ANY)), Direction::Write))
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        },
+        Operand::Many(ops) => {
+            let mut idx = idx;
+            for op in ops {
+                if idx > locations_in(op, usage) {
+                    idx -= locations_in(op, usage);
+                    continue;
+                }
+
+                return loc_by_id(idx, usage, op);
+            }
+            unreachable!("invalid index");
+        },
+        _ => {
+            unreachable!()
+        }
     }
 }
 
@@ -2105,8 +2127,12 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Memory(ANY)), Direction::Write)
                     ]
                 },
-                Operand::Many(_) => {
-                    unreachable!()
+                Operand::Many(ops) => {
+                    let mut res = Vec::new();
+                    for op in ops {
+                        res.extend_from_slice(&decompose_write(op));
+                    }
+                    res
                 },
                 Operand::Nothing => {
                     vec![]
@@ -2185,8 +2211,12 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Memory(ANY)), Direction::Read)
                     ]
                 },
-                Operand::Many(_) => {
-                    unreachable!()
+                Operand::Many(ops) => {
+                    let mut res = Vec::new();
+                    for op in ops {
+                        res.extend_from_slice(&decompose_read(op));
+                    }
+                    res
                 },
                 Operand::Nothing => {
                     vec![]
@@ -2280,8 +2310,12 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Memory(ANY)), Direction::Write)
                     ]
                 },
-                Operand::Many(_) => {
-                    unreachable!()
+                Operand::Many(ops) => {
+                    let mut res = Vec::new();
+                    for op in ops {
+                        res.extend_from_slice(&decompose_readwrite(op));
+                    }
+                    res
                 },
                 Operand::Nothing => {
                     vec![]

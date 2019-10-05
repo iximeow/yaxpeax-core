@@ -488,59 +488,64 @@ pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec
     let mut locs: Vec<(analyses::data_flow::Location, Direction)> = vec![];
     let op = &inst.operands[op_idx as usize];
     let usage = operand_use(inst, op_idx);
-    match op {
-        Operand::Register(reg) => {
-            match usage {
-                Use::Read => {
-                    locs.push((Location::Register(*reg), Direction::Read));
-                },
-                Use::Write => {
-                    locs.push((Location::Register(*reg), Direction::Write));
+    fn push_operand_locs(op: &Operand, usage: Use, locs: &mut Vec<(analyses::data_flow::Location, Direction)>) {
+        match op {
+            Operand::Register(reg) => {
+                match usage {
+                    Use::Read => {
+                        locs.push((Location::Register(*reg), Direction::Read));
+                    },
+                    Use::Write => {
+                        locs.push((Location::Register(*reg), Direction::Write));
+                    }
+                    Use::ReadWrite => {
+                        locs.push((Location::Register(*reg), Direction::Read));
+                        locs.push((Location::Register(*reg), Direction::Write));
+                    }
                 }
-                Use::ReadWrite => {
-                    locs.push((Location::Register(*reg), Direction::Read));
-                    locs.push((Location::Register(*reg), Direction::Write));
+            },
+            Operand::RegDeref(reg) => {
+                locs.push((Location::Register(*reg), Direction::Read));
+            },
+            Operand::RegDisp(reg, _) => {
+                locs.push((Location::Register(*reg), Direction::Read));
+            },
+            Operand::RegScale(reg, _) => {
+                locs.push((Location::Register(*reg), Direction::Read));
+            }
+            Operand::RegScaleDisp(base, _, _) => {
+                locs.push((Location::Register(*base), Direction::Read));
+            }
+            Operand::RegIndexBase(base, index) => {
+                locs.push((Location::Register(*base), Direction::Read));
+                locs.push((Location::Register(*index), Direction::Read));
+            }
+            Operand::RegIndexBaseDisp(base, index, _) => {
+                locs.push((Location::Register(*base), Direction::Read));
+                locs.push((Location::Register(*index), Direction::Read));
+            }
+            Operand::RegIndexBaseScale(base, index, _) => {
+                locs.push((Location::Register(*base), Direction::Read));
+                locs.push((Location::Register(*index), Direction::Read));
+            }
+            Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+                locs.push((Location::Register(*base), Direction::Read));
+                locs.push((Location::Register(*index), Direction::Read));
+            }
+            Operand::Many(ops) => {
+                for op in ops {
+                    push_operand_locs(op, usage, locs);
                 }
             }
-        },
-        Operand::RegDeref(reg) => {
-            locs.push((Location::Register(*reg), Direction::Read));
-        },
-        Operand::RegDisp(reg, _) => {
-            locs.push((Location::Register(*reg), Direction::Read));
-        },
-        Operand::RegScale(reg, _) => {
-            locs.push((Location::Register(*reg), Direction::Read));
-        }
-        Operand::RegScaleDisp(base, _, _) => {
-            locs.push((Location::Register(*base), Direction::Read));
-        }
-        Operand::RegIndexBase(base, index) => {
-            locs.push((Location::Register(*base), Direction::Read));
-            locs.push((Location::Register(*index), Direction::Read));
-        }
-        Operand::RegIndexBaseDisp(base, index, _) => {
-            locs.push((Location::Register(*base), Direction::Read));
-            locs.push((Location::Register(*index), Direction::Read));
-        }
-        Operand::RegIndexBaseScale(base, index, _) => {
-            locs.push((Location::Register(*base), Direction::Read));
-            locs.push((Location::Register(*index), Direction::Read));
-        }
-        Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
-            locs.push((Location::Register(*base), Direction::Read));
-            locs.push((Location::Register(*index), Direction::Read));
-        }
-        Operand::Many(_) => {
-            unreachable!("x86 Many operand is not currently used");
-        }
-        Operand::Nothing => {
-            panic!("Logical error: requested locations present in a Nothing operand");
-        }
-        _ => {
-            // this is an immediate, displacement, or Nothing. no locations.
+            Operand::Nothing => {
+                panic!("Logical error: requested locations present in a Nothing operand");
+            }
+            _ => {
+                // this is an immediate, displacement, or Nothing. no locations.
+            }
         }
     }
+    push_operand_locs(op, usage, &mut locs);
     locs
 }
 
@@ -1194,8 +1199,12 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                 Operand::Nothing => {
                     Ok(())
                 },
-                Operand::Many(_) => {
-                    panic!("asdf");
+                Operand::Many(ops) => {
+                    for (i, op) in ops.iter().enumerate() {
+                        write!(fmt, ", ")?;
+                        contextualize_operand(op, op_idx + i as u8, ctx, usage, fmt)?;
+                    }
+                    Ok(())
                 }
             }?;
 
