@@ -1,4 +1,5 @@
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressDisplay;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
@@ -464,26 +465,48 @@ pub fn generate_ssa<
                     (Some(loc), Direction::Read) => {
 //                        let widening = loc.maximal_alias_of();
                         edge_modifiers.insert((loc, Direction::Read), Rc::clone(&S[&loc][S[&loc].len() - 1]));
+                        for alias in loc.aliases_of() {
+                            edge_modifiers.insert((alias, Direction::Read), Rc::clone(&S[&alias][S[&alias].len() - 1]));
+                        }
                     },
                     (None, Direction::Read) => {
                         // it's a read of something, but we don't know what, 
                     },
                     (Some(loc), Direction::Write) => {
 //                        let widening = loc.maximal_alias_of();
-                        let new_value = Rc::new(RefCell::new(new_value(loc, C)));
+                        let value = Rc::new(RefCell::new(new_value(loc, C)));
                         defs.insert(HashedValue {
-                            value: Rc::clone(&new_value)
+                            value: Rc::clone(&value)
                         }, (block.start, DefSource::Between(Y)));
-                        edge_modifiers.insert((loc, Direction::Write), Rc::clone(&new_value));
+                        edge_modifiers.insert((loc, Direction::Write), Rc::clone(&value));
                         // Note we push S here only to immediately pop it when done with this
                         // block.
                         // This is replicated when working with immediate dominators as well.
                         // The value only exists in the context of one particular control flow
                         // path.
-                        S.get_mut(&loc).expect("S should have entries for all locations.").push(new_value);
+                        S.get_mut(&loc).expect("S should have entries for all locations.").push(value);
                         // this does not modify assignments because it does not need the same
                         // block-global assignment cleanup - it should be neutral w.r.t S in all
                         // cases.
+                        assignments.push(loc); // ???
+
+                        for alias in loc.aliases_of() {
+                            let value = Rc::new(RefCell::new(new_value(alias, C)));
+                            defs.insert(HashedValue {
+                                value: Rc::clone(&value)
+                            }, (block.start, DefSource::Between(Y)));
+                            edge_modifiers.insert((alias, Direction::Write), Rc::clone(&value));
+                            // Note we push S here only to immediately pop it when done with this
+                            // block.
+                            // This is replicated when working with immediate dominators as well.
+                            // The value only exists in the context of one particular control flow
+                            // path.
+                            S.get_mut(&alias).expect("S should have entries for all locations.").push(value);
+                            // this does not modify assignments because it does not need the same
+                            // block-global assignment cleanup - it should be neutral w.r.t S in all
+                            // cases.
+                            assignments.push(alias); // ???
+                        }
                     },
                     (None, Direction::Write) => {
                         // a write to somewhere, we don't know where, this should def ...
@@ -496,17 +519,16 @@ pub fn generate_ssa<
             if let Some(block_phis) = phi.get_mut(&Y) {
 //                for loc in phi.get(Y)
                 for (loc, phi_op) in block_phis.iter_mut() {
-                    let widening = loc.maximal_alias_of();
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough
-                    let widen_stack = &S[&widening];
-                    phi_op.ins.push(widen_stack[widen_stack.len() - 1].clone());
+                    let loc_stack = &S[&loc];
+                    phi_op.ins.push(loc_stack[loc_stack.len() - 1].clone());
                 }
             }
 
             for (loc, direction) in edge_modifiers.keys() {
                 if *direction == Direction::Write {
-                    S.get_mut(&loc.maximal_alias_of()).expect("S has entries for all locations").pop();
+//                    S.get_mut(&loc).expect("S has entries for all locations").pop();
                 }
             }
         }
@@ -521,7 +543,7 @@ pub fn generate_ssa<
                     if let Some(adjustments) = between_block_bounds[&block.start].get(&u) {
                         for ((loc, direction), value) in adjustments {
                             if *direction == Direction::Write {
-                                S.get_mut(&loc.maximal_alias_of()).expect("S has entries for locations").push(Rc::clone(value));
+                                S.get_mut(&loc).expect("S has entries for locations").push(Rc::clone(value));
                             }
                         }
                     }
@@ -547,7 +569,7 @@ pub fn generate_ssa<
                     if let Some(adjustments) = between_block_bounds[&block.start].get(&u) {
                         for ((loc, direction), _value) in adjustments {
                             if *direction == Direction::Write {
-                                S.get_mut(&loc.maximal_alias_of()).expect("S has entries for locations").pop();
+                                S.get_mut(&loc).expect("S has entries for locations").pop();
                             }
                         }
                     }

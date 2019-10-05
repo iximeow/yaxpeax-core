@@ -194,10 +194,20 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
     //
     // that flag should also remove the try_get_* variants
     pub fn get_def(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
-        DFGLValue { value: self.get_value(addr, loc, Direction::Write).unwrap() }
+        DFGLValue {
+            value: self.get_value(addr, loc, Direction::Write)
+                .unwrap_or_else(|| {
+                    panic!("Failed to get def of {:?} at {}", loc, addr.stringy())
+                })
+        }
     }
     pub fn get_use(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
-        DFGLValue { value: self.get_value(addr, loc, Direction::Read).unwrap() }
+        DFGLValue {
+            value: self.get_value(addr, loc, Direction::Read)
+                .unwrap_or_else(|| {
+                    panic!("Failed to get use of {:?} at {}", loc, addr.stringy())
+                })
+        }
     }
 
     pub fn get_transient_def(&self, from: A::Address, to: A::Address, loc: A::Location) -> DFGLValue<A> {
