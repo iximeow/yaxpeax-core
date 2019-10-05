@@ -224,6 +224,10 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         self.graph.neighbors_directed(block, petgraph::Direction::Outgoing).into_iter().collect()
     }
 
+    pub fn sources(&self, block: A) -> Vec<A> {
+        self.graph.neighbors_directed(block, petgraph::Direction::Incoming).into_iter().collect()
+    }
+
     /*
      * U should be a function, function_table should be an oracle
      * we can query to answer "does there exist a function at this place?"
