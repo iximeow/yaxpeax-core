@@ -100,10 +100,18 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                     (address, instr)
                 },
                 None => {
-                    result.push((
-                        continuation,
-                        vec![format!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap())]
-                    ));
+                    if data.read(continuation).is_some() {
+                        result.push((
+                            continuation,
+                            vec![format!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap())]
+                        ));
+                    } else {
+                        result.push((
+                            continuation,
+                            vec![format!("Out of bytes at {}", continuation.stringy())]
+                        ));
+                        return result;
+                    }
 
                     continuation += A::Instruction::min_size();
                         /*
