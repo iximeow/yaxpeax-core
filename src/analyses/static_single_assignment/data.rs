@@ -171,9 +171,63 @@ impl <A: SSAValues> PartialEq for Value<A> {
 }
 impl <A: SSAValues> Eq for Value<A> {}
 
+pub struct ValueDisplay<'a, A: SSAValues> {
+    value: &'a Value<A>,
+    show_location: bool,
+}
+
+impl <'a, A: SSAValues> ValueDisplay<'a, A> {
+    pub fn with_location(self) -> Self {
+        ValueDisplay {
+            value: self.value,
+            show_location: true,
+        }
+    }
+}
+
+impl <'a, A: SSAValues> fmt::Display for ValueDisplay<'a, A> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.show_location {
+            if let Some(name) = self.value.name.as_ref() {
+                write!(f, "{}", name)?;
+                if let Some(v) = self.value.version {
+                    write!(f, " [at {:?}_{}]", self.value.location, v)?;
+                } else {
+                    write!(f, " [at {:?}_input]", self.value.location)?;
+                }
+            } else {
+                if let Some(v) = self.value.version {
+                    write!(f, " {:?}_{}", self.value.location, v)?;
+                } else {
+                    write!(f, " {:?}_input", self.value.location)?;
+                }
+            }
+        } else {
+            if let Some(v) = self.value.version {
+                write!(f, "{:?}_{}", self.value.location, v)?;
+            } else {
+                write!(f, "{:?}_input", self.value.location)?;
+            }
+        }
+
+        if let Some(data) = self.value.data.as_ref() {
+            write!(f, " (= {:?})", data)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl <A> Value<A> where A: SSAValues {
     pub fn version(&self) -> Option<u32> {
         self.version
+    }
+
+    pub fn display(&self) -> ValueDisplay<A> {
+        ValueDisplay {
+            value: self,
+            show_location: false,
+        }
     }
 }
 
