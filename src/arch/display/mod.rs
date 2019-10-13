@@ -130,7 +130,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                 &mut instr_text,
                 address,
                 instr,
-                &mut data.range(address..(address + instr.len())).unwrap(),
+                &mut data.range_from(address).unwrap(),
                 Some(ctx),
             ).unwrap();
             instr_text.push(' ');
