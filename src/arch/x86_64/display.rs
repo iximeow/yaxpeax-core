@@ -70,7 +70,7 @@ impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch
                 )?;
             }
         }
-        write!(dest, "{:08x}: ", addr)?;
+        write!(dest, "{}: ", addr.stringy())?;
         for i in 0..16 {
             if i < instr.length {
                 match bytes.next() {

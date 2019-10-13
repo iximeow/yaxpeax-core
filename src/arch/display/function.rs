@@ -1,4 +1,5 @@
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressDisplay;
 use yaxpeax_arch::LengthedInstruction;
 use arch::InstructionSpan;
 use arch::display::BaseDisplay;
@@ -113,6 +114,59 @@ impl <
 
             let mut iter = self.data.instructions_spanning::<A::Instruction>(block.start, block.end);
 
+            if let Some(ssa) = self.ssa {
+                let start_ok = if let Some(start) = start {
+                    block.start >= start
+                } else { true };
+
+                let end_ok = if let Some(end) = end {
+                    block.start <= end
+                } else { true };
+
+                if start_ok && end_ok {
+                    let mut strings: Vec<String> = Vec::new();
+
+                    // this is the start of the block, so also check for Between's and phis
+                    for source in self.fn_graph.sources(block.start) {
+                        if let Some(modifications) = ssa.control_dependent_values
+                            .get(&source)
+                            .and_then(|dests| dests.get(&block.start)) {
+
+                            for ((_loc, dir), value) in modifications.iter() {
+                                match dir {
+                                    Direction::Read => {
+                                        strings.push(format!("read: {}", value.borrow().display()));
+                                        strings.push(format!("  via edge {} -> {}", source.stringy(), block.start.stringy()));
+                                    }
+                                    Direction::Write => {
+                                        strings.push(format!("write: {}", value.borrow().display()));
+                                        strings.push(format!("  via edge {} -> {}", source.stringy(), block.start.stringy()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(phis) = ssa.phi.get(&block.start) {
+                        // TODO rephrase this to A::blank_frame(addr).
+                        let frame = format!("{}:                                 : | |", block.start.stringy());
+                        for (_, phi_op) in phis.iter() {
+                            let mut phi_line = format!("{} {} <- phi(", frame, phi_op.out.borrow().display());
+                            let mut in_iter = phi_op.ins.iter();
+                            if let Some(phi_in) = in_iter.next() {
+                                write!(phi_line, "{}", phi_in.borrow().display()).unwrap();
+                            }
+                            while let Some(phi_in) = in_iter.next() {
+                                write!(phi_line, ", {}", phi_in.borrow().display()).unwrap();
+                            }
+                            phi_line.push(')');
+                            strings.push(phi_line);
+                        }
+                    }
+                    text.push((block.start, strings));
+                }
+            }
+
             let span_end = iter.end;
             while let Some((address, instr)) = iter.next() {
                 if let Some(start) = start {
@@ -169,8 +223,17 @@ impl <
                 if address.wrapping_add(&instr.len()) > span_end {
                     write!(instr_string ,"\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄").unwrap();
                 }
-                let strings: Vec<String> = instr_string.split("\n").map(|s| s.to_string()).collect();
-                text.push((address, strings));
+
+                // we might have to append after phis
+                match text.last().map(|(addr, _)| *addr) {
+                    Some(last_addr) if last_addr == address => { /* great! we already have a vec to insert in to */ },
+                    _ => {
+                        text.push((address, Vec::new()));
+                    }
+                }
+                text.last_mut().expect("actually unreachable").1.extend(
+                    instr_string.split("\n").map(|s| s.to_string())
+                );
             }
         }
         text
