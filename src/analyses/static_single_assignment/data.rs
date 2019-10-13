@@ -83,10 +83,31 @@ impl <A: SSAValues> fmt::Debug for Value<A> {
             write!(f, ", \"{}\"", name)?;
         }
         if let Some(data) = self.data.as_ref() {
-            write!(f, ", data: {:?}", data)
+            write!(f, ", data: {:?}", data)?;
         } else {
-            write!(f, ", data: None")
+            write!(f, ", data: None")?;
         }
+        write!(f, " }}")
+    }
+}
+
+impl <A: SSAValues> fmt::Display for Value<A> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.location)?;
+        if let Some(v) = self.version {
+            write!(f, "_{}", v)?;
+        } else {
+            write!(f, "_input")?;
+        }
+        if let Some(name) = self.name.as_ref() {
+            write!(f, ", \"{}\"", name)?;
+        }
+        if let Some(data) = self.data.as_ref() {
+            write!(f, ", data: {:?}", data)?;
+        } else {
+            write!(f, ", data: None")?;
+        }
+        write!(f, " }}")
     }
 }
 
