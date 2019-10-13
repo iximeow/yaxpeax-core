@@ -1,5 +1,4 @@
 use yaxpeax_arch::Arch;
-use yaxpeax_arch::AddressDisplay;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
@@ -525,12 +524,13 @@ pub fn generate_ssa<
                     phi_op.ins.push(loc_stack[loc_stack.len() - 1].clone());
                 }
             }
-
+/*
             for (loc, direction) in edge_modifiers.keys() {
                 if *direction == Direction::Write {
 //                    S.get_mut(&loc).expect("S has entries for all locations").pop();
                 }
             }
+            */
         }
         }
 
