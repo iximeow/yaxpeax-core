@@ -21,6 +21,7 @@ use memory::{MemoryRange, MemoryRepr};
 pub trait FunctionQuery<A: Address> {
     type Function: FunctionRepr;
     fn function_at(&self, addr: A) -> Option<&Self::Function>;
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function>;
 }
 
 pub trait SymbolQuery<A: Address> {
@@ -85,6 +86,17 @@ pub struct FunctionImpl<Loc> {
     arguments: Vec<(Loc, Parameter)>,
     returns: Vec<(Loc, Parameter)>,
     return_address: Option<Loc>,
+}
+
+impl <Loc> FunctionImpl<Loc> {
+    pub fn new(name: String) -> Self {
+        FunctionImpl {
+            name,
+            arguments: vec![],
+            returns: vec![],
+            return_address: None
+        }
+    }
 }
 
 // TODO:

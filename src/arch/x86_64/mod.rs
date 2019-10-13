@@ -38,6 +38,9 @@ impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
     fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
         self.contexts.function_at(addr)
     }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        self.contexts.all_functions()
+    }
 }
 
 impl CommentQuery<<x86_64 as Arch>::Address> for x86_64Data {
@@ -59,6 +62,9 @@ impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
     fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
         self.functions.get(&addr)
+    }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        self.functions.values().collect::<Vec<_>>()
     }
 }
 

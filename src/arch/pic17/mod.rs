@@ -44,6 +44,9 @@ impl FunctionQuery<<PIC17 as Arch>::Address> for PIC17Data {
     fn function_at(&self, addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
         self.contexts.function_at(addr)
     }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        self.contexts.all_functions()
+    }
 }
 
 impl SymbolQuery<<PIC17 as Arch>::Address> for PIC17Data {
@@ -65,6 +68,9 @@ impl FunctionQuery<<PIC17 as Arch>::Address> for MergedContextTable {
     type Function = Function;
     fn function_at(&self, _addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
         None
+    }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        unimplemented!()
     }
 }
 

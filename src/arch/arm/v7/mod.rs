@@ -34,6 +34,9 @@ impl FunctionQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
     fn function_at(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
         self.contexts.function_at(addr)
     }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        self.contexts.all_functions()
+    }
 }
 impl CommentQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
     fn comment_for(&self, addr: <ARMv7 as Arch>::Address) -> Option<&str> {
@@ -53,6 +56,9 @@ impl FunctionQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
     type Function = Function;
     fn function_at(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
         None
+    }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        unimplemented!()
     }
 }
 impl CommentQuery<<ARMv7 as Arch>::Address> for MergedContextTable {

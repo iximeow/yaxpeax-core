@@ -42,6 +42,9 @@ impl FunctionQuery<<MSP430 as Arch>::Address> for MergedContextTable {
     fn function_at(&self, _addr: <MSP430 as Arch>::Address) -> Option<&Self::Function> {
         None
     }
+    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+        unimplemented!()
+    }
 }
 
 impl SymbolQuery<<MSP430 as Arch>::Address> for MSP430Data {
