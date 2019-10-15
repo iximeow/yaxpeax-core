@@ -1612,8 +1612,12 @@ impl <
                 for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
                     if let (Some(flag), Direction::Read) = (loc, dir) {
                         if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
-                            let use_site = ssa.get_def_site(ssa.get_use(address, flag).value);
-                            write!(dest, "\n    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0)?;
+                            let use_site = ssa.try_get_def_site(ssa.get_use(address, flag).value);
+                            if let Some(use_site) = use_site {
+                                write!(dest, "\n    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0)?;
+                            } else {
+                                write!(dest, "\n    uses {:?}, MISSING DEFINITION", flag)?;
+                            }
                         }
                     }
                 }

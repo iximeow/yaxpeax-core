@@ -37,17 +37,17 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
             }
         });
 
-        let def_site: Option<(<x86_64 as Arch>::Address, DefSource<<x86_64 as Arch>::Address>)> = uses.next().map(|loc| {
-            dfg.get_def_site(dfg.get_use(addr, *loc).value)
+        let def_site: Option<&(<x86_64 as Arch>::Address, DefSource<<x86_64 as Arch>::Address>)> = uses.next().and_then(|loc| {
+            dfg.try_get_def_site(dfg.get_use(addr, *loc).value)
         });
 
         while let Some(loc) = uses.next() {
-            if def_site != Some(dfg.get_def_site(dfg.get_use(addr, *loc).value)) {
+            if def_site != dfg.try_get_def_site(dfg.get_use(addr, *loc).value) {
                 return None;
             }
         }
 
-        return def_site;
+        return def_site.cloned();
     }
 
     fn infer_conditional_bounds(
