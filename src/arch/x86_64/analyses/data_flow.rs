@@ -1291,7 +1291,9 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         Opcode::BT |
         Opcode::BTS |
         Opcode::BTR |
-        Opcode::BTC |
+        Opcode::BTC => {
+            (Some(Location::CF), Direction::Write)
+        }
         Opcode::BSR |
         Opcode::BSF => {
             (Some(Location::ZF), Direction::Write)
