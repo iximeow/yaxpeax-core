@@ -980,7 +980,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
                         .map(|sym| { ctx.colors.symbol(format!("&{}", sym)) })
                         .unwrap_or_else(|| { ctx.colors.address(addr.stringy()) });
                     let text = ctx.highlight.location(
-                        &(Location::Register(RegSpec::RIP()), Direction::Read),
+                        &(Location::Register(RegSpec::rip()), Direction::Read),
                         &text
                     );
                     let text = format!("[{}]", text);

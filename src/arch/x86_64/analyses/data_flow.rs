@@ -171,7 +171,7 @@ impl AliasInfo for Location {
                 ]
             }
             Location::Register(RegSpec { bank: RegisterBank::EIP, num: _ }) => {
-                vec![Location::Register(RegSpec::RIP())]
+                vec![Location::Register(RegSpec::rip())]
             }
             Location::Register(RegSpec { bank: RegisterBank::EFlags, num: _ }) => {
                 vec![Location::Register(RegSpec::rflags())]
@@ -234,7 +234,7 @@ impl AliasInfo for Location {
                 Location::Register(RegSpec { bank: RegisterBank::Z, num: *num })
             }
             Location::Register(RegSpec { bank: RegisterBank::EIP, num: _ }) => {
-                Location::Register(RegSpec::RIP())
+                Location::Register(RegSpec::rip())
             }
             Location::Register(RegSpec { bank: RegisterBank::EFlags, num: _ }) => {
                 Location::Register(RegSpec::rflags())
