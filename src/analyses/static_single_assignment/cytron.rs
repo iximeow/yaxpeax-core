@@ -363,7 +363,9 @@ pub fn generate_ssa<
                                     0
                                 }
                             };
-                            at_address.insert((loc, Direction::Read), Rc::clone(&S[&loc][s_idx]));
+                            let value = Rc::clone(&S[&loc][s_idx]);
+                            value.borrow_mut().used = true;
+                            at_address.insert((loc, Direction::Read), value);
                         },
                         Direction::Write => {
                             if writelog.contains(&loc) {
@@ -413,7 +415,9 @@ pub fn generate_ssa<
                                         0
                                     }
                                 };
-                                at_address.insert((alias, Direction::Read), Rc::clone(&S[&alias][s_idx]));
+                                let value = Rc::clone(&S[&alias][s_idx]);
+                                value.borrow_mut().used = true;
+                                at_address.insert((alias, Direction::Read), value);
                             },
                             Direction::Write => {
                                 if writelog.contains(&alias) {
@@ -463,9 +467,13 @@ pub fn generate_ssa<
                 match between {
                     (Some(loc), Direction::Read) => {
 //                        let widening = loc.maximal_alias_of();
-                        edge_modifiers.insert((loc, Direction::Read), Rc::clone(&S[&loc][S[&loc].len() - 1]));
+                        let value = Rc::clone(&S[&loc][S[&loc].len() - 1]);
+                        value.borrow_mut().used = true;
+                        edge_modifiers.insert((loc, Direction::Read), value);
                         for alias in loc.aliases_of() {
-                            edge_modifiers.insert((alias, Direction::Read), Rc::clone(&S[&alias][S[&alias].len() - 1]));
+                            let value = Rc::clone(&S[&alias][S[&alias].len() - 1]);
+                            value.borrow_mut().used = true;
+                            edge_modifiers.insert((alias, Direction::Read), value);
                         }
                     },
                     (None, Direction::Read) => {
@@ -610,6 +618,32 @@ pub fn generate_ssa<
         &value_modifiers,
         disambiguator,
     );
+
+    fn mark_phi_used<A: SSAValues>(
+        phi: &PhiOp<A>,
+        phis: &HashMap<A::Address, PhiLocations<A>>,
+        defs: &HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>
+    ) {
+        for value in phi.ins.iter() {
+            if !value.borrow().used {
+                value.borrow_mut().used = true;
+                if let Some((addr, DefSource::Phi)) = defs.get(&HashedValue { value: Rc::clone(&value) }) {
+                    let dep_phi = phis.get(addr).unwrap().get(&value.borrow().location).unwrap();
+                    mark_phi_used(dep_phi, phis, defs);
+                }
+            }
+        }
+    }
+
+    let phis = &phi;
+
+    for (_block, phi_locs) in phi.iter() {
+        for (_loc, phi) in phi_locs.iter() {
+            if phi.out.borrow().used {
+                mark_phi_used(phi, phis, &defs)
+            }
+        }
+    }
 
     SSA { instruction_values: values, modifier_values: HashMap::new(), control_dependent_values: between_block_bounds, defs: defs, phi: phi }
 }

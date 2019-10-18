@@ -67,7 +67,8 @@ pub struct Value<A: SSAValues> where A::Data: Typed {
     // None indicates "not written anywhere in this dfg", which indicates this value can
     // be considered an input from some enclosing control flow
     pub version: Option<u32>,
-    pub data: Option<A::Data>
+    pub data: Option<A::Data>,
+    pub used: bool,
 }
 
 impl <A: SSAValues> fmt::Debug for Value<A> {
@@ -237,7 +238,8 @@ impl <A: SSAValues + Arch> Value<A> {
             location: location,
             version: version,
             data: None,
-            name: None
+            name: None,
+            used: false,
         }
     }
 }
