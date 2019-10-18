@@ -9,6 +9,10 @@ pub mod x86_64;
 pub mod display;
 pub mod interface;
 
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use std::fmt::{Display, Write};
 
 use crate::data::types;
@@ -17,6 +21,8 @@ use data::ValueLocations;
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
+
+use serde::{Deserialize, Serialize};
 
 pub trait FunctionQuery<A: Address> {
     type Function: FunctionRepr;
@@ -76,59 +82,160 @@ impl Parameter {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Function {
     name: String,
-    arguments: Vec<Parameter>,
-    returns: Vec<Parameter>,
+    arguments: Vec<Option<Parameter>>,
+    returns: Vec<Option<Parameter>>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FunctionImpl<Loc> {
-    name: String,
-    arguments: Vec<(Loc, Parameter)>,
-    returns: Vec<(Loc, Parameter)>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionImpl<Loc: AbiDefaults> {
+    names: Function,
+    layout: Rc<RefCell<FunctionLayout<Loc>>>,
+}
+
+// PartialEq, Eq
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FunctionLayout<Loc: AbiDefaults> {
+    arguments: Vec<Option<Loc>>,
+    returns: Vec<Option<Loc>>,
+    clobbers: Vec<Option<Loc>>,
     return_address: Option<Loc>,
+    defaults: Loc::AbiDefault,
 }
 
-impl <Loc> FunctionImpl<Loc> {
-    pub fn new(name: String) -> Self {
-        FunctionImpl {
-            name,
-            arguments: vec![],
-            returns: vec![],
-            return_address: None
+impl <Loc: AbiDefaults> FunctionLayout<Loc> {
+    fn for_abi(default: Loc::AbiDefault) -> Self {
+        FunctionLayout {
+            arguments: Vec::new(),
+            returns: Vec::new(),
+            clobbers: Vec::new(),
+            return_address: None,
+            defaults: default
         }
+    }
+}
+
+pub trait AbiDefaults: Copy + Debug {
+    type AbiDefault: FunctionAbiReference<Self> + Debug + Serialize + for<'de> Deserialize<'de> + Default;
+}
+
+impl <Loc: Hash + AbiDefaults> Hash for FunctionLayout<Loc> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.arguments.hash(state);
+        self.returns.hash(state);
+        self.clobbers.hash(state);
+        self.return_address.hash(state);
+    }
+}
+
+fn insert_at<Loc: Copy>(vs: &mut Vec<Option<Loc>>, el: Option<Loc>, i: usize) {
+    if i >= vs.len() {
+        vs.resize(i + 1, None);
+    }
+
+    vs[i] = el;
+}
+
+impl <Loc: Clone + Copy + Debug + AbiDefaults> FunctionAbiReference<Loc> for FunctionLayout<Loc> {
+    fn argument_at(&mut self, i: usize) -> Option<Loc> {
+        if self.arguments.get(i).is_none() {
+            insert_at(&mut self.arguments, self.defaults.argument_at(i), i);
+        }
+
+        self.arguments[i]
+    }
+    fn return_at(&mut self, i: usize) -> Option<Loc> {
+        if self.returns.get(i).is_none() {
+            insert_at(&mut self.returns, self.defaults.return_at(i), i);
+        }
+
+        self.returns[i]
+    }
+    fn return_address(&mut self) -> Option<Loc> {
+        if self.return_address.is_none() {
+            self.return_address = self.defaults.return_address();
+        }
+
+        self.return_address
+    }
+    fn clobber_at(&mut self, i: usize) -> Option<Loc> {
+        if self.clobbers.get(i).is_none() {
+            insert_at(&mut self.clobbers, self.defaults.clobber_at(i), i);
+        }
+
+        self.clobbers[i]
+    }
+}
+
+// TODO: this is an insufficient api - some calling convention/architecture combinations pick
+// locations based on the type of value at the index in question. x86_64 ABIs typically use xmm
+// registers for floating point values but 64-bit general purpose registers for arguments in the
+// same index if the value is an integer.
+pub trait FunctionAbiReference<Loc: Debug + Copy + Clone>: Debug {
+    fn argument_at(&mut self, i: usize) -> Option<Loc>;
+    fn return_at(&mut self, i: usize) -> Option<Loc>;
+    fn return_address(&mut self) -> Option<Loc>;
+    fn clobber_at(&mut self, i: usize) -> Option<Loc>;
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+struct NilAbi {}
+
+impl <Loc: Debug + Copy + Clone> FunctionAbiReference<Loc> for NilAbi {
+    fn argument_at(&mut self, _: usize) -> Option<Loc> { None }
+    fn return_at(&mut self, _: usize) -> Option<Loc> { None }
+    fn return_address(&mut self) -> Option<Loc> { None }
+    fn clobber_at(&mut self, _: usize) -> Option<Loc> { None }
+}
+
+impl <Loc: AbiDefaults> FunctionImpl<Loc> {
+    pub fn new(name: String) -> Self {
+        Function::of(name, vec![], vec![])
+            .unimplemented()
+    }
+
+    pub fn rename(&mut self, new_name: String) {
+        self.names.name = new_name;
+    }
+
+    pub fn append_arg(&mut self, new_arg: (Option<Loc>, Parameter)) {
+        self.names.arguments.push(Some(new_arg.1));
+        let arg_idx = self.names.arguments.len() - 1;
+        let arg = new_arg.0.or_else(|| { self.layout.borrow_mut().argument_at(arg_idx) });
+        self.layout.borrow_mut().arguments[arg_idx] = arg;
     }
 }
 
 // TODO:
 // impl <T: Display> FunctionRepr for FunctionImpl<T> {
-impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
+impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
     fn decl_string(&self, show_locations: bool) -> String {
-        let mut res = self.name.clone();
+        let mut res = self.names.name.clone();
         res.push('(');
-        for (i, (loc, param)) in self.arguments.iter().enumerate() {
+        for (i, name) in self.names.arguments.iter().enumerate() {
             if i > 0 {
                 res.push_str(", ");
             }
             // TODO: figure out default naming strategy better than arg_n?
-            if let Some(name) = param.name.as_ref() {
+            if let Some(name) = name.as_ref().and_then(|n| n.name.as_ref()) {
                 res.push_str(name);
             } else {
                 res.push_str(&format!("arg_{}", i));
             }
             if show_locations {
                 res.push_str(" -> ");
-                write!(res, "{:?}", loc).unwrap();
+                write!(res, "{:?}", self.layout.borrow_mut().argument_at(i)).unwrap();
             }
         }
         res.push(')');
-        match self.returns.len() {
+        match self.names.returns.len() {
             0 => {},
             1 => {
                 if show_locations {
-                    write!(res, "{:?}", self.returns[0].0).unwrap();
+                    write!(res, "{:?}", self.layout.borrow_mut().return_at(0)).unwrap();
                     res.push_str(" -> ");
                 }
-                if let Some(name) = self.returns[0].1.name.as_ref() {
+                if let Some(name) = self.names.returns.get(0).and_then(|x| x.as_ref()).and_then(|n| n.name.as_ref()) {
                     res.push_str(name);
                 } else {
                     res.push_str("return_0");
@@ -136,15 +243,15 @@ impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
             },
             _ => {
                 res.push_str(" -> ");
-                for (i, (loc, ret)) in self.returns.iter().enumerate() {
+                for (i, name) in self.names.returns.iter().enumerate() {
                     if i > 0 {
                         res.push_str(", ");
                     }
                     if show_locations {
-                        write!(res, "{:?}", loc).unwrap();
+                        write!(res, "{:?}", self.layout.borrow_mut().return_at(i)).unwrap();
                         res.push_str(" -> ");
                     }
-                    if let Some(name) = ret.name.as_ref() {
+                    if let Some(name) = name.as_ref().and_then(|n| n.name.as_ref()) {
                         res.push_str(name);
                     } else {
                         res.push_str(&format!("return_{}", i));
@@ -155,7 +262,7 @@ impl <T: std::fmt::Debug> FunctionRepr for FunctionImpl<T> {
         res
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.names.name
     }
 }
 
@@ -166,26 +273,20 @@ pub trait FunctionAbi<A: ValueLocations> {
 }
 
 impl Function {
-    fn implement_for<A: ValueLocations>(&self, abi: &Box<dyn FunctionAbi<A>>) -> FunctionImpl<A::Location> {
-        let arguments = self.arguments.iter().enumerate().map(|(idx, arg)| (abi.argument_loc(idx), arg.to_owned())).collect();
-        let returns = self.returns.iter().enumerate().map(|(idx, arg)| (abi.return_loc(idx), arg.to_owned())).collect();
+    fn implement_for<Loc: AbiDefaults>(self, layout: FunctionLayout<Loc>) -> FunctionImpl<Loc> {
         FunctionImpl {
-            name: self.name.clone(),
-            arguments,
-            returns,
-            return_address: Some(abi.return_address()),
+            names: self,
+            layout: Rc::new(RefCell::new(layout))
         }
     }
 
-    fn unimplemented<A: ValueLocations>(&self) -> FunctionImpl<A::Location> {
-        // TODO: include aref to self? or something else to eventually map this function to real
-        // locations in the program?
-        FunctionImpl {
-            name: self.name.clone(),
-            arguments: vec![],
-            returns: vec![],
-            return_address: None
-        }
+    fn unimplemented<Loc: AbiDefaults>(self) -> FunctionImpl<Loc> {
+        self
+            .implement_for(
+                FunctionLayout::for_abi(
+                    Loc::AbiDefault::default()
+                )
+            )
     }
 }
 
@@ -198,8 +299,8 @@ impl Function {
     pub fn of(name: String, args: Vec<Parameter>, rets: Vec<Parameter>) -> Function {
         Function {
             name: name,
-            arguments: args,
-            returns: rets
+            arguments: args.into_iter().map(|x| Some(x)).collect(),
+            returns: rets.into_iter().map(|x| Some(x)).collect(),
         }
     }
 }
@@ -213,7 +314,7 @@ impl FunctionRepr for Function {
             if i > 0 {
                 res.push_str(", ");
             }
-            if let Some(name) = param.name.as_ref() {
+            if let Some(name) = param.as_ref().and_then(|p| p.name.as_ref()) {
                 res.push_str(name);
             } else {
                 res.push_str(&format!("arg_{}", i));
@@ -223,7 +324,7 @@ impl FunctionRepr for Function {
         match self.returns.len() {
             0 => {},
             1 => {
-                if let Some(name) = self.returns[0].name.as_ref() {
+                if let Some(name) = self.returns[0].as_ref().and_then(|r| r.name.as_ref()) {
                     res.push_str(name);
                 } else {
                     res.push_str("return_0");
@@ -234,7 +335,7 @@ impl FunctionRepr for Function {
                     if i > 0 {
                         res.push_str(", ");
                     }
-                    if let Some(name) = ret.name.as_ref() {
+                    if let Some(name) = ret.as_ref().and_then(|r| r.name.as_ref()) {
                         res.push_str(name);
                     } else {
                         res.push_str(&format!("return_{}", i));

@@ -1221,43 +1221,35 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
             Opcode::CALL |
             Opcode::JMP |
             Opcode::Jcc(_) => {
+                let dest_namer = |addr| {
+                    self.contexts.and_then(|context| {
+                        context.function_at(addr).map(|f| self.colors.function(f.decl_string(false)))
+                            .or_else(|| {
+                                context.address_name(addr).map(|name| self.colors.function(name))
+                            })
+                    }).unwrap_or_else(|| { self.colors.address(addr.stringy()) })
+                };
+                let relative_namer = |i| {
+                    let addr = (i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
+                    dest_namer(addr)
+                };
+
                 match &self.instr.operands[0] {
                     Operand::ImmediateI8(i) => {
-                        let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
-                            context.address_name(addr).map(|name| self.colors.function(name))
-                        }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
-                        return write!(fmt, " {}", text);
+                        return write!(fmt, " {}", relative_namer(*i as i64));
                     },
                     Operand::ImmediateI16(i) => {
-                        let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
-                            context.address_name(addr).map(|name| self.colors.function(name))
-                        }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
-                        return write!(fmt, " {}", text);
+                        return write!(fmt, " {}", relative_namer(*i as i64));
                     },
                     Operand::ImmediateI32(i) => {
-                        let addr = (*i as i64 as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
-                            context.address_name(addr).map(|name| self.colors.function(name))
-                        }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
-                        return write!(fmt, " {}", text);
+                        return write!(fmt, " {}", relative_namer(*i as i64));
                     },
                     Operand::ImmediateI64(i) => {
-                        let addr = (*i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
-                        let text = self.contexts.and_then(|context| {
-                            context.address_name(addr).map(|name| self.colors.function(name))
-                        }).unwrap_or_else(|| { self.colors.address(addr.stringy()) });
-                        return write!(fmt, " {}", text);
+                        return write!(fmt, " {}", relative_namer(*i as i64));
                     },
                     Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                         let addr = self.addr.wrapping_add(*disp as i64 as u64).wrapping_add(self.instr.len());
-                        let text = self.contexts.and_then(|context| {
-                            context.address_name(addr)
-                                .map(|name| { self.colors.function(name).to_string() })
-                        })
-                            .unwrap_or_else(|| colorize_u64(addr, self.colors));
-                        return write!(fmt, " [{}]", text);
+                        return write!(fmt, " {}", dest_namer(addr));
                     }
                     op @ _ => {
                         write!(fmt, " ")?;

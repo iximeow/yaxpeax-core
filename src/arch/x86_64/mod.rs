@@ -2,6 +2,7 @@ use yaxpeax_arch::Arch;
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
+use self::analyses::data_flow::DefaultCallingConvention;
 
 use std::collections::HashMap;
 use yaxpeax_x86::{x86_64, Opcode, Operand};
@@ -9,7 +10,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use num_traits::Zero;
 
-use arch::{BaseUpdate, CommentQuery, FunctionImpl, FunctionAbi, FunctionQuery, Symbol, SymbolQuery, Library};
+use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
 use data::{Direction, ValueLocations};
 
 use ContextRead;
@@ -227,8 +228,7 @@ pub struct MergedContextTable {
     pub functions: HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>,
     pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
-    #[serde(skip)]
-    pub default_abi: Option<Box<dyn FunctionAbi<x86_64>>>,
+    pub default_abi: Option<DefaultCallingConvention>,
 }
 
 #[derive(Debug)]
@@ -255,7 +255,7 @@ impl MergedContextTable {
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
             function_data: HashMap::new(),
-            default_abi: None,
+            default_abi: Some(DefaultCallingConvention::Microsoft), //None,
         }
     }
 }
@@ -317,12 +317,12 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 //println!("address of {:?} recorded at {}", sym, address.stringy());
                 match Symbol::to_function(&sym) {
                     Some(f) => {
-                        if let Some(abi) = self.default_abi.as_ref() {
-                            self.functions.insert(address, f.implement_for(abi));
+                        if let Some(abi) = self.default_abi {
+                            self.functions.insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
                         } else {
                             // TODO: indicate that the function should have been defined, but
                             // was not because we don't know an ABI to map it to?
-                            self.functions.insert(address, f.unimplemented::<x86_64>());
+                            self.functions.insert(address, f.unimplemented());
                         }
                     }
                     None => { }
@@ -333,12 +333,12 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
             BaseUpdate::DefineFunction(f) => {
                 self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
                 self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
-                if let Some(abi) = self.default_abi.as_ref() {
-                    self.functions.insert(address, f.implement_for(&*abi));
+                if let Some(abi) = self.default_abi {
+                    self.functions.insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
                 } else {
                     // TODO: indicate that the function should have been defined, but was not
                     // because we don't know an ABI to map it to?
-                    self.functions.insert(address, f.unimplemented::<x86_64>());
+                    self.functions.insert(address, f.unimplemented());
                 }
             }
             BaseUpdate::AddCodeComment(comment) => {

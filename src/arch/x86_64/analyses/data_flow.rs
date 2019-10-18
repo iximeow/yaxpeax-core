@@ -12,6 +12,7 @@
 /// this should be optimistic or pessimistic, I'm .. ignoring it :)
 
 use arch::Symbol;
+use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::{ConditionCode, RegSpec, RegisterBank, x86_64, Opcode, Operand};
@@ -2050,6 +2051,62 @@ impl <'a, 'b, D: 'b + Disambiguator<Location, (u8, u8)>> crate::data::LocIterato
     fn iter_locs(self, disam: &'b mut D) -> Self::Iter {
         LocationIter::new(self, disam)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DefaultCallingConvention {
+    None,
+    SystemV,
+    Microsoft,
+}
+
+impl Default for DefaultCallingConvention {
+    fn default() -> Self {
+        DefaultCallingConvention::None
+    }
+}
+
+impl FunctionAbiReference<Location> for DefaultCallingConvention {
+    fn argument_at(&mut self, i: usize) -> Option<Location> {
+        match self {
+            DefaultCallingConvention::None => None,
+            DefaultCallingConvention::SystemV => {
+                [
+                    Location::Register(RegSpec::rdi()),
+                    Location::Register(RegSpec::rsi()),
+                    Location::Register(RegSpec::rdx()),
+                    Location::Register(RegSpec::rcx()),
+                    Location::Register(RegSpec::r8()),
+                    Location::Register(RegSpec::r9())
+                ].get(i).cloned()
+            },
+            DefaultCallingConvention::Microsoft => {
+                [
+                    Location::Register(RegSpec::rdx()),
+                    Location::Register(RegSpec::rcx()),
+                    Location::Register(RegSpec::r8()),
+                    Location::Register(RegSpec::r9())
+                ].get(i).cloned()
+            }
+        }
+    }
+    fn return_at(&mut self, i: usize) -> Option<Location> {
+        if i == 0 {
+            Some(Location::Register(RegSpec::rax()))
+        } else {
+            None
+        }
+    }
+    fn clobber_at(&mut self, _: usize) -> Option<Location> {
+        None
+    }
+    fn return_address(&mut self) -> Option<Location> {
+        Some(Location::Register(RegSpec::rip()))
+    }
+}
+
+impl AbiDefaults for Location {
+    type AbiDefault = DefaultCallingConvention;
 }
 
 impl ValueLocations for x86_64 {
