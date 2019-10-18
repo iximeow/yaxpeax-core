@@ -150,7 +150,13 @@ impl <
                     if let Some(phis) = ssa.phi.get(&block.start) {
                         // TODO rephrase this to A::blank_frame(addr).
                         let frame = format!("{}:                                 : | |", block.start.stringy());
+                        let mut hiddens: Vec<A::Location> = Vec::new();
                         for (_, phi_op) in phis.iter() {
+                            let out = phi_op.out.borrow();
+                            if !out.used {
+                                hiddens.push(out.location);
+                                continue;
+                            }
                             let mut phi_line = format!("{} {} <- phi(", frame, phi_op.out.borrow().display());
                             let mut in_iter = phi_op.ins.iter();
                             if let Some(phi_in) = in_iter.next() {
@@ -161,6 +167,13 @@ impl <
                             }
                             phi_line.push(')');
                             strings.push(phi_line);
+                        }
+                        if hiddens.len() > 0 {
+                            let mut hidden_locs_line = format!("{} hidden dead phis for {:?}", frame, hiddens[0]);
+                            for loc in &hiddens[1..] {
+                                write!(hidden_locs_line, ", {:?}", loc).unwrap();
+                            }
+                            strings.push(hidden_locs_line);
                         }
                     }
                     text.push((block.start, strings));
