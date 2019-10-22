@@ -143,7 +143,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
     }
 }
 
-impl <T> BaseDisplay<pic17::Function, T> for PIC17 where T: FunctionQuery<<PIC17 as Arch>::Address> + CommentQuery<<PIC17 as Arch>::Address> {
+impl <F: FunctionRepr, T> BaseDisplay<F, T> for PIC17 where T: FunctionQuery<<PIC17 as Arch>::Address, Function=F> + CommentQuery<<PIC17 as Arch>::Address> {
     fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
         dest: &mut W,
         addr: u16,

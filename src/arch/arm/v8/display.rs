@@ -12,7 +12,7 @@ use arch::arm::v8::MergedContextTable;
 
 use termion::color;
 
-impl <T: FunctionQuery<<ARMv8 as Arch>::Address>> BaseDisplay<arm::v8::Function, T> for ARMv8 {
+impl <F: FunctionRepr, T: FunctionQuery<<ARMv8 as Arch>::Address, Function=F>> BaseDisplay<arm::v8::Function, T> for ARMv8 {
     fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
         dest: &mut W,
         addr: <ARMv8 as Arch>::Address,

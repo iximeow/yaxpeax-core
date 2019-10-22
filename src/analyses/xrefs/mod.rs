@@ -72,6 +72,18 @@ impl <A: Address + NodeTrait> XRefCollection<A> {
             (to, tpe, action)
         );
     }
+
+    pub fn code_references_to(&self, tpe: RefType, action: RefAction, to: A) -> Vec<A> {
+        let mut result = Vec::new();
+
+        for neighbor in self.xrefs.neighbors_directed((to, tpe, action), petgraph::Direction::Incoming) {
+            if let (addr, RefType::Code, RefAction::Referrer) = neighbor {
+                result.push(addr);
+            }
+        }
+
+        result
+    }
 }
 
 /*

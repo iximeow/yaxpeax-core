@@ -4,10 +4,13 @@ use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
 use self::analyses::data_flow::DefaultCallingConvention;
 
+use petgraph::graphmap::GraphMap;
+
 use std::collections::HashMap;
 use yaxpeax_x86::{x86_64, Opcode, Operand};
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::cell::Ref;
 use num_traits::Zero;
 
 use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
@@ -34,38 +37,20 @@ pub struct x86_64Data {
     )>,
 }
 
+pub struct DisplayCtx<'a> {
+    functions: Ref<'a, HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>,
+    comments: &'a HashMap<<x86_64 as Arch>::Address, String>,
+    symbols: &'a HashMap<<x86_64 as Arch>::Address, Symbol>,
+}
+
 impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
-        self.contexts.function_at(addr)
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+        panic!("self.contexts.functions.get(&addr)");
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
-        self.contexts.all_functions()
-    }
-}
-
-impl CommentQuery<<x86_64 as Arch>::Address> for x86_64Data {
-    fn comment_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&str> {
-        self.contexts.comment_for(addr)
-    }
-}
-
-impl SymbolQuery<<x86_64 as Arch>::Address> for x86_64Data {
-    fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
-        self.contexts.symbol_for(addr)
-    }
-    fn symbol_addr(&self, sym: &Symbol) -> Option<<x86_64 as Arch>::Address> {
-        self.contexts.symbol_addr(sym)
-    }
-}
-
-impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
-    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&FunctionImpl<<x86_64 as ValueLocations>::Location>> {
-        self.functions.get(&addr)
-    }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
-        self.functions.values().collect::<Vec<_>>()
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        panic!("TODO");
+        // self.values().collect::<Vec<_>>()
     }
 }
 
@@ -75,7 +60,61 @@ impl CommentQuery<<x86_64 as Arch>::Address> for MergedContextTable {
     }
 }
 
-impl SymbolQuery<<x86_64 as Arch>::Address> for MergedContextTable {
+impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
+    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+        panic!("TODO");
+//        self.get(&addr)
+    }
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        panic!("TODO");
+        // self.values().collect::<Vec<_>>()
+    }
+}
+
+impl FunctionQuery<<x86_64 as Arch>::Address> for HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>> {
+    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+        self.get(&addr)
+    }
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        panic!("TODO");
+        // self.values().collect::<Vec<_>>()
+    }
+}
+
+impl SymbolQuery<<x86_64 as Arch>::Address> for x86_64Data {
+    fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
+        self.contexts.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<x86_64 as Arch>::Address> {
+        for (k, v) in self.contexts.symbols.iter() {
+            if v == sym {
+                return Some(*k);
+            }
+        }
+
+        None
+    }
+}
+
+impl<'a> FunctionQuery<<x86_64 as Arch>::Address> for DisplayCtx<'a> {
+    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+        self.functions.function_at(addr)
+    }
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        self.functions.all_functions()
+    }
+}
+
+impl<'a> CommentQuery<<x86_64 as Arch>::Address> for DisplayCtx<'a> {
+    fn comment_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&str> {
+        self.comments.get(&addr).map(String::as_ref)
+    }
+}
+
+impl<'a> SymbolQuery<<x86_64 as Arch>::Address> for DisplayCtx<'a> {
     fn symbol_for(&self, addr: <x86_64 as Arch>::Address) -> Option<&Symbol> {
         self.symbols.get(&addr)
     }
@@ -118,19 +157,23 @@ pub enum ModifierExpression {
 /// The `Vec<ModifierExpression>` are _conjunctions_. This differs from `ValueSet`, which uses a
 /// sequence of values as disjunctions. This means there's no way to express a sparseset of values
 /// as ModifierExpression, for the time being.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct InstructionModifiers {
     before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
     after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
-    between: HashMap<<x86_64 as Arch>::Address, HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>>
+    between: HashMap<<x86_64 as Arch>::Address, HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>>,
+    pub calls: HashMap<<x86_64 as Arch>::Address, <x86_64 as Arch>::Address>,
+    fn_query: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,
 }
 
 impl InstructionModifiers {
-    pub fn new() -> Self {
+    pub fn new(fn_query: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>) -> Self {
         InstructionModifiers {
             before: HashMap::new(),
             after: HashMap::new(),
             between: HashMap::new(),
+            calls: HashMap::new(),
+            fn_query,
         }
     }
 
@@ -211,6 +254,26 @@ impl ModifierCollection<x86_64> for InstructionModifiers {
                 }
             }
         }
+        if let Some(target) = self.calls.get(&addr) {
+            if let Some(f) = (&*self.fn_query.borrow()).function_at(*target) {
+                let layout = f.layout();
+                for arg in layout.arguments.iter() {
+                    res.push((arg.to_owned(), Direction::Read));
+                }
+                for arg in layout.clobbers.iter() {
+                    res.push((arg.to_owned(), Direction::Write));
+                }
+                for arg in layout.returns.iter() {
+                    res.push((arg.to_owned(), Direction::Write));
+                }
+                if let Some(ret) = layout.return_address {
+                    res.push((Some(ret), Direction::Read));
+                }
+                // we can add all the reads/writes of f.
+            } else {
+                // !! log an error somewhere !!
+            }
+        }
         res
     }
 }
@@ -221,11 +284,13 @@ pub struct MergedContextTable {
     pub computed_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
     pub comments: HashMap<<x86_64 as Arch>::Address, String>,
     #[serde(skip)]
+    pub call_graph: GraphMap<<x86_64 as Arch>::Address, (), petgraph::Directed>,
+    #[serde(skip)]
     pub xrefs: xrefs::XRefCollection<<x86_64 as Arch>::Address>,
     pub symbols: HashMap<<x86_64 as Arch>::Address, Symbol>,
     #[serde(skip)]
     pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
-    pub functions: HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>,
+    pub functions: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,
     pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
     pub default_abi: Option<DefaultCallingConvention>,
@@ -249,13 +314,22 @@ impl MergedContextTable {
             user_contexts: HashMap::new(),
             computed_contexts: HashMap::new(),
             comments: HashMap::new(),
+            call_graph: GraphMap::new(),
             xrefs: xrefs::XRefCollection::new(),
-            functions: HashMap::new(),
+            functions: Rc::new(RefCell::new(HashMap::new())),
             function_hints: Vec::new(),
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
             function_data: HashMap::new(),
             default_abi: Some(DefaultCallingConvention::Microsoft), //None,
+        }
+    }
+
+    pub fn display_ctx(&self) -> DisplayCtx {
+        DisplayCtx {
+            functions: self.functions.borrow(),
+            symbols: &self.symbols,
+            comments: &self.comments,
         }
     }
 }
@@ -301,7 +375,7 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
         // println!("Applying update: {} -> {:?}", address.stringy(), update);
         match update {
             BaseUpdate::Specialized(x86Update::FunctionHint) => {
-                if !self.function_hints.contains(&address) && !self.functions.contains_key(&address) {
+                if !self.function_hints.contains(&address) && !self.functions.borrow().contains_key(&address) {
 //                    println!("Function hint: {}", address.stringy());
                     self.function_hints.push(address)
                 }
@@ -318,11 +392,11 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 match Symbol::to_function(&sym) {
                     Some(f) => {
                         if let Some(abi) = self.default_abi {
-                            self.functions.insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
+                            self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
                         } else {
                             // TODO: indicate that the function should have been defined, but
                             // was not because we don't know an ABI to map it to?
-                            self.functions.insert(address, f.unimplemented());
+                            self.functions.borrow_mut().insert(address, f.unimplemented());
                         }
                     }
                     None => { }
@@ -334,11 +408,11 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
                 self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
                 self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
                 if let Some(abi) = self.default_abi {
-                    self.functions.insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
+                    self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
                 } else {
                     // TODO: indicate that the function should have been defined, but was not
                     // because we don't know an ABI to map it to?
-                    self.functions.insert(address, f.unimplemented());
+                    self.functions.borrow_mut().insert(address, f.unimplemented());
                 }
             }
             BaseUpdate::AddCodeComment(comment) => {

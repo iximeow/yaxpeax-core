@@ -31,7 +31,7 @@ use num_traits::Zero;
 /// Anyway the question of highlighting operands is architecture-independent and only requires that
 /// operands are known, which is true by virtue of `Arch` being implemented
 pub struct FunctionView<
-    'a, 'b, 'c, 'd, 'e,
+    'a, 'c, 'd, 'e,
     F: FunctionRepr,
     Context: FunctionQuery<A::Address>,
     A: Arch + BaseDisplay<F, Context> + SSAValues,
@@ -39,7 +39,7 @@ pub struct FunctionView<
 > {
     pub _function_type: PhantomData<F>,
     pub data: &'a M,
-    pub ctx: &'b Context,
+    pub ctx: Context,
     pub fn_graph: &'c ControlFlowGraph<A::Address>,
     pub ssa: Option<&'d SSA<A>>,
     pub colors: Option<&'e ColorSettings>,
@@ -71,12 +71,12 @@ pub trait FunctionInstructionDisplay<A: Arch + SSAValues, Context: SymbolQuery<A
 
 
 impl <
-    'a, 'b, 'c, 'd, 'e,
+    'a, 'c, 'd, 'e,
     F: FunctionRepr,
     Context: FunctionQuery<A::Address> + SymbolQuery<A::Address>,
     A: Arch + BaseDisplay<F, Context> + SSAValues,
     M: MemoryRepr<A::Address> + MemoryRange<A::Address>
-> FunctionDisplay<A> for FunctionView<'a, 'b, 'c, 'd, 'e, F, Context, A, M> where A: FunctionInstructionDisplay<A, Context>  {
+> FunctionDisplay<A> for FunctionView<'a, 'c, 'd, 'e, F, Context, A, M> where A: FunctionInstructionDisplay<A, Context>  {
     fn entrypoint(&self) -> A::Address {
         self.fn_graph.entrypoint
     }
@@ -200,7 +200,7 @@ impl <
                     address,
                     instr,
                     &mut self.data.range(address..(address + instr.len())).unwrap(),
-                    Some(self.ctx),
+                    Some(&self.ctx),
                 ).unwrap();
                 // ok come back to this
                 write!(instr_string, " ").unwrap();
@@ -215,7 +215,7 @@ impl <
                         &mut instr_string,
                         &instr,
                         address,
-                        self.ctx, self.ssa, self.colors,
+                        &self.ctx, self.ssa, self.colors,
                         &NoHighlights
                     ).unwrap();
                 } else {
@@ -223,7 +223,7 @@ impl <
                         &mut instr_string,
                         &instr,
                         address,
-                        self.ctx, self.ssa, self.colors,
+                        &self.ctx, self.ssa, self.colors,
                         &HighlightList {
                             operands_bits: 0,
                             location_highlights: highlights

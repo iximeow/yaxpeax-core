@@ -19,6 +19,9 @@ use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, 
 use analyses::static_single_assignment::data::PhiOp;
 use data::{AliasInfo, Direction, Disambiguator, LocIterator};
 use data::modifier::ModifierCollection;
+use data::modifier;
+
+use arch::{AbiDefaults, FunctionImpl, FunctionQuery, InstructionSpan};
 
 #[test]
 fn test_immediate_dominators_construction() {
@@ -136,12 +139,14 @@ impl <A: crate::data::ValueLocations> UseDefTracker<A> {
 }
 
 pub fn generate_ssa<
+    'functions,
     A: SSAValues,
     M: MemoryRange<A::Address>,
     U: ModifierCollection<A>,
     D: std::ops::Deref<Target = U>,
     LocSpec,
     Disam: Disambiguator<A::Location, LocSpec>,
+    F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
 >(
     data: &M,
     entry: A::Address,
@@ -149,8 +154,10 @@ pub fn generate_ssa<
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
     value_modifiers: D,
     disambiguator: &mut Disam,
+    functions: &'functions F,
 ) -> SSA<A> where
-    for<'a, 'disam> &'a <A as Arch>::Instruction: LocIterator<'disam, A::Location, Disam, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    A::Location: 'static + AbiDefaults,
+    for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
 {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -159,8 +166,6 @@ pub fn generate_ssa<
     // extract out dominance frontiers .... one day...
 
     let mut use_tracker = UseDefTracker::<A>::new();
-
-    use arch::InstructionSpan;
 
     let mut has_already: HashMap<A::Address, u32> = HashMap::new();
     let mut work: HashMap<A::Address, u32> = HashMap::new();
@@ -171,8 +176,8 @@ pub fn generate_ssa<
         has_already.insert(k, 0);
         work.insert(k, 0);
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
-        while let Some((_address, instr)) = iter.next() {
-            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
+        while let Some((address, instr)) = iter.next() {
+            for (maybeloc, direction) in value_modifiers.before(address).iter().cloned().chain(instr.iter_locs(address, disambiguator, functions)).chain(value_modifiers.after(address).iter().cloned()) {
                 match (maybeloc, direction) {
                     (Some(loc), Direction::Write) => {
                         // TODO: this us the cause of some inaccuracies f.ex on x86:
@@ -234,6 +239,7 @@ pub fn generate_ssa<
     // TODO: some nice abstraction to look up by (Address, Location) but also
     // find all Location for an Address
     let mut values: HashMap<A::Address, RWMap<A>> = HashMap::new();
+    let mut modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>> = HashMap::new();
     let mut between_block_bounds: HashMap<A::Address, HashMap<A::Address, RWMap<A>>> = HashMap::new();
     let mut defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)> = HashMap::new();
     let mut phi: HashMap<A::Address, PhiLocations<A>> = HashMap::new();
@@ -294,15 +300,18 @@ pub fn generate_ssa<
 
     #[allow(non_snake_case)]
     fn search<
+        'functions,
         A: Arch + SSAValues,
         M: MemoryRange<A::Address>,
         U: ModifierCollection<A>,
         LocSpec,
         Disam: Disambiguator<A::Location, LocSpec>,
+        F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     >(
         data: &M,
         block: &BasicBlock<A::Address>,
         values: &mut HashMap<A::Address, RWMap<A>>,
+        modifier_values: &mut HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
         between_block_bounds: &mut HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
         defs: &mut HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
         phi: &mut HashMap<A::Address, PhiLocations<A>>,
@@ -314,8 +323,10 @@ pub fn generate_ssa<
         S: &mut HashMap<A::Location, Vec<DFGRef<A>>>,
         value_modifiers: &impl std::ops::Deref<Target = U>,
         disambiguator: &mut Disam,
+        functions: &'functions F,
     ) where
-        for<'a, 'disam> &'a <A as Arch>::Instruction: LocIterator<'disam, A::Location, Disam, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+        A::Location: 'static + AbiDefaults,
+        for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
     {
         fn new_value<A: Arch + SSAValues>(loc: A::Location, C: &mut HashMap<A::Location, u32>) -> Value<A> {
             use std::collections::hash_map::Entry;
@@ -347,102 +358,104 @@ pub fn generate_ssa<
         }
         let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
         while let Some((address, instr)) = iter.next() {
-            let mut writelog: HashSet<A::Location> = HashSet::new();
-            let def_source = DefSource::Instruction;
-            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
-                if let Some(loc) = maybeloc {
-                    match direction {
-                        Direction::Read => {
-                            let at_address = values.entry(address).or_insert_with(||
-                                HashMap::new()
-                            );
-                            let s_idx = {
-                                S[&loc].len() - 1 - if writelog.contains(&loc) {
-                                    1
-                                } else {
-                                    0
-                                }
-                            };
-                            let value = Rc::clone(&S[&loc][s_idx]);
-                            value.borrow_mut().used = true;
-                            at_address.insert((loc, Direction::Read), value);
-                        },
-                        Direction::Write => {
-                            if writelog.contains(&loc) {
-                                continue;
-                            } else {
-                                writelog.insert(loc.clone());
-                            }
-                            let new_value = Rc::new(RefCell::new(new_value(loc, C)));
-                            defs.insert(HashedValue {
-                                value: Rc::clone(&new_value)
-                            }, (address, def_source));
-                            let at_address = values.entry(address).or_insert_with(||
-                                HashMap::new()
-                            );
-                            at_address.insert((loc, Direction::Write), Rc::clone(&new_value));
-                            S.get_mut(&loc).expect("S should have entries for all locations.").push(new_value);
-                            // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
-                            // eg is it faster to store this and pop it back or is it faster to just
-                            // decode again..?
-                            assignments.push(loc); // ???
-                        },
-                    }
-                } else {
-                    match direction {
-                        Direction::Read => {
-                            // it's a read of something, but we don't know what, 
-                        },
-                        Direction::Write => {
-                            // a write to somewhere, we don't know where, this should def ...
-                            // everything
-                        }
-                    }
-                }
-            }
-            for (maybeloc, direction) in instr.iter_locs(disambiguator) {
-                if let Some(loc) = maybeloc {
-                    for alias in loc.aliases_of() {
+            let mut process_region = |items: Vec<(Option<A::Location>, Direction)>, mut insert_entry: &mut FnMut((A::Location, Direction), DFGRef<A>)| {
+                let mut writelog: HashSet<A::Location> = HashSet::new();
+                let mut def_source = DefSource::Instruction;
+                for (maybeloc, direction) in items.iter().cloned() {
+                    if let Some(loc) = maybeloc {
                         match direction {
                             Direction::Read => {
-                                let at_address = values.entry(address).or_insert_with(||
-                                    HashMap::new()
-                                );
                                 let s_idx = {
-                                    S[&alias].len() - 1 - if writelog.contains(&alias) {
+                                    S[&loc].len() - 1 - if writelog.contains(&loc) {
                                         1
                                     } else {
                                         0
                                     }
                                 };
-                                let value = Rc::clone(&S[&alias][s_idx]);
+                                let value = Rc::clone(&S[&loc][s_idx]);
                                 value.borrow_mut().used = true;
-                                at_address.insert((alias, Direction::Read), value);
+                                insert_entry((loc, Direction::Read), value);
                             },
                             Direction::Write => {
-                                if writelog.contains(&alias) {
+                                if writelog.contains(&loc) {
                                     continue;
                                 } else {
-                                    writelog.insert(alias.clone());
+                                    writelog.insert(loc.clone());
                                 }
-                                let new_value = Rc::new(RefCell::new(new_value(alias, C)));
+                                let new_value = Rc::new(RefCell::new(new_value(loc, C)));
                                 defs.insert(HashedValue {
                                     value: Rc::clone(&new_value)
                                 }, (address, def_source));
-                                let at_address = values.entry(address).or_insert_with(||
-                                    HashMap::new()
-                                );
-                                at_address.insert((alias, Direction::Write), Rc::clone(&new_value));
-                                S.get_mut(&alias).expect("S should have entries for all locations.").push(new_value);
+                                insert_entry((loc, Direction::Write), Rc::clone(&new_value));
+                                S.get_mut(&loc).expect("S should have entries for all locations.").push(new_value);
                                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                                 // eg is it faster to store this and pop it back or is it faster to just
                                 // decode again..?
-                                assignments.push(alias); // ???
+                                assignments.push(loc); // ???
                             },
+                        }
+                    } else {
+                        match direction {
+                            Direction::Read => {
+                                // it's a read of something, but we don't know what, 
+                            },
+                            Direction::Write => {
+                                // a write to somewhere, we don't know where, this should def ...
+                                // everything
+                            }
                         }
                     }
                 }
-            }
+                for (maybeloc, direction) in items.iter().cloned() {
+                    if let Some(loc) = maybeloc {
+                        for alias in loc.aliases_of() {
+                            match direction {
+                                Direction::Read => {
+                                    let s_idx = {
+                                        S[&alias].len() - 1 - if writelog.contains(&alias) {
+                                            1
+                                        } else {
+                                            0
+                                        }
+                                    };
+                                    let value = Rc::clone(&S[&alias][s_idx]);
+                                    value.borrow_mut().used = true;
+                                    insert_entry((alias, Direction::Read), value);
+                                },
+                                Direction::Write => {
+                                    if writelog.contains(&alias) {
+                                        continue;
+                                    } else {
+                                        writelog.insert(alias.clone());
+                                    }
+                                    let new_value = Rc::new(RefCell::new(new_value(alias, C)));
+                                    defs.insert(HashedValue {
+                                        value: Rc::clone(&new_value)
+                                    }, (address, def_source));
+                                    insert_entry((alias, Direction::Write), Rc::clone(&new_value));
+                                    S.get_mut(&alias).expect("S should have entries for all locations.").push(new_value);
+                                    // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
+                                    // eg is it faster to store this and pop it back or is it faster to just
+                                    // decode again..?
+                                    assignments.push(alias); // ???
+                                },
+                            }
+                        }
+                    }
+                }
+            };
+            let mut before_fn = |pos, value| {
+                modifier_values.entry((address, modifier::Precedence::Before)).or_insert_with(|| HashMap::new()).insert(pos, value);
+            };
+            process_region(value_modifiers.before(address), &mut before_fn);
+            let mut between_fn = |pos, value| {
+                values.entry(address).or_insert_with(|| HashMap::new()).insert(pos, value);
+            };
+            process_region(instr.iter_locs(address, disambiguator, functions).collect::<Vec<_>>(), &mut between_fn);
+            let mut after_fn = |pos, value| {
+                modifier_values.entry((address, modifier::Precedence::After)).or_insert_with(|| HashMap::new()).insert(pos, value);
+            };
+            process_region(value_modifiers.after(address), &mut after_fn);
         }
 
         /*
@@ -559,6 +572,7 @@ pub fn generate_ssa<
                     data,
                     basic_blocks.get_block(u),
                     values,
+                    modifier_values,
                     between_block_bounds,
                     defs,
                     phi,
@@ -570,6 +584,7 @@ pub fn generate_ssa<
                     S,
                     value_modifiers,
                     disambiguator,
+                    functions,
                 );
                     // this shouldn't be modified in recursive calls (we won't visit the same block
                     // [so, same bounds] twice), but it's clumsy to express that to rustc. might
@@ -606,6 +621,7 @@ pub fn generate_ssa<
         data,
         basic_blocks.get_block(entry),
         &mut values,
+        &mut modifier_values,
         &mut between_block_bounds,
         &mut defs,
         &mut phi,
@@ -617,6 +633,7 @@ pub fn generate_ssa<
         &mut S,
         &value_modifiers,
         disambiguator,
+        functions,
     );
 
     fn mark_phi_used<A: SSAValues>(
@@ -645,5 +662,5 @@ pub fn generate_ssa<
         }
     }
 
-    SSA { instruction_values: values, modifier_values: HashMap::new(), control_dependent_values: between_block_bounds, defs: defs, phi: phi }
+    SSA { instruction_values: values, modifier_values: modifier_values, control_dependent_values: between_block_bounds, defs: defs, phi: phi }
 }

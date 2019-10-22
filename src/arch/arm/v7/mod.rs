@@ -31,10 +31,10 @@ pub struct ARMv7Data {
 
 impl FunctionQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
     type Function = Function;
-    fn function_at(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
+    fn function_at(&self, addr: <ARMv7 as Arch>::Address) -> Option<&Self::Function> {
         self.contexts.function_at(addr)
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         self.contexts.all_functions()
     }
 }
@@ -54,10 +54,10 @@ impl SymbolQuery<<ARMv7 as Arch>::Address> for ARMv7Data {
 
 impl FunctionQuery<<ARMv7 as Arch>::Address> for MergedContextTable {
     type Function = Function;
-    fn function_at(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Function> {
+    fn function_at(&self, _addr: <ARMv7 as Arch>::Address) -> Option<&Self::Function> {
         None
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         unimplemented!()
     }
 }

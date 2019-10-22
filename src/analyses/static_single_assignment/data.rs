@@ -13,6 +13,8 @@ use data::modifier;
 use data::ValueLocations;
 use data::Direction;
 
+use arch::x86_64::display::DataDisplay;
+
 pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
 pub type RWMap<A> = HashMap<(<A as ValueLocations>::Location, Direction), DFGRef<A>>;
 #[derive(Clone, Debug)]
@@ -59,6 +61,63 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     pub control_dependent_values: HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
     pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
     pub phi: HashMap<A::Address, PhiLocations<A>>
+}
+
+pub struct SSAQuery<'a, A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
+    ssa: &'a SSA<A>,
+    addr: A::Address
+}
+
+pub struct NoValueDescriptions;
+
+impl<Location> ValueDescriptionQuery<Location> for NoValueDescriptions {
+    fn modifier_name(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> { None }
+    fn modifier_value(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> { None }
+}
+
+pub trait ValueDescriptionQuery<Location> {
+    fn modifier_name(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String>;
+    fn modifier_value(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String>;
+}
+
+impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a, A> where A::Location: Hash + Eq, A::Address: Hash + Eq {
+    fn modifier_name(&self, loc: A::Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> {
+        if let Some(rwmap) = self.ssa.modifier_values.get(&(self.addr, precedence)) {
+            if let Some(entry) = rwmap.get(&(loc, dir)) {
+                entry.borrow().name.as_ref().map(|x| x.clone()).or_else(|| {
+                    let entry = entry.borrow();
+                    if let Some(version) = entry.version() {
+                        Some(format!("{:?}_{}", entry.location, version))
+                    } else {
+                        Some(format!("{:?}_input", entry.location))
+                    }
+                })
+            } else {
+                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc, dir))
+            }
+        } else {
+            Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
+        }
+    }
+
+    fn modifier_value(&self, loc: A::Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> {
+        if let Some(rwmap) = self.ssa.modifier_values.get(&(self.addr, precedence)) {
+            if let Some(entry) = rwmap.get(&(loc, dir)) {
+                entry.borrow().name.as_ref().map(|x| x.clone()).or_else(|| {
+                    let entry = entry.borrow();
+                    if let Some(data) = entry.data.as_ref() {
+                        Some(format!("{:?})", data))
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc, dir))
+            }
+        } else {
+            Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
+        }
+    }
 }
 
 pub struct Value<A: SSAValues> where A::Data: Typed {
@@ -249,6 +308,12 @@ pub trait SSAValues where Self: Arch + ValueLocations {
 }
 
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
+    pub fn query_at<'a>(&'a self, addr: A::Address) -> SSAQuery<'a, A> {
+        SSAQuery {
+            ssa: self,
+            addr
+        }
+    }
     pub fn get_value(&self, addr: A::Address, loc: A::Location, dir: Direction) -> Option<DFGRef<A>> {
         self.instruction_values.get(&addr)
             .and_then(|addr_values| addr_values.get(&(loc, dir)))

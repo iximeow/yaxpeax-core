@@ -42,10 +42,10 @@ impl CommentQuery<<PIC17 as Arch>::Address> for PIC17Data {
 impl FunctionQuery<<PIC17 as Arch>::Address> for PIC17Data {
     type Function = Function;
     fn function_at(&self, addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
-        self.contexts.function_at(addr)
+        (&self.contexts).function_at(addr)
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
-        self.contexts.all_functions()
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        (&self.contexts).all_functions()
     }
 }
 
@@ -69,7 +69,7 @@ impl FunctionQuery<<PIC17 as Arch>::Address> for MergedContextTable {
     fn function_at(&self, _addr: <PIC17 as Arch>::Address) -> Option<&Self::Function> {
         None
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         unimplemented!()
     }
 }

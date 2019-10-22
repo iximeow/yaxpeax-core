@@ -25,20 +25,20 @@ pub struct ARMv8Data {
 
 impl FunctionQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
     type Function = Function;
-    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
+    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
         self.functions.get(&addr)
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         self.functions.values().collect()
     }
 }
 
 impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
     type Function = Function;
-    fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Function> {
+    fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
         None
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         unimplemented!()
     }
 }

@@ -1,7 +1,9 @@
 pub mod modifier;
 pub mod types;
 
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{Address, Arch};
+
+use arch::{AbiDefaults, FunctionImpl, FunctionQuery};
 
 use serde::Serialize;
 use std::hash::Hash;
@@ -68,13 +70,18 @@ pub trait Disambiguator<Location, LocSpec> {
     fn disambiguate(&mut self, spec: LocSpec) -> Option<Location>;
 }
 
-pub trait LocIterator<'disambiguator, Location, D: Disambiguator<Location, Self::LocSpec>> {
+pub trait LocIterator<'disambiguator, 'fns, A: Address, Location: 'static + AbiDefaults, D: Disambiguator<Location, Self::LocSpec>, F: FunctionQuery<A, Function=FunctionImpl<Location>>> {
     type Item;
     type LocSpec;
     type Iter: Iterator<Item = Self::Item>;
-    fn iter_locs(self, _: &'disambiguator mut D) -> Self::Iter;
+    // TODO:
+    // this probably needs to grow to know about a table of functions and a mechanism to pick which
+    // one(s? plural?) is called. plural, because `call [rbp]` may have a known finite set of
+    // targets, and a perfectly fine analysis would consider the union of all reads and writes
+    fn iter_locs(self, loc: A, _: &'disambiguator mut D, functions: &'fns F) -> Self::Iter;
 }
 
+/*
 #[allow(unused)]
 macro_rules! impl_loc_iterator_transition {
     ($arch:ty) => {
@@ -87,3 +94,4 @@ macro_rules! impl_loc_iterator_transition {
         }
     }
 }
+*/

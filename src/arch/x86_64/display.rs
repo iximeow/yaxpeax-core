@@ -15,7 +15,7 @@ use arch::FunctionQuery;
 use arch::CommentQuery;
 use arch::SymbolQuery;
 use arch::AddressNamer;
-use arch::x86_64::{ContextRead, MergedContextTable};
+use arch::x86_64::{ContextRead, DisplayCtx, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
 use analyses::control_flow::Determinant;
 use yaxpeax_x86::{Instruction, Opcode, Operand};
@@ -38,13 +38,13 @@ use std::fmt::Write;
 use std::marker::PhantomData;
 
 use yaxpeax_arch::ShowContextual;
-impl <T: std::fmt::Write> ShowContextual<u64, MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, _context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
+impl <'a, T: std::fmt::Write> ShowContextual<u64, DisplayCtx<'a>, T> for Instruction {
+    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Option::<&[Option<String>]>::None, out)
     }
 }
 
-impl <T: FunctionQuery<<x86_64Arch as Arch>::Address> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<FunctionImpl<<x86_64Arch as ValueLocations>::Location>, T> for x86_64Arch {
+impl <F: FunctionRepr, T: FunctionQuery<<x86_64Arch as Arch>::Address, Function=F> + CommentQuery<<x86_64Arch as Arch>::Address>> BaseDisplay<F, T> for x86_64Arch {
     fn render_frame<Data: Iterator<Item=u8>, W: fmt::Write>(
         dest: &mut W,
         addr: <x86_64Arch as Arch>::Address,
@@ -697,7 +697,11 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
     }
 }
 
-impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address>, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>> Display for InstructionContext<'a, 'b, 'c, 'd, 'e, Context, Highlighter> {
+impl <
+    'a, 'b, 'c, 'd, 'e,
+    Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address, Function=FunctionImpl<<x86_64Arch as ValueLocations>::Location>>,
+    Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>
+> Display for InstructionContext<'a, 'b, 'c, 'd, 'e, Context, Highlighter> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fn colorize_i8(num: i8, colors: Option<&ColorSettings>) -> String {
             match num {
@@ -773,7 +777,8 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
 
         fn contextualize_operand<
             'a, 'b, 'c, 'd, 'e,
-            C: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>,
+            F: FunctionRepr,
+            C: FunctionQuery<<x86_64Arch as Arch>::Address, Function=F> + SymbolQuery<<x86_64Arch as Arch>::Address>,
             Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>
         >(
             op: &Operand,
@@ -1223,7 +1228,9 @@ impl <'a, 'b, 'c, 'd, 'e, Context: SymbolQuery<<x86_64Arch as Arch>::Address> + 
             Opcode::Jcc(_) => {
                 let dest_namer = |addr| {
                     self.contexts.and_then(|context| {
-                        context.function_at(addr).map(|f| self.colors.function(f.decl_string(false)))
+                        context.function_at(addr).map(|f| {
+                            self.colors.function(f.with_value_names(self.ssa.map(|fn_ssa| fn_ssa.query_at(self.addr))).decl_string(false))
+                        })
                             .or_else(|| {
                                 context.address_name(addr).map(|name| self.colors.function(name))
                             })
@@ -1522,12 +1529,12 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
             address,
             instr,
             &mut data.range(address..(address + instr.len())).unwrap(),
-            Some(ctx),
+            Some(&ctx.display_ctx()),
         ).unwrap();
         writeln!(instr_string, " {}", InstructionContext {
             instr: &instr,
             addr: address,
-            contexts: Some(ctx),
+            contexts: Some(&ctx.display_ctx()),
             ssa: ssa,
             colors: colors,
             highlight: &NoHighlights,
@@ -1551,13 +1558,13 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
                 address,
                 &instr,
                 &mut data.range(address..(address + instr.len())).unwrap(),
-                Some(ctx),
+                Some(&ctx.display_ctx()),
             ).unwrap();
             print!("{}", instr_text);
             println!(" {}", InstructionContext {
                 instr: &instr,
                 addr: address,
-                contexts: Some(ctx),
+                contexts: Some(&ctx.display_ctx()),
                 ssa: None,
                 colors: colors,
                 highlight: &NoHighlights,
@@ -1579,8 +1586,7 @@ fn is_conditional_op(op: Opcode) -> bool {
 }
 
 impl <
-    Context: FunctionQuery<<x86_64Arch as Arch>::Address> + SymbolQuery<<x86_64Arch as Arch>::Address>,
-    
+    Context: FunctionQuery<<x86_64Arch as Arch>::Address, Function=FunctionImpl<<x86_64Arch as ValueLocations>::Location>> + SymbolQuery<<x86_64Arch as Arch>::Address>,
 > FunctionInstructionDisplay<x86_64Arch, Context> for x86_64Arch {
     fn display_instruction_in_function<W: fmt::Write, Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>>(
         dest: &mut W,
@@ -1625,11 +1631,11 @@ pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<<x86_64Arch as Arch>::Add
     ssa: Option<&'d SSA<x86_64Arch>>,
     fn_graph: &'c ControlFlowGraph<<x86_64Arch as Arch>::Address>,
     colors: Option<&'e ColorSettings>
-) -> FunctionView<'a, 'b, 'c, 'd, 'e, FunctionImpl<<x86_64Arch as ValueLocations>::Location>, MergedContextTable, x86_64Arch, M> {
+) -> FunctionView<'a, 'c, 'd, 'e, FunctionImpl<<x86_64Arch as ValueLocations>::Location>, DisplayCtx<'b>, x86_64Arch, M> {
     FunctionView {
         _function_type: PhantomData,
         data,
-        ctx,
+        ctx: ctx.display_ctx(),
         fn_graph,
         ssa,
         colors,

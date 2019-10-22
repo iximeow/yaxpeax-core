@@ -9,7 +9,7 @@ pub mod x86_64;
 pub mod display;
 pub mod interface;
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -17,6 +17,10 @@ use std::fmt::{Display, Write};
 
 use crate::data::types;
 use data::ValueLocations;
+use data::Direction;
+use data::modifier::Precedence;
+
+use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
 use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
 
@@ -25,9 +29,9 @@ use memory::{MemoryRange, MemoryRepr};
 use serde::{Deserialize, Serialize};
 
 pub trait FunctionQuery<A: Address> {
-    type Function: FunctionRepr;
+    type Function;
     fn function_at(&self, addr: A) -> Option<&Self::Function>;
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function>;
+    fn all_functions(&self) -> Vec<&Self::Function>;
 }
 
 pub trait SymbolQuery<A: Address> {
@@ -39,7 +43,7 @@ pub trait AddressNamer<A: Address> {
     fn address_name(&self, addr: A) -> Option<String>;
 }
 
-impl <T, A: Address> AddressNamer<A> for T where T: FunctionQuery<A> + SymbolQuery<A> {
+impl <'a, T, A: Address, F: FunctionRepr> AddressNamer<A> for T where T: FunctionQuery<A, Function=F> + SymbolQuery<A> {
     fn address_name(&self, addr: A) -> Option<String> {
         self.function_at(addr).map(|func| func.name().to_owned())
             .or_else(|| { self.symbol_for(addr).map(|sym| sym.to_string()) })
@@ -92,14 +96,19 @@ pub struct FunctionImpl<Loc: AbiDefaults> {
     layout: Rc<RefCell<FunctionLayout<Loc>>>,
 }
 
+pub struct FunctionImplDescription<'a, Loc: AbiDefaults, V: ValueDescriptionQuery<Loc>> {
+    f: &'a FunctionImpl<Loc>,
+    values: Option<V>
+}
+
 // PartialEq, Eq
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionLayout<Loc: AbiDefaults> {
-    arguments: Vec<Option<Loc>>,
-    returns: Vec<Option<Loc>>,
-    clobbers: Vec<Option<Loc>>,
-    return_address: Option<Loc>,
+    pub(crate) arguments: Vec<Option<Loc>>,
+    pub(crate) returns: Vec<Option<Loc>>,
+    pub(crate) clobbers: Vec<Option<Loc>>,
+    pub(crate) return_address: Option<Loc>,
     defaults: Loc::AbiDefault,
 }
 
@@ -204,15 +213,38 @@ impl <Loc: AbiDefaults> FunctionImpl<Loc> {
         let arg = new_arg.0.or_else(|| { self.layout.borrow_mut().argument_at(arg_idx) });
         self.layout.borrow_mut().arguments[arg_idx] = arg;
     }
+
+    pub fn append_ret(&mut self, new_ret: (Option<Loc>, Parameter)) {
+        self.names.returns.push(Some(new_ret.1));
+        let ret_idx = self.names.returns.len() - 1;
+        let ret = new_ret.0.or_else(|| { self.layout.borrow_mut().return_at(ret_idx) });
+        self.layout.borrow_mut().returns[ret_idx] = ret;
+    }
+
+    fn layout(&self) -> Ref<FunctionLayout<Loc>> {
+        self.layout.borrow()
+    }
+
+    pub fn with_value_names<V: ValueDescriptionQuery<Loc>>(&self, value_descs: Option<V>) -> FunctionImplDescription<Loc, V> {
+        FunctionImplDescription {
+            f: self,
+            values: value_descs,
+        }
+    }
 }
 
-// TODO:
-// impl <T: Display> FunctionRepr for FunctionImpl<T> {
-impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
+impl <T: AbiDefaults + Debug, V: ValueDescriptionQuery<T>> FunctionRepr for FunctionImplDescription<'_, T, V> {
     fn decl_string(&self, show_locations: bool) -> String {
-        let mut res = self.names.name.clone();
+        let mut res = self.f.names.name.clone();
         res.push('(');
-        for (i, name) in self.names.arguments.iter().enumerate() {
+        // Arguments are shown like this:
+        // <arg_name>[ -> <location>]: <value_location>[[ (= <value_description>)]]
+        //
+        // square brackets indicate text selected by `show_locations`.
+        // double square brackets are only set if a value is known for the argument.
+        //
+        // TODO: if `<arg_name>` == `<value_location>`, just fold them together.
+        for (i, name) in self.f.names.arguments.iter().enumerate() {
             if i > 0 {
                 res.push_str(", ");
             }
@@ -222,33 +254,53 @@ impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
             } else {
                 res.push_str(&format!("arg_{}", i));
             }
+            let argument = self.f.layout.borrow_mut().argument_at(i);
             if show_locations {
                 res.push_str(" -> ");
-                write!(res, "{:?}", self.layout.borrow_mut().argument_at(i)).unwrap();
+                write!(res, "{:?}", argument).unwrap();
+            }
+            if let (Some(argument), Some(values)) = (argument, self.values.as_ref()) {
+                if let Some(name) = values.modifier_name(argument, Direction::Read, Precedence::After) {
+                    write!(res, ": {}", name).unwrap();
+                }
+                if let Some(value) = values.modifier_value(argument, Direction::Read, Precedence::After) {
+                    write!(res, " (= {})", value).unwrap();
+                }
             }
         }
         res.push(')');
-        match self.names.returns.len() {
+        match self.f.names.returns.len() {
             0 => {},
             1 => {
+                res.push_str(" -> ");
+                let ret = self.f.layout.borrow_mut().return_at(0);
                 if show_locations {
-                    write!(res, "{:?}", self.layout.borrow_mut().return_at(0)).unwrap();
+                    write!(res, "{:?}", ret).unwrap();
                     res.push_str(" -> ");
                 }
-                if let Some(name) = self.names.returns.get(0).and_then(|x| x.as_ref()).and_then(|n| n.name.as_ref()) {
+                if let Some(name) = self.f.names.returns.get(0).and_then(|x| x.as_ref()).and_then(|n| n.name.as_ref()) {
                     res.push_str(name);
                 } else {
                     res.push_str("return_0");
                 }
+                if let (Some(ret), Some(values)) = (ret, self.values.as_ref()) {
+                    if let Some(name) = values.modifier_name(ret, Direction::Write, Precedence::After) {
+                        write!(res, ": {}", name).unwrap();
+                    }
+                    if let Some(value) = values.modifier_value(ret, Direction::Write, Precedence::After) {
+                        write!(res, " (= {})", value).unwrap();
+                    }
+                }
             },
             _ => {
                 res.push_str(" -> ");
-                for (i, name) in self.names.returns.iter().enumerate() {
+                for (i, name) in self.f.names.returns.iter().enumerate() {
                     if i > 0 {
                         res.push_str(", ");
                     }
+                    let ret = self.f.layout.borrow_mut().return_at(i);
                     if show_locations {
-                        write!(res, "{:?}", self.layout.borrow_mut().return_at(i)).unwrap();
+                        write!(res, "{:?}", ret).unwrap();
                         res.push_str(" -> ");
                     }
                     if let Some(name) = name.as_ref().and_then(|n| n.name.as_ref()) {
@@ -256,10 +308,30 @@ impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
                     } else {
                         res.push_str(&format!("return_{}", i));
                     }
+                    if let (Some(ret), Some(values)) = (ret, self.values.as_ref()) {
+                        if let Some(name) = values.modifier_name(ret, Direction::Write, Precedence::After) {
+                            write!(res, ": {}", name).unwrap();
+                        }
+                        if let Some(value) = values.modifier_value(ret, Direction::Write, Precedence::After) {
+                            write!(res, " (= {})", value).unwrap();
+                        }
+                    }
                 }
             }
         }
         res
+    }
+
+    fn name(&self) -> &str {
+        &self.f.names.name
+    }
+}
+
+// TODO:
+// impl <T: Display> FunctionRepr for FunctionImpl<T> {
+impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
+    fn decl_string(&self, show_locations: bool) -> String {
+        self.with_value_names(Some(NoValueDescriptions)).decl_string(show_locations)
     }
     fn name(&self) -> &str {
         &self.names.name

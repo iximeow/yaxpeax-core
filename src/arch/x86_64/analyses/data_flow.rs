@@ -12,6 +12,7 @@
 /// this should be optimistic or pessimistic, I'm .. ignoring it :)
 
 use arch::Symbol;
+use arch::{FunctionImpl, FunctionQuery};
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
@@ -697,7 +698,8 @@ impl <'a> Disambiguator<Location, (u8, u8)> for ContextualDisambiguation<'a> {
     }
 }
 
-pub struct LocationIter<'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> {
+pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address> + ?Sized> {
+    addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address,
     inst: &'a yaxpeax_x86::Instruction,
     op_count: u8,
     op_idx: u8,
@@ -706,6 +708,7 @@ pub struct LocationIter<'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> {
     curr_op: Option<&'a yaxpeax_x86::Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
+    fn_query: &'c F,
 }
 
 fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
@@ -989,9 +992,10 @@ fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
     }
 }
 
-impl <'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> LocationIter<'a, 'b, D> {
-    pub fn new(inst: &'a yaxpeax_x86::Instruction, disambiguator: &'b mut D) -> Self {
+impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
+    pub fn new(addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_x86::Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
         LocationIter {
+            addr,
             inst,
             op_count: operands_in(inst),
             op_idx: 0,
@@ -1000,6 +1004,7 @@ impl <'a, 'b, D: Disambiguator<Location, (u8, u8)> + ?Sized> LocationIter<'a, 'b
             curr_op: None,
             curr_use: None,
             disambiguator,
+            fn_query,
         }
     }
     fn curr_loc(&self) -> (u8, u8) {
@@ -1926,10 +1931,10 @@ fn test_xor_locations() {
     panic!("{:?}", locs);
 }
 
-impl <'a, 'b, D: Disambiguator<Location, (u8, u8)>> Iterator for LocationIter<'a, 'b, D> {
+impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> Iterator for LocationIter<'a, 'b, 'c, D, F> {
     type Item = (Option<Location>, Direction);
     fn next(&mut self) -> Option<Self::Item> {
-        fn next_loc<'a, 'b, D: Disambiguator<Location, (u8, u8)>>(iter: &mut LocationIter<'a, 'b, D>) -> Option<(Option<Location>, Direction)> {
+        fn next_loc<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>>(iter: &mut LocationIter<'a, 'b, 'c, D, F>) -> Option<(Option<Location>, Direction)> {
             while iter.loc_count == iter.loc_idx {
                 // advance op
                 iter.op_idx += 1;
@@ -2044,12 +2049,12 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
     }
 }
 
-impl <'a, 'b, D: 'b + Disambiguator<Location, (u8, u8)>> crate::data::LocIterator<'b, Location, D> for &'a yaxpeax_x86::Instruction {
+impl <'a, 'b, 'c, D: 'b + Disambiguator<Location, (u8, u8)>, F: 'c + FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Function=FunctionImpl<Location>>> crate::data::LocIterator<'b, 'c, <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Location, D, F> for &'a yaxpeax_x86::Instruction {
     type Item = (Option<Location>, Direction);
     type LocSpec = (u8, u8);
-    type Iter = LocationIter<'a, 'b, D>;
-    fn iter_locs(self, disam: &'b mut D) -> Self::Iter {
-        LocationIter::new(self, disam)
+    type Iter = LocationIter<'a, 'b, 'c, D, F>;
+    fn iter_locs(self, addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, disam: &'b mut D, functions: &'c F) -> Self::Iter {
+        LocationIter::new(addr, self, disam, functions)
     }
 }
 
@@ -2082,8 +2087,8 @@ impl FunctionAbiReference<Location> for DefaultCallingConvention {
             },
             DefaultCallingConvention::Microsoft => {
                 [
-                    Location::Register(RegSpec::rdx()),
                     Location::Register(RegSpec::rcx()),
+                    Location::Register(RegSpec::rdx()),
                     Location::Register(RegSpec::r8()),
                     Location::Register(RegSpec::r9())
                 ].get(i).cloned()

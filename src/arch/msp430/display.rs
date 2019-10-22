@@ -7,6 +7,7 @@ use SyntaxedSSARender;
 use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual};
 use arch::display::BaseDisplay;
 use arch::CommentQuery;
+use arch::Function;
 use arch::FunctionQuery;
 use arch::FunctionRepr;
 use arch::InstructionSpan;
@@ -21,13 +22,13 @@ use memory::MemoryRange;
 use data::{Direction, ValueLocations};
 use std::fmt;
 
-impl <T> SyntaxedSSARender<MSP430, T, ()> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
+impl <T> SyntaxedSSARender<MSP430, T, Function> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
     fn render_with_ssa_values(
         &self,
         address: <MSP430 as Arch>::Address,
         _colors: Option<&ColorSettings>,
         context: Option<&T>,
-        _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
+        _function_table: &HashMap<<MSP430 as Arch>::Address, Function>,
         ssa: &SSA<MSP430>) -> String {
 
         fn render_operand<T: PartialInstructionContext>(address: <MSP430 as Arch>::Address, operand: &Operand, context: Option<&T>, ssa: &SSA<MSP430>, direction: Direction) -> String {
@@ -211,7 +212,7 @@ impl <T: std::fmt::Write> ShowContextual<u16, msp430::MergedContextTable, T> for
         self.contextualize(colors, address, Some(&ctxs[..]), out)
     }
 }
-impl <T> BaseDisplay<(), T> for MSP430 where T: FunctionQuery<<MSP430 as Arch>::Address> + CommentQuery<<MSP430 as Arch>::Address> {
+impl <F: FunctionRepr, T> BaseDisplay<Function, T> for MSP430 where T: FunctionQuery<<MSP430 as Arch>::Address, Function=F> + CommentQuery<<MSP430 as Arch>::Address> {
     fn render_frame<Data: Iterator<Item=u8> + ?Sized, W: fmt::Write>(
         dest: &mut W,
         addr: u16,
@@ -258,13 +259,13 @@ pub fn render_instruction_with_ssa_values<T>(
     instr: &<MSP430 as Arch>::Instruction,
     colors: Option<&ColorSettings>,
     ctx: Option<&T>,
-    function_table: &HashMap<u16, ()>,
+    function_table: &HashMap<u16, Function>,
     ssa: &SSA<MSP430>
 ) where
     T: msp430::PartialInstructionContext,
     <MSP430 as ValueLocations>::Location: Eq + Hash,
     <MSP430 as Arch>::Address: Eq + Hash,
-    <MSP430 as Arch>::Instruction: SyntaxedSSARender<MSP430, T, ()> {
+    <MSP430 as Arch>::Instruction: SyntaxedSSARender<MSP430, T, Function> {
     println!(" {}", instr.render_with_ssa_values(address, colors, ctx, &function_table, ssa))
 }
 
@@ -274,7 +275,7 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     start_addr: <MSP430 as Arch>::Address,
     end_addr: <MSP430 as Arch>::Address,
-    _function_table: &HashMap<<MSP430 as Arch>::Address, ()>,
+    _function_table: &HashMap<<MSP430 as Arch>::Address, Function>,
     _colors: Option<&ColorSettings>) {
     let continuation = start_addr;
     while continuation < end_addr {
@@ -329,7 +330,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
     colors: Option<&ColorSettings>
     ) {
 
-    let fn_graph = cfg.get_function::<()>(addr, &HashMap::new());
+    let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());
 
     let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();
@@ -363,14 +364,16 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
                 Option::<&msp430::MergedContextTable>::None
             ).unwrap();
             print!("{}", instr_text);
+            /* TODO: figure out what's going on here...
             render_instruction_with_ssa_values(
                 address,
                 instr,
                 colors,
-                Option::<&msp430::MergedContext>::None,
+                Option::<&&msp430::MergedContext>::None,
                 &HashMap::new(),
                 ssa
             );
+            */
             if ssa.instruction_values.contains_key(&address) {
                 // println!("  values: {:?}", ssa.instruction_values[&address]);
             }
@@ -387,7 +390,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
     addr: <MSP430 as Arch>::Address,
     colors: Option<&ColorSettings>) {
 
-    let fn_graph = cfg.get_function::<()>(addr, &HashMap::new());
+    let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());
 
     let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
     blocks.sort();

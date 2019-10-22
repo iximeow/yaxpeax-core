@@ -28,7 +28,7 @@ pub struct MSP430Data {
     pub preferred_addr: <MSP430 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<MSP430 as Arch>::Address>,
-    pub functions: HashMap<<MSP430 as Arch>::Address, ()>
+    pub functions: HashMap<<MSP430 as Arch>::Address, Function>
 }
 
 impl CommentQuery<<MSP430 as Arch>::Address> for MergedContextTable {
@@ -42,7 +42,7 @@ impl FunctionQuery<<MSP430 as Arch>::Address> for MergedContextTable {
     fn function_at(&self, _addr: <MSP430 as Arch>::Address) -> Option<&Self::Function> {
         None
     }
-    fn all_functions<'a>(&'a self) -> Vec<&'a Self::Function> {
+    fn all_functions(&self) -> Vec<&Self::Function> {
         unimplemented!()
     }
 }

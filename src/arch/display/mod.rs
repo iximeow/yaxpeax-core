@@ -2,6 +2,7 @@ use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decodable, LengthedInstr
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
 use arch::InstructionSpan;
+use arch::FunctionQuery;
 use memory::{MemoryRepr, MemoryRange};
 use num_traits::Zero;
 
@@ -80,12 +81,12 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
     };
 }
 
-pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
+pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, FnQuery: FunctionQuery<A::Address, Function=F>, Contexts>(
     data: &M,
     ctx: &Contexts,
     start_addr: A::Address,
     end_addr: A::Address,
-    _function_table: &HashMap<A::Address, F>,
+    _function_table: &FnQuery,
     colors: Option<&ColorSettings>
 ) -> Vec<(A::Address, Vec<String>)> where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
