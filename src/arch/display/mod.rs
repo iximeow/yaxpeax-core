@@ -134,8 +134,14 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                 &mut data.range_from(address).unwrap(),
                 Some(ctx),
             ).unwrap();
+            println!("bytes: {}", instr_text);
             instr_text.push(' ');
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
+            println!("instr at {}, {}, len={}", address.stringy(), instr_text, instr.len());
+            use yaxpeax_arch::Address;
+            if instr.len().to_linear() == 0 {
+                panic!("oh no");
+            }
             result.push((
                 address,
                 instr_text.split("\n").map(|s| s.to_string()).collect()
