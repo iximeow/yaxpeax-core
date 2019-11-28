@@ -1,6 +1,6 @@
 use arch;
 use arch::MCU;
-use yaxpeax_arch::{Arch, Decodable, LengthedInstruction};
+use yaxpeax_arch::{Arch, Decoder, LengthedInstruction};
 use memory::{MemoryRepr, MemoryRange};
 use memory::repr::FlatMemoryRepr;
 use debug;
@@ -609,7 +609,8 @@ impl CPU {
 
 impl MCU for CPU {
     type Addr = u32;
-    type Instruction = yaxpeax_pic18::Instruction;
+    type Instruction = <PIC18 as Arch>::Instruction;
+    type Decoder = <PIC18 as Arch>::Decoder;
     fn emulate(&mut self) -> Result<(), String> {
         let mut skip_next = false;
         let eval_result = match self.decode() {
@@ -1469,21 +1470,13 @@ impl MCU for CPU {
     }
 
     fn decode(&self) -> Result<Self::Instruction, String> {
-        let mut result = yaxpeax_pic18::Instruction {
-            opcode: Opcode::NOP,
-            operands: [Operand::Nothing, Operand::Nothing]
-        };
-        match result.decode_into(self.program.range_from(self.ip).unwrap()) {
-            Some(()) => Ok(result),
-            None => {
-                Err(
-                    format!(
-                        "Unable to decode bytes at 0x{:x}: {:x?}",
-                        self.ip,
-                        self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>()
-                    )
+        <PIC18 as Arch>::Decoder::default().decode(self.program.range_from(self.ip).unwrap())
+            .ok_or_else(|| {
+                format!(
+                    "Unable to decode bytes at 0x{:x}: {:x?}",
+                    self.ip,
+                    self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>()
                 )
-            }
-        }
+            })
     }
 }

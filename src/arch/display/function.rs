@@ -112,7 +112,7 @@ impl <
             // hack to avoid looking at the "basic block" over [0, ... first real basic block)
             if block.start == A::Address::zero() { continue; }
 
-            let mut iter = self.data.instructions_spanning::<A::Instruction>(block.start, block.end);
+            let mut iter = self.data.instructions_spanning(A::Decoder::default(), block.start, block.end);
 
             if let Some(ssa) = self.ssa {
                 let start_ok = if let Some(start) = start {

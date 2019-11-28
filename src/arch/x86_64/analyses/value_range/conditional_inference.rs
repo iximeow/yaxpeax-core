@@ -11,10 +11,18 @@ pub struct ConditionalInference;
 
 impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInference {
     fn inferrable_conditional(conditional_instr: &<x86_64 as Arch>::Instruction) -> bool {
-        if let Opcode::Jcc(_) = conditional_instr.opcode {
-            true
-        } else {
-            false
+        if !conditional_instr.opcode.condition().is_some() {
+            return false;
+        }
+
+        match conditional_instr.control_flow(Option::<&u8>::None).dest {
+            Some(Target::Relative(_)) |
+            Some(Target::Absolute(_)) => {
+                true
+            },
+            _ => {
+                false
+            }
         }
     }
 
@@ -63,22 +71,28 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
         if test_addr == 0x140486bad {
             println!("inferring bounds for 0x140486bad");
         }
+        let next_addr = conditional_addr + conditional_instr.len();
+        let conditional_dest = match conditional_instr.control_flow(Option::<&u8>::None).dest {
+            Some(Target::Relative(addr)) => {
+                next_addr.wrapping_add(addr)
+            },
+            Some(Target::Absolute(addr)) => {
+                addr
+            },
+            Some(_) => {
+                // this is some kind of jump to unknown destination
+                // TODO: infer something about the known destination
+                return false;
+            }
+            None => {
+                // not a conditional branch, so there aren't arms to infer values over
+                return false;
+            }
+        };
+
         // TODO: revisit how this handles sub-64-bit registers
         // TODO: only support z/nz, g/le/l/ge, a/be/b/ae
-        if let Opcode::Jcc(cond) = conditional_instr.opcode {
-            let next_addr = conditional_addr + conditional_instr.len();
-
-                                                        // the option type doesn't actually matter
-            let effect = conditional_instr.control_flow(Option::<&u8>::None);
-
-            let conditional_dest = if let Some(Target::Relative(addr)) = effect.dest {
-                next_addr.wrapping_add(addr)
-            } else if let Some(Target::Absolute(addr)) = effect.dest {
-                addr
-            } else {
-                unreachable!();
-            };
-
+        if let Some(cond) = conditional_instr.opcode.condition() {
             // Pair up conditions and their negations, swap destinations to phrase bounds in terms
             // of `bound applied` and `negated bound applied`
             let (bound_dest, negated_bound_dest) = match cond {
@@ -104,51 +118,68 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
             match cond {
                 ConditionCode::Z |
                 ConditionCode::NZ => {
-                    match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
+                    match test_instr.opcode {
+                        Opcode::CMP => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+                            let imm_src = match test_instr.operand(1) {
+                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::ImmediateU8(imm) => imm as u64,
+                                Operand::ImmediateU16(imm) => imm as u64,
+                                Operand::ImmediateU32(imm) => imm as u64,
+                                Operand::ImmediateI8(imm) => imm as i64 as u64,
+                                Operand::ImmediateI16(imm) => imm as i64 as u64,
+                                Operand::ImmediateI32(imm) => imm as i64 as u64,
+                                _ => { return false; } // TODO: support non-immediate sources
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Is(imm_src));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::IsNot(imm_src));
+                            true
                         }
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as i64 as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as i64 as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
-                            if l == r {
-                                aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(0));
-                                aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(0));
-                                true
-                            } else {
-                                false
+                        Opcode::TEST => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+
+                            match test_instr.operand(1) {
+                                Operand::Register(l) => {
+                                    if l == dest_reg {
+                                        aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(l)), ModifierExpression::Is(0));
+                                        aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(l)), ModifierExpression::IsNot(0));
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                _ => {
+                                    // TODO: handle bit granularity
+                                    false
+                                }
                             }
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Is(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::IsNot(*imm as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::ADD, operands: [Operand::Register(result), _], .. } |
-                        Instruction { opcode: Opcode::SUB, operands: [Operand::Register(result), _], .. } |
-                        Instruction { opcode: Opcode::AND, operands: [Operand::Register(result), _], .. } |
-                        Instruction { opcode: Opcode::OR, operands: [Operand::Register(result), _], .. } |
-                        Instruction { opcode: Opcode::XOR, operands: [Operand::Register(result), _], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*result)), ModifierExpression::Is(0));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*result)), ModifierExpression::IsNot(0));
+                        }
+                        Opcode::ADD |
+                        Opcode::SUB |
+                        Opcode::AND |
+                        Opcode::OR |
+                        Opcode::XOR => {
+                            // if dest is a register
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; }
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Is(0));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::IsNot(0));
                             true
                         }
                         _ => { false }
@@ -156,109 +187,175 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 },
                 ConditionCode::G |
                 ConditionCode::LE => {
-                    match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below((*imm as u64).wrapping_sub(1)));
+                    match test_instr.opcode {
+                        Opcode::CMP => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+                            let imm_src = match test_instr.operand(1) {
+                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::ImmediateU8(imm) => imm as u64,
+                                Operand::ImmediateU16(imm) => imm as u64,
+                                Operand::ImmediateU32(imm) => imm as u64,
+                                Operand::ImmediateI8(imm) => imm as i64 as u64,
+                                Operand::ImmediateI16(imm) => imm as i64 as u64,
+                                Operand::ImmediateI32(imm) => imm as i64 as u64,
+                                _ => { return false; } // TODO: support non-immediate sources
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Above(imm_src));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Below(imm_src));
                             true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above(*imm as i64 as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below((*imm as i64).wrapping_sub(1) as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below((*imm as u64).wrapping_sub(1)));
-                            true
-                        },
+                        }
+                        Opcode::TEST => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+
+                            match test_instr.operand(1) {
+                                _ => {
+                                    // TODO: handle bit granularity
+                                    false
+                                }
+                            }
+                        }
                         _ => { false }
                     }
                 }
                 ConditionCode::L |
                 ConditionCode::GE => {
-                    match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_sub(1)));
+                    match test_instr.opcode {
+                        Opcode::CMP => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+                            let imm_src = match test_instr.operand(1) {
+                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::ImmediateU8(imm) => imm as u64,
+                                Operand::ImmediateU16(imm) => imm as u64,
+                                Operand::ImmediateU32(imm) => imm as u64,
+                                Operand::ImmediateI8(imm) => imm as i64 as u64,
+                                Operand::ImmediateI16(imm) => imm as i64 as u64,
+                                Operand::ImmediateI32(imm) => imm as i64 as u64,
+                                _ => { return false; } // TODO: support non-immediate sources
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Below(imm_src));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Above(imm_src));
                             true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as i64 as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as i64).wrapping_sub(1) as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_sub(1)));
-                            true
-                        },
+                        }
+                        Opcode::TEST => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+
+                            match test_instr.operand(1) {
+                                _ => {
+                                    // TODO: handle bit granularity
+                                    false
+                                }
+                            }
+                        }
                         _ => { false }
                     }
                 }
                 ConditionCode::A |
-                ConditionCode::NA => {
-                    match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_add(1)));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
+                ConditionCode::BE => { // A or NA
+                    match test_instr.opcode {
+                        // TODO: add bounds as if this is an unsigned compare!
+                        Opcode::CMP => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+                            let imm_src = match test_instr.operand(1) {
+                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::ImmediateU8(imm) => imm as u64,
+                                Operand::ImmediateU16(imm) => imm as u64,
+                                Operand::ImmediateU32(imm) => imm as u64,
+                                Operand::ImmediateI8(imm) => imm as i64 as u64,
+                                Operand::ImmediateI16(imm) => imm as i64 as u64,
+                                Operand::ImmediateI32(imm) => imm as i64 as u64,
+                                _ => { return false; } // TODO: support non-immediate sources
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Above(imm_src));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Below(imm_src));
                             true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as i64 as u64).wrapping_add(1)));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as i64 as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_add(1)));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
-                            true
-                        },
+                        }
+                        Opcode::TEST => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+
+                            match test_instr.operand(1) {
+                                _ => {
+                                    // TODO: handle bit granularity
+                                    false
+                                }
+                            }
+                        }
                         _ => { false }
                     }
                 }
                 ConditionCode::B |
-                ConditionCode::NB => {
-                    match test_instr {
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_sub(1)));
+                ConditionCode::AE => { // B or NB
+                    match test_instr.opcode {
+                        // TODO: add bounds as if this is an unsigned compare!
+                        Opcode::CMP => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+                            let imm_src = match test_instr.operand(1) {
+                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::ImmediateU8(imm) => imm as u64,
+                                Operand::ImmediateU16(imm) => imm as u64,
+                                Operand::ImmediateU32(imm) => imm as u64,
+                                Operand::ImmediateI8(imm) => imm as i64 as u64,
+                                Operand::ImmediateI16(imm) => imm as i64 as u64,
+                                Operand::ImmediateI32(imm) => imm as i64 as u64,
+                                _ => { return false; } // TODO: support non-immediate sources
+                            };
+
+                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Below(imm_src));
+                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Above(imm_src));
                             true
-                        },
-                        Instruction { opcode: Opcode::CMP, operands: [Operand::Register(l), Operand::ImmediateI32(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as i64 as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as i64).wrapping_sub(1) as u64));
-                            true
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(_l), Operand::Register(_r)], .. } => {
-                            false
-                        },
-                        Instruction { opcode: Opcode::TEST, operands: [Operand::Register(l), Operand::ImmediateU8(imm)], .. } => {
-                            aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(*l)), ModifierExpression::Below(*imm as u64));
-                            aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(*l)), ModifierExpression::Above((*imm as u64).wrapping_sub(1)));
-                            true
-                        },
+                        }
+                        Opcode::TEST => {
+                            // TODO: shouldn't care about dest operand, should be able to just query
+                            // dfg for a value.
+                            let dest_reg = match test_instr.operand(0) {
+                                Operand::Register(r) => r,
+                                _ => { return false; } // comparison with non-reg is not yet supported
+                            };
+
+                            match test_instr.operand(1) {
+                                _ => {
+                                    // TODO: handle bit granularity
+                                    false
+                                }
+                            }
+                        }
                         _ => { false }
                     }
                 }
@@ -270,7 +367,17 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
                 ConditionCode::NO => { false },
             }
         } else {
-            // do nothing
+            // this instruction has multiple destinations but is not conditional? this could be the
+            // case in sequences like
+            // ```
+            // mov rdx, 1
+            // mov rcx, 2
+            // cmp rax, 5
+            // cmov rdx, rcx
+            // jmp rdx
+            // ```
+            // where we've inferred exactly two possible concrete destinations, but the condition
+            // is further back.
             false
         }
     }

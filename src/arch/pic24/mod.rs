@@ -22,6 +22,7 @@ impl CPU {
 impl MCU for CPU {
     type Addr = u32;
     type Instruction = yaxpeax_pic24::Instruction;
+    type Decoder = yaxpeax_pic24::InstDecoder;
     fn emulate(&mut self) -> Result<(), String> {
         panic!("not implemented yet")
     }

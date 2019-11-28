@@ -350,7 +350,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
             println!("Phi: {:?}", ssa.phi[&block.start].keys());
         }
 
-        let mut iter = data.instructions_spanning::<yaxpeax_msp430_mc::Instruction>(block.start, block.end);
+        let mut iter = data.instructions_spanning(<MSP430 as Arch>::Decoder::default(), block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
@@ -400,7 +400,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
         if block.start == 0x00 { continue; }
 //        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
 //        continue;
-        let mut iter = data.instructions_spanning::<yaxpeax_msp430_mc::Instruction>(block.start, block.end);
+        let mut iter = data.instructions_spanning(<MSP430 as Arch>::Decoder::default(), block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {

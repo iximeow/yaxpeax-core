@@ -5,7 +5,7 @@ use std::hash::Hash;
 use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
-use yaxpeax_arch::{Address, Arch, Decodable, LengthedInstruction};
+use yaxpeax_arch::{Address, Arch, Decoder, LengthedInstruction};
 
 use num_traits::{WrappingAdd, Zero, One};
 
@@ -483,7 +483,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 return vec![];
             }
         };
-        match A::Instruction::decode(range) {
+        match A::Decoder::default().decode(range) {
             Some(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);

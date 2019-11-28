@@ -1,4 +1,4 @@
-use arch::{Decodable, MCU};
+use arch::{Decoder, MCU};
 use memory::{MemoryRange, MemoryRepr};
 use debug;
 use debug::DebugTarget;
@@ -254,7 +254,8 @@ impl CPU {
 
 impl MCU for CPU {
     type Addr = u16;
-    type Instruction = yaxpeax_msp430_mc::Instruction;
+    type Instruction = <MSP430 as Arch>::Instruction;
+    type Decoder = <MSP430 as Arch>::Decoder;
     fn emulate(&mut self) -> Result<(), String> {
         if self.disable {
             return Ok(());
@@ -269,13 +270,8 @@ impl MCU for CPU {
     }
 
     fn decode(&self) -> Result<Self::Instruction, String> {
-        let mut result = yaxpeax_msp430_mc::Instruction {
-            opcode: Opcode::Invalid(0xffff),
-            op_width: Width::W,
-            operands: [Operand::Nothing, Operand::Nothing]
-        };
-        match result.decode_into(self.memory.range_from(self.ip()).unwrap()) {
-            Some(()) => Ok(result),
+        match <MSP430 as Arch>::Decoder::default().decode(self.memory.range_from(self.ip()).unwrap()) {
+            Some(result) => Ok(result),
             None => {
                 Err(
                     format!(

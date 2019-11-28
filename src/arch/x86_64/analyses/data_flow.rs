@@ -598,7 +598,7 @@ fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>, Direction)
         ConditionCode::B => {
             &[(Some(Location::CF), Direction::Read)]
         }
-        ConditionCode::NB => {
+        ConditionCode::AE => {
             &[(Some(Location::CF), Direction::Read)]
         }
         ConditionCode::Z => {
@@ -613,7 +613,7 @@ fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>, Direction)
                 (Some(Location::ZF), Direction::Read)
             ]
         }
-        ConditionCode::NA => {
+        ConditionCode::BE => {
             &[
                 (Some(Location::CF), Direction::Read),
                 (Some(Location::ZF), Direction::Read)
@@ -705,7 +705,7 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     op_idx: u8,
     loc_count: u8,
     loc_idx: u8,
-    curr_op: Option<&'a yaxpeax_x86::Operand>,
+    curr_op: Option<yaxpeax_x86::Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
     fn_query: &'c F,
@@ -776,7 +776,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
 
         Opcode::IMUL => {
             // TODO: this.
-            if let Operand::Nothing = instr.operands[1] {
+            if !instr.operand_present(1) {
                 2
             } else {
                 3
@@ -787,7 +787,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
             // TODO: this is lazy and assumes writes of all flags
             // this may not be true
             // TODO: this may not read *dx (if this is idiv r/m 8)
-            //if let Operand::Nothing = instr.operands[1] {
+            //if let Operand::Nothing = instr.operand(1) {
                 2
             //} else {
             //    3
@@ -900,14 +900,58 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::Invalid => {
             0
         },
-        Opcode::Jcc(_cond) => {
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JNB |
+        Opcode::JB |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL => {
             2
         }
-
-        Opcode::MOVcc(_cond) => {
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVNB |
+        Opcode::CMOVB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL => {
             3
         }
-        Opcode::SETcc(_cond) => {
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETAE |
+        Opcode::SETB |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL => {
             3
         }
         Opcode::LSL => {
@@ -950,7 +994,9 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
             /* TODO: these. */
             // vec![]
         }
-
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
+        }
     }
 }
 
@@ -1078,7 +1124,7 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         }
         Opcode::IMUL => {
             // TODO: this.
-            if let Operand::Nothing = instr.operands[1] {
+            if !instr.operand_present(1) {
                 Use::Read
             } else {
                 [Use::ReadWrite, Use::Read][idx as usize]
@@ -1202,14 +1248,59 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::Invalid => {
             Use::Read
         },
-        Opcode::Jcc(_cond) => {
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JNB |
+        Opcode::JB |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL => {
             Use::Read
         }
 
-        Opcode::MOVcc(_cond) => {
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVNB |
+        Opcode::CMOVB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL => {
             [Use::Write, Use::Read][idx as usize]
         }
-        Opcode::SETcc(_cond) => {
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETAE |
+        Opcode::SETB |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL => {
             Use::Write
         }
         Opcode::LSL => {
@@ -1249,6 +1340,9 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::INS |
         Opcode::OUTS => {
             Use::Read
+        }
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
         }
     }
 }
@@ -1614,15 +1708,60 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         Opcode::Invalid => {
             panic!()
         },
-        Opcode::Jcc(cond) => {
-            cond_to_flags(cond)[i as usize]
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JNB |
+        Opcode::JB |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL => {
+            cond_to_flags(op.condition().unwrap())[i as usize]
         }
 
-        Opcode::MOVcc(cond) => {
-            cond_to_flags(cond)[i as usize]
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVNB |
+        Opcode::CMOVB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL => {
+            cond_to_flags(op.condition().unwrap())[i as usize]
         }
-        Opcode::SETcc(cond) => {
-            cond_to_flags(cond)[i as usize]
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETAE |
+        Opcode::SETB |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL => {
+            cond_to_flags(op.condition().unwrap())[i as usize]
         }
         Opcode::LSL => {
             (Some(Location::ZF), Direction::Write)
@@ -1664,6 +1803,9 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             panic!()
         }
 
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
+        }
     }
 }
 
@@ -1873,15 +2015,60 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::Invalid => {
             0
         },
-        Opcode::Jcc(cond) => {
-            cond_to_flags(cond).len() as u8
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JNB |
+        Opcode::JB |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL => {
+            cond_to_flags(op.condition().unwrap()).len() as u8
         }
 
-        Opcode::MOVcc(cond) => {
-            cond_to_flags(cond).len() as u8
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVNB |
+        Opcode::CMOVB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL => {
+            cond_to_flags(op.condition().unwrap()).len() as u8
         }
-        Opcode::SETcc(cond) => {
-            cond_to_flags(cond).len() as u8
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETAE |
+        Opcode::SETB |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL => {
+            cond_to_flags(op.condition().unwrap()).len() as u8
         }
         Opcode::LSL |
         Opcode::LAR => {
@@ -1920,12 +2107,15 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
             0
         }
 
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
+        }
     }
 }
 #[test]
 fn test_xor_locations() {
-    use yaxpeax_arch::Decodable;
-    let inst = yaxpeax_x86::Instruction::decode([0x33u8, 0xc1].iter().map(|x| *x)).unwrap();
+    use yaxpeax_arch::{Arch, Decoder};
+    let inst = <x86_64 as Arch>::Decoder::default().decode([0x33u8, 0xc1].iter().map(|x| *x)).unwrap();
     use data::LocIterator;
     let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
     panic!("{:?}", locs);
@@ -1945,9 +2135,9 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
                 }
     //            println!("opc: {}", iter.inst.opcode);
 
-                let op = &iter.inst.operands[iter.op_idx as usize - 1];
+                let op = iter.inst.operand(iter.op_idx - 1);
                 let op_use = use_of(iter.inst, iter.op_idx - 1);
-                iter.loc_count = locations_in(op, op_use);
+                iter.loc_count = locations_in(&op, op_use);
                 iter.loc_idx = 0;
                 iter.curr_op = Some(op);
                 iter.curr_use = Some(op_use);
@@ -2410,14 +2600,14 @@ impl ValueLocations for x86_64 {
             Opcode::MOVSX |
             Opcode::MOVSXD |
             Opcode::MOV => {
-                let mut locs = decompose_read(&instr.operands[1]);
-                locs.append(&mut decompose_write(&instr.operands[0]));
+                let mut locs = decompose_read(&instr.operand(1));
+                locs.append(&mut decompose_write(&instr.operand(0)));
                 locs
             }
             Opcode::XADD |
             Opcode::XCHG => {
-                let mut locs = decompose_readwrite(&instr.operands[1]);
-                locs.append(&mut decompose_readwrite(&instr.operands[0]));
+                let mut locs = decompose_readwrite(&instr.operand(1));
+                locs.append(&mut decompose_readwrite(&instr.operand(0)));
                 locs
             }
             Opcode::STI |
@@ -2444,8 +2634,8 @@ impl ValueLocations for x86_64 {
             Opcode::BTC |
             Opcode::BSR |
             Opcode::BSF => {
-                let mut locs = decompose_read(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_read(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::ZF), Direction::Write));
                 locs
             }
@@ -2455,8 +2645,8 @@ impl ValueLocations for x86_64 {
             Opcode::SHL => {
                 // TODO: inspect imm8 and CL if context permits to decide
                 // flags more granularly
-                let mut locs = decompose_readwrite(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_readwrite(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs.push((Some(Location::SF), Direction::Write));
                 locs.push((Some(Location::ZF), Direction::Write));
@@ -2470,8 +2660,8 @@ impl ValueLocations for x86_64 {
             Opcode::ROL => {
                 // TODO: inspect imm8 and CL if context permits to decide
                 // flags more granularly
-                let mut locs = decompose_readwrite(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_readwrite(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs.push((Some(Location::OF), Direction::Write));
                 locs
@@ -2480,8 +2670,8 @@ impl ValueLocations for x86_64 {
             Opcode::SBB => {
                 // TODO: this is lazy and assumes writes of all flags
                 // this may not be true
-                let mut locs = decompose_read(&instr.operands[1]);
-                locs.append(&mut decompose_readwrite(&instr.operands[0]));
+                let mut locs = decompose_read(&instr.operand(1));
+                locs.append(&mut decompose_readwrite(&instr.operand(0)));
                 locs.push((Some(Location::CF), Direction::Read));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs.push((Some(Location::OF), Direction::Write));
@@ -2499,8 +2689,8 @@ impl ValueLocations for x86_64 {
             Opcode::OR => {
                 // TODO: this is lazy and assumes writes of all flags
                 // this may not be true
-                let mut locs = decompose_read(&instr.operands[1]);
-                locs.append(&mut decompose_readwrite(&instr.operands[0]));
+                let mut locs = decompose_read(&instr.operand(1));
+                locs.append(&mut decompose_readwrite(&instr.operand(0)));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs.push((Some(Location::OF), Direction::Write));
                 locs.push((Some(Location::SF), Direction::Write));
@@ -2512,11 +2702,11 @@ impl ValueLocations for x86_64 {
 
             Opcode::IMUL => {
                 // TODO: this.
-                let mut locs = if let Operand::Nothing = instr.operands[1] {
-                    decompose_read(&instr.operands[0])
+                let mut locs = if !instr.operand_present(1) {
+                    decompose_read(&instr.operand(0))
                 } else {
-                    let mut ls = decompose_readwrite(&instr.operands[0]);
-                    ls.append(&mut decompose_read(&instr.operands[1]));
+                    let mut ls = decompose_readwrite(&instr.operand(0));
+                    ls.append(&mut decompose_read(&instr.operand(1)));
                     ls
                 };
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
@@ -2535,11 +2725,11 @@ impl ValueLocations for x86_64 {
                 // TODO: this is lazy and assumes writes of all flags
                 // this may not be true
                 // TODO: this may not read *dx (if this is idiv r/m 8)
-                let mut locs = if let Operand::Nothing = instr.operands[1] {
-                    decompose_read(&instr.operands[0])
+                let mut locs = if !instr.operand_present(1) {
+                    decompose_read(&instr.operand(0))
                 } else {
-                    let mut ls = decompose_readwrite(&instr.operands[0]);
-                    ls.append(&mut decompose_read(&instr.operands[1]));
+                    let mut ls = decompose_readwrite(&instr.operand(0));
+                    ls.append(&mut decompose_read(&instr.operand(1)));
                     ls
                 };
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
@@ -2557,7 +2747,7 @@ impl ValueLocations for x86_64 {
             Opcode::MUL => {
                 // TODO: this is lazy and assumes writes of all flags
                 // this may not be true
-                let mut locs = decompose_read(&instr.operands[0]);
+                let mut locs = decompose_read(&instr.operand(0));
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
                 locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
@@ -2571,14 +2761,14 @@ impl ValueLocations for x86_64 {
             }
 
             Opcode::PUSH => {
-                let mut locs = decompose_read(&instr.operands[0]);
+                let mut locs = decompose_read(&instr.operand(0));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
                 locs.push((Some(Location::Memory(ANY)), Direction::Write));
                 locs
             },
             Opcode::POP => {
-                let mut locs = decompose_write(&instr.operands[0]);
+                let mut locs = decompose_write(&instr.operand(0));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
                 locs.push((Some(Location::Memory(ANY)), Direction::Read));
@@ -2586,7 +2776,7 @@ impl ValueLocations for x86_64 {
             },
             Opcode::INC |
             Opcode::DEC => {
-                let mut locs = decompose_readwrite(&instr.operands[0]);
+                let mut locs = decompose_readwrite(&instr.operand(0));
                 locs.push((Some(Location::OF), Direction::Write));
                 locs.push((Some(Location::SF), Direction::Write));
                 locs.push((Some(Location::ZF), Direction::Write));
@@ -2649,8 +2839,8 @@ impl ValueLocations for x86_64 {
             Opcode::TEST |
             Opcode::CMP => {
                 /* not strictly correct for either */
-                let mut locs = decompose_read(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_read(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs.push((Some(Location::OF), Direction::Write));
                 locs.push((Some(Location::AF), Direction::Write));
@@ -2660,15 +2850,15 @@ impl ValueLocations for x86_64 {
                 locs
             }
             Opcode::NEG => {
-                let mut locs = decompose_readwrite(&instr.operands[0]);
+                let mut locs = decompose_readwrite(&instr.operand(0));
                 locs.push((Some(Location::CF), Direction::Write));
                 locs
             }
             Opcode::NOT => {
-                decompose_readwrite(&instr.operands[0])
+                decompose_readwrite(&instr.operand(0))
             }
             Opcode::CMPXCHG => {
-                let mut locs = match &instr.operands[1] {
+                let mut locs = match &instr.operand(1) {
                     Operand::Register(RegSpec { bank: RegisterBank::Q, num }) => {
                         vec![
                             (Some(Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })), Direction::Read),
@@ -2702,19 +2892,19 @@ impl ValueLocations for x86_64 {
                     _ => { unreachable!() }
                 };
                 locs.push((Some(Location::ZF), Direction::Write));
-                locs.append(&mut decompose_readwrite(&instr.operands[0]));
+                locs.append(&mut decompose_readwrite(&instr.operand(0)));
                 locs
             },
             Opcode::CALLF | // TODO: this is wrong
             Opcode::CALL => {
-                let mut locs = decompose_read(&instr.operands[0]);
+                let mut locs = decompose_read(&instr.operand(0));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
                 locs.push((Some(Location::Memory(ANY)), Direction::Write));
                 locs
             }
             Opcode::JMP => {
-                decompose_read(&instr.operands[0])
+                decompose_read(&instr.operand(0))
             },
             Opcode::JMPF => { // TODO: this is wrong.
                 vec![]
@@ -2742,20 +2932,20 @@ impl ValueLocations for x86_64 {
             Opcode::STMXCSR |
             Opcode::SGDT |
             Opcode::SIDT => {
-                decompose_write(&instr.operands[0])
+                decompose_write(&instr.operand(0))
             }
             Opcode::LDMXCSR |
             Opcode::LGDT |
             Opcode::LIDT => {
-                decompose_read(&instr.operands[0])
+                decompose_read(&instr.operand(0))
             }
             // TODO: this is wrong
             Opcode::SMSW => {
-                decompose_write(&instr.operands[0])
+                decompose_write(&instr.operand(0))
             }
             // TODO: this is wrong
             Opcode::LMSW => {
-                decompose_read(&instr.operands[0])
+                decompose_read(&instr.operand(0))
             }
             Opcode::SWAPGS => {
                 vec![
@@ -2798,18 +2988,18 @@ impl ValueLocations for x86_64 {
             }
             Opcode::VERR |
             Opcode::VERW => {
-                let mut locs = decompose_read(&instr.operands[0]);
+                let mut locs = decompose_read(&instr.operand(0));
                 locs.push((Some(Location::ZF), Direction::Write));
                 locs
             }
             Opcode::SLDT |
             Opcode::STR |
             Opcode::INVLPG => {
-                decompose_write(&instr.operands[0])
+                decompose_write(&instr.operand(0))
             }
             Opcode::LLDT |
             Opcode::LTR => {
-                decompose_read(&instr.operands[0])
+                decompose_read(&instr.operand(0))
             }
             // these are immediate-only or have no operands
             Opcode::JMPE |
@@ -2820,30 +3010,75 @@ impl ValueLocations for x86_64 {
             Opcode::Invalid => {
                 vec![]
             },
-            Opcode::Jcc(cond) => {
-                cond_to_flags(cond).to_vec()
+            Opcode::JO |
+            Opcode::JNO |
+            Opcode::JZ |
+            Opcode::JNZ |
+            Opcode::JA |
+            Opcode::JNA |
+            Opcode::JNB |
+            Opcode::JB |
+            Opcode::JP |
+            Opcode::JNP |
+            Opcode::JS |
+            Opcode::JNS |
+            Opcode::JG |
+            Opcode::JLE |
+            Opcode::JGE |
+            Opcode::JL => {
+                cond_to_flags(instr.opcode.condition().unwrap()).to_vec()
             }
 
-            Opcode::MOVcc(cond) => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
-                locs.extend_from_slice(cond_to_flags(cond));
+            Opcode::CMOVO |
+            Opcode::CMOVNO |
+            Opcode::CMOVZ |
+            Opcode::CMOVNZ |
+            Opcode::CMOVA |
+            Opcode::CMOVNA |
+            Opcode::CMOVNB |
+            Opcode::CMOVB |
+            Opcode::CMOVP |
+            Opcode::CMOVNP |
+            Opcode::CMOVS |
+            Opcode::CMOVNS |
+            Opcode::CMOVG |
+            Opcode::CMOVLE |
+            Opcode::CMOVGE |
+            Opcode::CMOVL => {
+                let mut locs = decompose_write(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
+                locs.extend_from_slice(cond_to_flags(instr.opcode.condition().unwrap()));
                 locs
             }
-            Opcode::SETcc(cond) => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.extend_from_slice(cond_to_flags(cond));
+            Opcode::SETO |
+            Opcode::SETNO |
+            Opcode::SETZ |
+            Opcode::SETNZ |
+            Opcode::SETA |
+            Opcode::SETBE |
+            Opcode::SETAE |
+            Opcode::SETB |
+            Opcode::SETP |
+            Opcode::SETNP |
+            Opcode::SETS |
+            Opcode::SETNS |
+            Opcode::SETG |
+            Opcode::SETLE |
+            Opcode::SETGE |
+            Opcode::SETL => {
+                let mut locs = decompose_write(&instr.operand(0));
+                locs.extend_from_slice(cond_to_flags(instr.opcode.condition().unwrap()));
                 locs
             }
             Opcode::LSL => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_write(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::ZF), Direction::Write));
                 locs
             }
             Opcode::LAR => {
-                let mut locs = decompose_write(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_write(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::ZF), Direction::Read));
                 locs
             }
@@ -2862,8 +3097,8 @@ impl ValueLocations for x86_64 {
             Opcode::HADDPS |
             Opcode::HSUBPS |
             Opcode::ADDSUBPS => {
-                let mut locs = decompose_readwrite(&instr.operands[0]);
-                locs.append(&mut decompose_read(&instr.operands[1]));
+                let mut locs = decompose_readwrite(&instr.operand(0));
+                locs.append(&mut decompose_read(&instr.operand(1)));
                 locs
             }
             Opcode::CPUID |
@@ -2881,6 +3116,9 @@ impl ValueLocations for x86_64 {
             Opcode::OUTS => {
                 /* TODO: these. */
                 vec![]
+            }
+            o => {
+                unimplemented!("yet-unsupported opcode {:?}", o);
             }
         }
     }

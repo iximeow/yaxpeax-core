@@ -22,7 +22,7 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Address, Decodable, LengthedInstruction};
+use yaxpeax_arch::{Address, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 
@@ -617,21 +617,23 @@ impl ISA {
     }
 }
 
-pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr> {
+pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr, D: Decoder<Instr>> {
     data: &'a M,
+    decoder: D,
     current: Addr,
     end: Addr,
     elem: Option<Instr>
 }
 
 pub trait InstructionSpan<'a, Addr: Address> where Self: MemoryRepr<Addr> {
-    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr>;
+    fn instructions_spanning<Instr, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr, D>;
 }
 
 impl <'a, Addr: Address, M: MemoryRepr<Addr>> InstructionSpan<'a, Addr> for M {
-    fn instructions_spanning<Instr: Decodable>(&'a self, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr> {
+    fn instructions_spanning<Instr, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr, D> {
         InstructionIteratorSpanned {
             data: self,
+            decoder,
             current: start,
             end: end,
             elem: None
@@ -653,7 +655,8 @@ pub trait ControlFlowDeterminant {
 
 trait MCU {
     type Addr;
-    type Instruction: Decodable;
+    type Decoder: Decoder<Self::Instruction>;
+    type Instruction;
     fn emulate(&mut self) -> Result<(), String>;
     fn decode(&self) -> Result<Self::Instruction, String>;
 }
@@ -665,7 +668,7 @@ pub trait SimpleStreamingIterator {
     fn next<'b>(&mut self) -> Option<&'b Self::Item>;
 }
 
-impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> InstructionIteratorSpanned<'a, Addr, M, Instr> where Instr: Decodable + LengthedInstruction<Unit=Addr> {
+impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=Addr> {
     pub fn next<'b>(&mut self) -> Option<(Addr, &Instr)> {
         if self.elem.is_some() {
             let instr: &mut Instr = self.elem.as_mut().unwrap();
@@ -675,7 +678,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> Instruc
                     if next <= self.end {
                         self.current = next;
                         if let Some(range) = self.data.range_from(self.current) {
-                            match instr.decode_into(range) {
+                            match self.decoder.decode_into(instr, range) {
                                 Some(_) => {
                                     Some((self.current, instr))
                                 },
@@ -694,7 +697,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr> Instruc
         } else {
             if self.current <= self.end {
                 if let Some(range) = self.data.range_from(self.current) {
-                    self.elem = Instr::decode(range);
+                    self.elem = self.decoder.decode(range);
                     match self.elem {
                         Some(ref instr) => {
                             Some((self.current, &instr))

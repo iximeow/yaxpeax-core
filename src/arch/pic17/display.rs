@@ -272,7 +272,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
             println!("Phi: {:?}", ssa.phi[&block.start].keys());
         }
 
-        let mut iter = data.instructions_spanning::<yaxpeax_pic17::Instruction>(block.start, block.end);
+        let mut iter = data.instructions_spanning(<PIC17 as Arch>::Decoder::default(), block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {

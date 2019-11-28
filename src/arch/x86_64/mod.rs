@@ -570,7 +570,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
                 // to determine that the called address begins a well-formed
                 // region that may or may not let the caller consider "call"
                 // a single non-effectual instruction w.r.t control flow
-                let dest = match self.operands[0] {
+                let dest = match self.operand(0) {
                     Operand::ImmediateI8(i) => {
                         Some(control_flow::Target::Relative(i as i64 as u64))
                     },
@@ -601,7 +601,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
 
             }
             Opcode::JMP => {
-                let dest = match self.operands[0] {
+                let dest = match self.operand(0) {
                     Operand::ImmediateI8(i) => {
                         Some(control_flow::Target::Relative(i as i64 as u64))
                     },
@@ -644,8 +644,23 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::HLT => {
                 control_flow::Effect::stop()
             },
-            Opcode::Jcc(_) => {
-                match self.operands[0] {
+            Opcode::JO |
+            Opcode::JNO |
+            Opcode::JZ |
+            Opcode::JNZ |
+            Opcode::JA |
+            Opcode::JNA |
+            Opcode::JB |
+            Opcode::JNB |
+            Opcode::JS |
+            Opcode::JNS |
+            Opcode::JP |
+            Opcode::JNP |
+            Opcode::JG |
+            Opcode::JLE |
+            Opcode::JGE |
+            Opcode::JL => {
+                match self.operand(0) {
                     Operand::ImmediateI8(i) => {
                         control_flow::Effect::cont_and(
                             control_flow::Target::Relative(i as i64 as u64)
@@ -677,8 +692,38 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
                 control_flow::Effect::stop()
             },
 
-            Opcode::MOVcc(_) |
-            Opcode::SETcc(_) => {
+            Opcode::SETO |
+            Opcode::SETNO |
+            Opcode::SETZ |
+            Opcode::SETNZ |
+            Opcode::SETA |
+            Opcode::SETBE |
+            Opcode::SETB |
+            Opcode::SETAE |
+            Opcode::SETS |
+            Opcode::SETNS |
+            Opcode::SETP |
+            Opcode::SETNP |
+            Opcode::SETG |
+            Opcode::SETLE |
+            Opcode::SETGE |
+            Opcode::SETL |
+            Opcode::CMOVO |
+            Opcode::CMOVNO |
+            Opcode::CMOVZ |
+            Opcode::CMOVNZ |
+            Opcode::CMOVA |
+            Opcode::CMOVNA |
+            Opcode::CMOVB |
+            Opcode::CMOVNB |
+            Opcode::CMOVS |
+            Opcode::CMOVNS |
+            Opcode::CMOVP |
+            Opcode::CMOVNP |
+            Opcode::CMOVG |
+            Opcode::CMOVLE |
+            Opcode::CMOVGE |
+            Opcode::CMOVL => {
                 control_flow::Effect::cont()
             }
 
@@ -689,6 +734,9 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::LODS |
             Opcode::STOS => {
                 control_flow::Effect::cont()
+            }
+            o => {
+                unimplemented!("yet-unsupported opcode {:?}", o);
             }
         }
     }

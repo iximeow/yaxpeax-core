@@ -6,7 +6,7 @@ use termion::color;
 use arch::FunctionImpl;
 use memory::MemoryRepr;
 use yaxpeax_arch::{ColorSettings, Colorize, Colored};
-use yaxpeax_arch::{AddressDisplay, Arch, Decodable, LengthedInstruction, YaxColors};
+use yaxpeax_arch::{AddressDisplay, Arch, Decoder, LengthedInstruction, YaxColors};
 use yaxpeax_arch::display::*;
 use arch::display::BaseDisplay;
 use arch::FunctionRepr;
@@ -72,7 +72,7 @@ impl <F: FunctionRepr, T: FunctionQuery<<x86_64Arch as Arch>::Address, Function=
         }
         write!(dest, "{}: ", addr.stringy())?;
         for i in 0..16 {
-            if i < instr.length {
+            if i < instr.len() {
                 match bytes.next() {
                     Some(b) => {
                         write!(dest, "{:02x}", b)?;
@@ -273,7 +273,22 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
     match inst.opcode {
         Opcode::CALL |
         Opcode::JMP |
-        Opcode::Jcc(_) => {
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JB |
+        Opcode::JNB |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL => {
             // we can assume op_idx is valid (so, 0), and as a result...
             debug_assert!(op_idx == 0);
             Use::Read
@@ -340,7 +355,22 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
 
         Opcode::SQRTSD |
         Opcode::SQRTSS |
-        Opcode::MOVcc(_) => {
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVNB |
+        Opcode::CMOVB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL => {
             [Use::Write, Use::Read][op_idx as usize]
         }
         Opcode::BT |
@@ -362,7 +392,22 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
         Opcode::LAR => {
             [Use::Write, Use::Read][op_idx as usize]
         }
-        Opcode::SETcc(_) => {
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETAE |
+        Opcode::SETB |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL => {
             debug_assert!(op_idx == 0);
             Use::Write
         }
@@ -480,13 +525,16 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
             // TODO: questionable.
             Use::Read
         }
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
+        }
     }
 }
 
 use arch::x86_64::analyses;
 pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec<(analyses::data_flow::Location, Direction)> {
     let mut locs: Vec<(analyses::data_flow::Location, Direction)> = vec![];
-    let op = &inst.operands[op_idx as usize];
+    let op = &inst.operand(op_idx);
     let usage = operand_use(inst, op_idx);
     fn push_operand_locs(op: &Operand, usage: Use, locs: &mut Vec<(analyses::data_flow::Location, Direction)>) {
         match op {
@@ -566,13 +614,13 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
 
         if let Some(_ssa) = ssa {
             // some instructions have no operands, so we can just bail early:
-            if inst.operands[0] == Operand::Nothing {
+            if !inst.operand_present(0) {
                 // nope, not scrolling!
                 false
             } else {
                 // instruction has operands. we can assume here that 'operand' selects an actual
                 // operand.
-                let _curr_op = &inst.operands[self.operand as usize];
+                let _curr_op = &inst.operand(self.operand);
 
                 let mut locations = locations_of(inst, self.operand);
 
@@ -591,7 +639,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
                         if next_loc as usize >= locations.len() {
                             // try to advance operands..
                             next_operand += 1;
-                            if next_operand as usize >= inst.operands.len() || inst.operands[next_operand as usize] == Operand::Nothing {
+                            if next_operand >= inst.operand_count() || !inst.operand_present(next_operand) {
                                 // we've hit the end! no more locations!
                                 return false;
                             }
@@ -623,7 +671,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
 
         } else {
             let next_operand = self.operand + 1;
-            if inst.operands.len() > next_operand as usize && inst.operands[next_operand as usize] != Operand::Nothing {
+            if inst.operand_count() > next_operand && inst.operand_present(next_operand) {
                 self.operand = next_operand;
                 true
             } else {
@@ -639,13 +687,13 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
 
         if let Some(_ssa) = ssa {
             // some instructions have no operands, so we can just bail early:
-            if inst.operands[0] == Operand::Nothing {
+            if !inst.operand_present(0) {
                 // nope, not scrolling!
                 false
             } else {
                 // instruction has operands. we can assume here that 'operand' selects an actual
                 // operand.
-                let _curr_op = &inst.operands[self.operand as usize];
+                let _curr_op = &inst.operand(self.operand);
 
                 let mut locations = locations_of(inst, self.operand);
 
@@ -660,7 +708,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
                                 return false;
                             }
                             next_operand -= 1;
-                            if inst.operands[next_operand as usize] == Operand::Nothing {
+                            if !inst.operand_present(next_operand) {
                                 // we've hit the end! no more locations!
                                 return false;
                             }
@@ -1225,7 +1273,22 @@ impl <
         match self.instr.opcode {
             Opcode::CALL |
             Opcode::JMP |
-            Opcode::Jcc(_) => {
+            Opcode::JO |
+            Opcode::JNO |
+            Opcode::JB |
+            Opcode::JNB |
+            Opcode::JZ |
+            Opcode::JNZ |
+            Opcode::JNA |
+            Opcode::JA |
+            Opcode::JS |
+            Opcode::JNS |
+            Opcode::JP |
+            Opcode::JNP |
+            Opcode::JL |
+            Opcode::JGE |
+            Opcode::JLE |
+            Opcode::JG => {
                 let dest_namer = |addr| {
                     self.contexts.and_then(|context| {
                         context.function_at(addr).map(|f| {
@@ -1241,7 +1304,7 @@ impl <
                     dest_namer(addr)
                 };
 
-                match &self.instr.operands[0] {
+                match &self.instr.operand(0) {
                     Operand::ImmediateI8(i) => {
                         return write!(fmt, " {}", relative_namer(*i as i64));
                     },
@@ -1286,16 +1349,16 @@ impl <
             Opcode::MOVSXD |
             Opcode::MOV => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
             Opcode::XADD |
             Opcode::XCHG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::ReadWrite, fmt)
             }
             Opcode::ADDSD |
             Opcode::SUBSD |
@@ -1328,18 +1391,33 @@ impl <
             Opcode::XOR |
             Opcode::OR => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
 
             Opcode::SQRTSD |
             Opcode::SQRTSS |
-            Opcode::MOVcc(_) => {
+            Opcode::CMOVO |
+            Opcode::CMOVNO |
+            Opcode::CMOVB |
+            Opcode::CMOVNB |
+            Opcode::CMOVZ |
+            Opcode::CMOVNZ |
+            Opcode::CMOVNA |
+            Opcode::CMOVA |
+            Opcode::CMOVS |
+            Opcode::CMOVNS |
+            Opcode::CMOVP |
+            Opcode::CMOVNP |
+            Opcode::CMOVL |
+            Opcode::CMOVGE |
+            Opcode::CMOVLE |
+            Opcode::CMOVG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
             Opcode::BT |
             Opcode::BTS |
@@ -1350,31 +1428,46 @@ impl <
             Opcode::CMP |
             Opcode::TEST => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
             Opcode::CMPXCHG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::ReadWrite, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
             Opcode::LSL => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Write, fmt)
             }
             Opcode::LAR => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)?;
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)?;
                 write!(fmt, ", ")?;
-                contextualize_operand(&self.instr.operands[1], 1, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(1), 1, self, Use::Read, fmt)
             }
-            Opcode::SETcc(_) => {
+            Opcode::SETO |
+            Opcode::SETNO |
+            Opcode::SETB |
+            Opcode::SETAE |
+            Opcode::SETZ |
+            Opcode::SETNZ |
+            Opcode::SETBE |
+            Opcode::SETA |
+            Opcode::SETS |
+            Opcode::SETNS |
+            Opcode::SETP |
+            Opcode::SETNP |
+            Opcode::SETL |
+            Opcode::SETGE |
+            Opcode::SETLE |
+            Opcode::SETG => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)
             }
             Opcode::NOP => {
                 // TODO: work around the fact that NOP doesn't decompose into ssa operations ...
@@ -1382,11 +1475,11 @@ impl <
                 return Ok(())
             }
             Opcode::RETURN => {
-                match &self.instr.operands[0] {
+                match &self.instr.operand(0) {
                     Operand::Nothing => { return Ok(()); },
                     _ => {
                         write!(fmt, " ")?;
-                        contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                        contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)
                    }
                 }
             }
@@ -1395,7 +1488,7 @@ impl <
             Opcode::NEG |
             Opcode::NOT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::ReadWrite, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::ReadWrite, fmt)
             }
             Opcode::CALLF | // TODO: this is wrong.
             Opcode::JMPF => { // TODO: this is wrong.
@@ -1403,11 +1496,11 @@ impl <
             }
             Opcode::PUSH => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)
             }
             Opcode::POP => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)
             }
             Opcode::RETF | // TODO: this is wrong.
             Opcode::CMPS |
@@ -1434,7 +1527,7 @@ impl <
             Opcode::SGDT |
             Opcode::SIDT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Write, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Write, fmt)
             }
             Opcode::VERR |
             Opcode::VERW |
@@ -1445,7 +1538,7 @@ impl <
             Opcode::LGDT |
             Opcode::LIDT => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)
             }
             Opcode::RDMSR |
             Opcode::WRMSR |
@@ -1489,20 +1582,23 @@ impl <
             Opcode::DIV |
             Opcode::MUL => {
                 write!(fmt, " ")?;
-                contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)
+                contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)
             },
             Opcode::IMUL |
             Opcode::IDIV => {
                 write!(fmt, " ")?;
-                if let Operand::Nothing = &self.instr.operands[1] {
-                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
+                if !self.instr.operand_present(1) {
+                    contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)?;
                     Ok(())
                 } else {
-                    contextualize_operand(&self.instr.operands[0], 0, self, Use::Read, fmt)?;
+                    contextualize_operand(&self.instr.operand(0), 0, self, Use::Read, fmt)?;
                     write!(fmt, ", ")?;
-                    contextualize_operand(&self.instr.operands[1], 0, self, Use::Read, fmt)
+                    contextualize_operand(&self.instr.operand(1), 0, self, Use::Read, fmt)
                 }
                 // TODO: 3-operand mul/div?
+            }
+            o => {
+                unimplemented!("yet-unsupported opcode {:?}", o);
             }
         }
     }
@@ -1521,7 +1617,7 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     for neighbor in cfg.graph.neighbors(block.start) {
         println!("    {}", neighbor.stringy());
     }
-    let mut iter = data.instructions_spanning::<<x86_64Arch as Arch>::Instruction>(block.start, block.end);
+    let mut iter = data.instructions_spanning(<x86_64Arch as Arch>::Decoder::default(), block.start, block.end);
     while let Some((address, instr)) = iter.next() {
         let mut instr_string = String::new();
         x86_64Arch::render_frame(
@@ -1550,7 +1646,7 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     address: <x86_64Arch as Arch>::Address,
     colors: Option<&ColorSettings>
 ) {
-    match <x86_64Arch as Arch>::Instruction::decode(data.range_from(address).unwrap()) {
+    match <x86_64Arch as Arch>::Decoder::default().decode(data.range_from(address).unwrap()) {
         Some(instr) => {
             let mut instr_text = String::new();
             x86_64Arch::render_frame(
@@ -1578,9 +1674,54 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
 
 fn is_conditional_op(op: Opcode) -> bool {
     match op {
-        Opcode::Jcc(_) |
-        Opcode::MOVcc(_) |
-        Opcode::SETcc(_) => true,
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JB |
+        Opcode::JNB |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JNA |
+        Opcode::JA |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JL |
+        Opcode::JGE |
+        Opcode::JLE |
+        Opcode::JG |
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVB |
+        Opcode::CMOVNB |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVNA |
+        Opcode::CMOVA |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVL |
+        Opcode::CMOVGE |
+        Opcode::CMOVLE |
+        Opcode::CMOVG |
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETB |
+        Opcode::SETAE |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETBE |
+        Opcode::SETA |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETL |
+        Opcode::SETGE |
+        Opcode::SETLE |
+        Opcode::SETG => true,
         _ => false
     }
 }

@@ -45,7 +45,7 @@ pub fn find_function_hints(
     _ctxs: &x86_64::MergedContextTable
 ) -> Vec<(<x86_64Arch as Arch>::Address, Update)> {
     if instr.opcode == Opcode::CALL {
-        match instr.operands[0] {
+        match instr.operand(0) {
             Operand::ImmediateI32(disp) => {
                 let dest = (disp as u64).wrapping_add(address).wrapping_add(instr.len());
                 vec![
@@ -107,13 +107,28 @@ pub fn find_xrefs(
         Opcode::NOP => { vec! [] }
 
         // Control flow operations are special
-        Opcode::Jcc(_) |
+        Opcode::JO |
+        Opcode::JNO |
+        Opcode::JZ |
+        Opcode::JNZ |
+        Opcode::JA |
+        Opcode::JNA |
+        Opcode::JB |
+        Opcode::JNB |
+        Opcode::JS |
+        Opcode::JNS |
+        Opcode::JP |
+        Opcode::JNP |
+        Opcode::JG |
+        Opcode::JLE |
+        Opcode::JGE |
+        Opcode::JL |
         Opcode::CALL |
         Opcode::CALLF |
         Opcode::JMP |
         Opcode::JMPF => {
             let mut refs: Vec<(<x86_64Arch as Arch>::Address, Update)> = vec![];
-            match instr.operands[0] {
+            match instr.operand(0) {
                 Operand::ImmediateI8(offset) => {
                     refs.push((
                         address,
@@ -192,8 +207,38 @@ pub fn find_xrefs(
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
         Opcode::LDDQU |
-        Opcode::SETcc(_) |
-        Opcode::MOVcc(_) |
+        Opcode::SETO |
+        Opcode::SETNO |
+        Opcode::SETZ |
+        Opcode::SETNZ |
+        Opcode::SETA |
+        Opcode::SETBE |
+        Opcode::SETB |
+        Opcode::SETAE |
+        Opcode::SETP |
+        Opcode::SETNP |
+        Opcode::SETS |
+        Opcode::SETNS |
+        Opcode::SETG |
+        Opcode::SETLE |
+        Opcode::SETGE |
+        Opcode::SETL |
+        Opcode::CMOVO |
+        Opcode::CMOVNO |
+        Opcode::CMOVZ |
+        Opcode::CMOVNZ |
+        Opcode::CMOVA |
+        Opcode::CMOVNA |
+        Opcode::CMOVB |
+        Opcode::CMOVNB |
+        Opcode::CMOVP |
+        Opcode::CMOVNP |
+        Opcode::CMOVS |
+        Opcode::CMOVNS |
+        Opcode::CMOVG |
+        Opcode::CMOVLE |
+        Opcode::CMOVGE |
+        Opcode::CMOVL |
         Opcode::MOV |
         Opcode::MOVSX_b |
         Opcode::MOVSX_w |
@@ -203,7 +248,7 @@ pub fn find_xrefs(
         Opcode::MOVSX => {
             // TODO: anything other than mov probably should be read+write
             let mut refs: Vec<(<x86_64Arch as Arch>::Address, Update)> = vec![];
-            match instr.operands[0] {
+            match instr.operand(0) {
                 /* One day, consult ctx to figure out if we know effective addresses. */
                 Operand::DisplacementU32(ref_addr) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(RefType::Data, RefAction::Write, ref_addr as u64))));
@@ -223,7 +268,7 @@ pub fn find_xrefs(
                 _ => {}
             };
 
-            match instr.operands[1] {
+            match instr.operand(1) {
                 /* One day, consult ctx to figure out if we know effective addresses. */
                 Operand::DisplacementU32(ref_addr) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(RefType::Data, RefAction::Read, ref_addr as u64))));
@@ -320,6 +365,9 @@ pub fn find_xrefs(
         Opcode::Invalid => {
             /* Honestly, i'm too tired to think about retf and ret right now.*/
             vec![]
+        }
+        o => {
+            unimplemented!("yet-unsupported opcode {:?}", o);
         }
     }
 }

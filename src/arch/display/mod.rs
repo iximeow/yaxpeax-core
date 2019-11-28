@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decodable, LengthedInstruction, ShowContextual};
+use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decoder, LengthedInstruction, ShowContextual};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
 use arch::InstructionSpan;
@@ -37,7 +37,7 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>
     for neighbor in cfg.graph.neighbors(block.start) {
         println!("    {}", neighbor.stringy());
     }
-    let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
+    let mut iter = data.instructions_spanning(A::Decoder::default(), block.start, block.end);
     while let Some((address, instr)) = iter.next() {
         let mut instr_text = String::new();
         A::render_frame(
@@ -62,7 +62,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
     A::Instruction: ShowContextual<A::Address, Contexts, String> {
-    match A::Instruction::decode(data.range_from(address).unwrap()) {
+    match A::Decoder::default().decode(data.range_from(address).unwrap()) {
         Some(instr) => {
             let mut instr_text = String::new();
             A::render_frame(
@@ -94,7 +94,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
     let mut result: Vec<(A::Address, Vec<String>)> = Vec::new();
     let mut continuation = start_addr;
     while continuation < end_addr {
-        let mut iter = data.instructions_spanning::<A::Instruction>(continuation, end_addr);
+        let mut iter = data.instructions_spanning(A::Decoder::default(), continuation, end_addr);
         loop {
             let (address, instr) = match iter.next() {
                 Some((address, instr)) => {
@@ -168,7 +168,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
         if block.start == A::Address::zero() { continue; }
 //        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
 //        continue;
-        let mut iter = data.instructions_spanning::<A::Instruction>(block.start, block.end);
+        let mut iter = data.instructions_spanning(A::Decoder::default(), block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {

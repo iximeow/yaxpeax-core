@@ -229,105 +229,132 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
 
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
         //TODO: handle prefixes like at all
-        match instr {
-            Instruction { opcode: Opcode::MOVSXD, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
-                // TODO: respect the sign extendy bits of movsxd
-                dfg.get_def(addr, Location::Register(*l)).replace(
-                    dfg.get_use(addr, Location::Register(*r)).get_data()
-                );
-            },
-            Instruction { opcode: Opcode::MOVZX_b, operands: [Operand::Register(l), op], .. } => {
-                if op.is_memory() {
-                    // might be a pointer deref or somesuch.
-                    if let Some(Data::ValueSet(values)) = referent(instr, op, addr, dfg, contexts) {
-                        if let Some(read_values) = valueset_deref(values.clone(), data, 1) {
-                            use arch::x86_64::display::DataDisplay;
-                            println!(
-                                "at {}, Derefed value set {} to read {}",
-                                addr.stringy(),
-                                DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
-                            );
-                            dfg.get_def(addr, Location::Register(*l)).update(
-                                Data::ValueSet(read_values)
-                            );
-                        } else {
-                            // TODO: deref results in all values being invalid
-                        }
-                    } else {
-                        // this was handled in some other evaluator
+        match instr.opcode {
+            Opcode::MOVSXD => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), Operand::Register(r)) => {
+                        // TODO: respect the sign extendy bits of movsxd
+                        dfg.get_def(addr, Location::Register(l)).replace(
+                            dfg.get_use(addr, Location::Register(r)).get_data()
+                        );
                     }
-                } else {
-                    // reg-reg mov is handled in another evalator
-                }
-            },
-            Instruction { opcode: Opcode::MOVZX_w, operands: [Operand::Register(l), op], .. } => {
-                if op.is_memory() {
-                    // might be a pointer deref or somesuch.
-                    if let Some(Data::ValueSet(values)) = referent(instr, op, addr, dfg, contexts) {
-                        if let Some(read_values) = valueset_deref(values.clone(), data, 2) {
-                            use arch::x86_64::display::DataDisplay;
-                            println!(
-                                "Derefed value set {} to read {}",
-                                DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
-                            );
-                            dfg.get_def(addr, Location::Register(*l)).update(
-                                Data::ValueSet(read_values)
-                            );
-                        } else {
-                            // TODO: deref results in all values being invalid
-                        }
-                    } else {
-                        // this was handled in some other evaluator
-                    }
-                } else {
-                    // reg-reg mov is handled in another evalator
-                }
-            },
-            Instruction { opcode: Opcode::MOV, operands: [Operand::Register(l), op], .. } => {
-                if op.is_memory() {
-                    // might be a pointer deref or somesuch.
-                    if let Some(Data::ValueSet(values)) = referent(instr, op, addr, dfg, contexts) {
-                        let size = match l.bank {
-                            RegisterBank::Q => 8,
-                            RegisterBank::D => 4,
-                            RegisterBank::W => 2,
-                            RegisterBank::B |
-                            RegisterBank::rB => 1,
-                            _ => {
-                                // TODO: handle movs to other registers
-                                return;
-                            }
-                        };
-                        if let Some(read_values) = valueset_deref(values.clone(), data, size) {
-                            use arch::x86_64::display::DataDisplay;
-                            println!(
-                                "Derefed value set {} to read {}",
-                                DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
-                            );
-                            dfg.get_def(addr, Location::Register(*l)).update(
-                                Data::ValueSet(read_values)
-                            );
-                        } else {
-                            // TODO: deref results in all values being invalid
-                        }
-                    } else {
-                        // this was handled in some other evaluator
-                    }
-                } else {
-                    // reg-reg mov is handled in another evalator
+                    _ => {}
                 }
             }
-            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), Operand::Register(r)], .. } => {
-                dfg.get_def(addr, Location::Register(*l)).replace(
-                    dfg.get_use(addr, Location::Register(*l)).get_data().and_then(|ldata| {
-                        dfg.get_use(addr, Location::Register(*r)).get_data().and_then(|rdata| {
-                            Data::add(&ldata, &rdata)
-                        })
-                    })
-                );
+            Opcode::MOVZX_b => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), op) => {
+                        if op.is_memory() {
+                            // might be a pointer deref or somesuch.
+                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
+                                if let Some(read_values) = valueset_deref(values.clone(), data, 1) {
+                                    use arch::x86_64::display::DataDisplay;
+                                    println!(
+                                        "at {}, Derefed value set {} to read {}",
+                                        addr.stringy(),
+                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
+                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                    );
+                                    dfg.get_def(addr, Location::Register(l)).update(
+                                        Data::ValueSet(read_values)
+                                    );
+                                } else {
+                                    // TODO: deref results in all values being invalid
+                                }
+                            } else {
+                                // this was handled in some other evaluator
+                            }
+                        } else {
+                            // reg-reg mov is handled in another evalator
+                        }
+                    }
+                    _ => {}
+                }
+
+            }
+            Opcode::MOVZX_w => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), op) => {
+                        if op.is_memory() {
+                            // might be a pointer deref or somesuch.
+                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
+                                if let Some(read_values) = valueset_deref(values.clone(), data, 2) {
+                                    use arch::x86_64::display::DataDisplay;
+                                    println!(
+                                        "Derefed value set {} to read {}",
+                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
+                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                    );
+                                    dfg.get_def(addr, Location::Register(l)).update(
+                                        Data::ValueSet(read_values)
+                                    );
+                                } else {
+                                    // TODO: deref results in all values being invalid
+                                }
+                            } else {
+                                // this was handled in some other evaluator
+                            }
+                        } else {
+                            // reg-reg mov is handled in another evalator
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Opcode::MOV => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), op) => {
+                        if op.is_memory() {
+                            // might be a pointer deref or somesuch.
+                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
+                                let size = match l.bank {
+                                    RegisterBank::Q => 8,
+                                    RegisterBank::D => 4,
+                                    RegisterBank::W => 2,
+                                    RegisterBank::B |
+                                    RegisterBank::rB => 1,
+                                    _ => {
+                                        // TODO: handle movs to other registers
+                                        return;
+                                    }
+                                };
+                                if let Some(read_values) = valueset_deref(values.clone(), data, size) {
+                                    use arch::x86_64::display::DataDisplay;
+                                    println!(
+                                        "Derefed value set {} to read {}",
+                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
+                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                    );
+                                    dfg.get_def(addr, Location::Register(l)).update(
+                                        Data::ValueSet(read_values)
+                                    );
+                                } else {
+                                    // TODO: deref results in all values being invalid
+                                }
+                            } else {
+                                // this was handled in some other evaluator
+                            }
+                        } else {
+                            // reg-reg mov is handled in another evalator
+                        }
+
+                    }
+                    _ => {}
+                }
+            }
+            Opcode::ADD => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), Operand::Register(r)) => {
+                        dfg.get_def(addr, Location::Register(l)).replace(
+                            dfg.get_use(addr, Location::Register(l)).get_data().and_then(|ldata| {
+                                dfg.get_use(addr, Location::Register(r)).get_data().and_then(|rdata| {
+                                    Data::add(&ldata, &rdata)
+                                })
+                            })
+                        );
+                    }
+                    _ => {}
+                }
             }
             _ => { }
         }

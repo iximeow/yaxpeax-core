@@ -1,4 +1,4 @@
-use yaxpeax_arch::Decodable;
+use yaxpeax_arch::Decoder;
 use arch::MCU;
 use yaxpeax_arch::LengthedInstruction;
 use yaxpeax_arch::Arch;
@@ -567,7 +567,8 @@ impl ValueLocations for PIC17 {
 
 impl MCU for CPU {
     type Addr = u16;
-    type Instruction = yaxpeax_pic17::Instruction;
+    type Decoder = <PIC17 as Arch>::Decoder;
+    type Instruction = <PIC17 as Arch>::Instruction;
     fn emulate(&mut self) -> Result<(), String> {
         fn store_operand(cpu: &mut CPU, new_value: u8, dest: Operand) {
             match dest {
@@ -1042,21 +1043,13 @@ impl MCU for CPU {
     }
 
     fn decode(&self) -> Result<Self::Instruction, String> {
-        let mut result = yaxpeax_pic17::Instruction {
-            opcode: Opcode::NOP,
-            operands: [Operand::Nothing, Operand::Nothing]
-        };
-        match result.decode_into(self.program.range_from(self.ip).unwrap()) {
-            Some(()) => Ok(result),
-            None => {
-                Err(
-                    format!(
-                        "Unable to decode bytes at 0x{:x}: {:x?}",
-                        self.ip,
-                        self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>()
-                    )
+        <PIC17 as Arch>::Decoder::default().decode(self.program.range_from(self.ip).unwrap())
+            .ok_or_else(|| {
+                format!(
+                    "Unable to decode bytes at 0x{:x}: {:x?}",
+                    self.ip,
+                    self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>()
                 )
-            }
-        }
+            })
     }
 }

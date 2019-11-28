@@ -8,6 +8,7 @@ use arch::x86_64::ModifierExpression;
 use data::ValueLocations;
 use data::types::TypeSpec;
 use memory::MemoryRange;
+use yaxpeax_arch::LengthedInstruction;
 
 pub struct SymbolicDomain;
 
@@ -60,7 +61,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             }
         }
         Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, disp) => {
-            let addr = (addr.wrapping_add(instr.length as u64)).wrapping_add(*disp as i64 as u64);
+            let addr = (addr.wrapping_add(instr.len())).wrapping_add(*disp as i64 as u64);
             if addr == 0x1402a3148 {
                 // its that global struct referenced in ntoskrnl:0x1402a9370
                 // ... it's actually the linear address of the KPCR...
@@ -144,50 +145,53 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
         use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
-        match instr {
-            Instruction { opcode: Opcode::MOV, operands: [Operand::Register(l), op], .. } => {
-                if op.is_memory() {
-                    // might be a pointer deref or somesuch.
-                    if let Some(src) = referent(instr, op, addr, dfg, contexts) {
-                        let def = dfg.get_def(addr, Location::Register(*l));
-                        if def.get_data().is_none() {
-                            def.update(
-                                Data::Expression(SymbolicExpression::Deref(Box::new(src)))
-                            )
+        match instr.opcode {
+            Opcode::MOV => {
+                match (instr.operand(0), instr.operand(1)) {
+                    (Operand::Register(l), op) => {
+                        if op.is_memory() {
+                            // might be a pointer deref or somesuch.
+                            if let Some(src) = referent(instr, &op, addr, dfg, contexts) {
+                                let def = dfg.get_def(addr, Location::Register(l));
+                                if def.get_data().is_none() {
+                                    def.update(
+                                        Data::Expression(SymbolicExpression::Deref(Box::new(src)))
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    _ => {
+                        // don't handle others yet
+                    }
+                }
+            }
+            Opcode::ADD => {
+                match instr.operand(0) {
+                    Operand::Register(l) => {
+                        let offset = match instr.operand(1) {
+                            Operand::ImmediateI64(i) => i,
+                            Operand::ImmediateI32(i) => i as i64,
+                            Operand::ImmediateI8(i) => i as i64,
+                            _ => {
+                                // don't handle these yet
+                                return;
+                            }
+                        };
+                        let use_val = dfg.get_use(addr, Location::Register(l));
+                        let def_val = dfg.get_def(addr, Location::Register(l));
+        //                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
+                        match use_val.get_data() {
+                            Some(Data::Expression(expr)) => {
+        //                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
+                                def_val.update(Data::Expression(expr.offset(offset as u64)));
+                            }
+                            _ => { }
                         }
                     }
-                }
-            }
-            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI64(i)], .. } => {
-                let use_val = dfg.get_use(addr, Location::Register(*l));
-                let def_val = dfg.get_def(addr, Location::Register(*l));
-//                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
-                match use_val.get_data() {
-                    Some(Data::Expression(expr)) => {
-//                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
-                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
+                    _ => {
+                        // don't handle others yet
                     }
-                    _ => { }
-                }
-            }
-            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI32(i)], .. } => {
-                let use_val = dfg.get_use(addr, Location::Register(*l));
-                let def_val = dfg.get_def(addr, Location::Register(*l));
-                match use_val.get_data() {
-                    Some(Data::Expression(expr)) => {
-                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
-                    }
-                    _ => { }
-                }
-            }
-            Instruction { opcode: Opcode::ADD, operands: [Operand::Register(l), ImmediateI8(i)], .. } => {
-                let use_val = dfg.get_use(addr, Location::Register(*l));
-                let def_val = dfg.get_def(addr, Location::Register(*l));
-                match use_val.get_data() {
-                    Some(Data::Expression(expr)) => {
-                        def_val.update(Data::Expression(expr.offset(*i as i64 as u64)));
-                    }
-                    _ => { }
                 }
             }
             _ => { }
