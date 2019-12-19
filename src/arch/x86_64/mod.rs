@@ -495,7 +495,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::PUSHF |
             Opcode::WAIT |
             Opcode::CBW |
-            Opcode::CDW |
+            Opcode::CDQ |
             Opcode::LAHF |
             Opcode::SAHF |
             Opcode::TEST |
@@ -529,7 +529,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
             Opcode::LDMXCSR |
             Opcode::STMXCSR |
             Opcode::XSAVE |
-            Opcode::XSTOR |
+            Opcode::XRSTOR |
             Opcode::XSAVEOPT |
             Opcode::LFENCE |
             Opcode::MFENCE |

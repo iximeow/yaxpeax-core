@@ -456,7 +456,7 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
         Opcode::FXRSTOR |
         Opcode::STMXCSR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::SMSW |
         Opcode::SLDT |
@@ -490,7 +490,7 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
         Opcode::PUSHF |
         Opcode::POPF |
         Opcode::CBW |
-        Opcode::CDW |
+        Opcode::CDQ |
         Opcode::LAHF |
         Opcode::SAHF |
         Opcode::IRET |
@@ -1519,7 +1519,7 @@ impl <
             Opcode::FXRSTOR |
             Opcode::STMXCSR |
             Opcode::XSAVE |
-            Opcode::XSTOR |
+            Opcode::XRSTOR |
             Opcode::XSAVEOPT |
             Opcode::SMSW |
             Opcode::SLDT |
@@ -1555,7 +1555,7 @@ impl <
             Opcode::PUSHF |
             Opcode::POPF |
             Opcode::CBW |
-            Opcode::CDW |
+            Opcode::CDQ |
             Opcode::LAHF |
             Opcode::SAHF |
             Opcode::IRET |

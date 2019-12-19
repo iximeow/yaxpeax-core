@@ -120,6 +120,7 @@ impl AliasInfo for Location {
             Location::Register(RegSpec { bank: RegisterBank::RIP, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::RFlags, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::ST, num: _ }) |
+            Location::Register(RegSpec { bank: RegisterBank::K, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::Z, num: _ }) => {
                 vec![]
             }
@@ -216,6 +217,7 @@ impl AliasInfo for Location {
             Location::Register(RegSpec { bank: RegisterBank::RIP, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::RFlags, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::ST, num: _ }) |
+            Location::Register(RegSpec { bank: RegisterBank::K, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::Z, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::Q, num: _ }) => {
                 self.clone()
@@ -756,6 +758,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::BTC |
         Opcode::BSR |
         Opcode::BSF |
+        Opcode::TZCNT |
         Opcode::SAR |
         Opcode::SAL |
         Opcode::SHR |
@@ -810,7 +813,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::POPF |
         Opcode::PUSHF |
         Opcode::CBW |
-        Opcode::CDW |
+        Opcode::CDQ |
         Opcode::LAHF |
         Opcode::SAHF => {
             1
@@ -850,7 +853,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::FXSAVE |
         Opcode::FXRSTOR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::STMXCSR |
         Opcode::SGDT |
@@ -977,12 +980,6 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::ADDSUBPS => {
             3
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL |
         Opcode::CMPS |
         Opcode::SCAS |
         Opcode::MOVS |
@@ -990,6 +987,15 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
         Opcode::STOS |
         Opcode::INS |
         Opcode::OUTS => {
+            // TODO: incomplete
+            2
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL => {
             0
             /* TODO: these. */
             // vec![]
@@ -1102,7 +1108,8 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::BTR |
         Opcode::BTC |
         Opcode::BSR |
-        Opcode::BSF => {
+        Opcode::BSF |
+        Opcode::TZCNT => {
             Use::Read
         }
         Opcode::SAR |
@@ -1156,7 +1163,7 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::POPF |
         Opcode::PUSHF |
         Opcode::CBW |
-        Opcode::CDW |
+        Opcode::CDQ |
         Opcode::LAHF |
         Opcode::SAHF => {
             Use::Read
@@ -1198,7 +1205,7 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::FXSAVE |
         Opcode::FXRSTOR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::STMXCSR |
         Opcode::SGDT |
@@ -1326,21 +1333,33 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         Opcode::ADDSUBPS => {
             [Use::ReadWrite, Use::Read][idx as usize]
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL |
-        Opcode::CMPS |
-        Opcode::SCAS |
-        Opcode::MOVS |
-        Opcode::LODS |
-        Opcode::STOS |
-        Opcode::INS |
-        Opcode::OUTS => {
+        Opcode::MOVS => {
             Use::Read
         }
+        Opcode::LODS => {
+            // the only explicit operand is rax/eax/ax/al that is written to
+            [Use::Write][idx as usize]
+        }
+
+        Opcode::STOS => {
+            // the only explicit operand is rax/eax/ax/al that is read from
+            [Use::Read][idx as usize]
+        }
+        Opcode::INS |
+        Opcode::OUTS => {
+            [Use::Write, Use::Read][idx as usize]
+        }
+
+        Opcode::CMPS |
+        Opcode::SCAS => {
+            Use::Read
+        }
+        o @ Opcode::CPUID |
+        o @ Opcode::WBINVD |
+        o @ Opcode::INVD |
+        o @ Opcode::SYSRET |
+        o @ Opcode::CLTS |
+        o @ Opcode::SYSCALL |
         o => {
             unimplemented!("yet-unsupported opcode {:?}", o);
         }
@@ -1395,7 +1414,8 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             (Some(Location::CF), Direction::Write)
         }
         Opcode::BSR |
-        Opcode::BSF => {
+        Opcode::BSF |
+        Opcode::TZCNT => {
             (Some(Location::ZF), Direction::Write)
         }
         Opcode::SAR |
@@ -1557,7 +1577,7 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             ][i as usize]
         }
         Opcode::CBW |
-        Opcode::CDW => {
+        Opcode::CDQ => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Read),
                 (Some(Location::Register(RegSpec::rax())), Direction::Write)
@@ -1627,7 +1647,7 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         Opcode::FXSAVE |
         Opcode::FXRSTOR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::STMXCSR |
         Opcode::SGDT |
@@ -1786,12 +1806,6 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         Opcode::ADDSUBPS => {
             panic!()
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL |
         Opcode::CMPS |
         Opcode::SCAS |
         Opcode::MOVS |
@@ -1799,6 +1813,15 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
         Opcode::STOS |
         Opcode::INS |
         Opcode::OUTS => {
+            // TODO: incomplete
+            (Some(Location::DF), Direction::Read)
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL => {
             /* TODO: these. */
             panic!()
         }
@@ -1851,7 +1874,8 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::BTR |
         Opcode::BTC |
         Opcode::BSR |
-        Opcode::BSF => {
+        Opcode::BSF |
+        Opcode::TZCNT => {
             1
         }
         Opcode::SAR |
@@ -1911,7 +1935,7 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
             4
         }
         Opcode::CBW |
-        Opcode::CDW => {
+        Opcode::CDQ => {
             2
         }
         Opcode::LAHF => {
@@ -1957,7 +1981,7 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::FXSAVE |
         Opcode::FXRSTOR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::STMXCSR |
         Opcode::SGDT |
@@ -2091,12 +2115,6 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::ADDSUBPS => {
             0
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL |
         Opcode::CMPS |
         Opcode::SCAS |
         Opcode::MOVS |
@@ -2104,6 +2122,15 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
         Opcode::STOS |
         Opcode::INS |
         Opcode::OUTS => {
+            // TODO: incomplete
+            1
+        }
+        Opcode::CPUID |
+        Opcode::WBINVD |
+        Opcode::INVD |
+        Opcode::SYSRET |
+        Opcode::CLTS |
+        Opcode::SYSCALL => {
             0
         }
 
@@ -2633,7 +2660,8 @@ impl ValueLocations for x86_64 {
             Opcode::BTR |
             Opcode::BTC |
             Opcode::BSR |
-            Opcode::BSF => {
+            Opcode::BSF |
+            Opcode::TZCNT => {
                 let mut locs = decompose_read(&instr.operand(0));
                 locs.append(&mut decompose_read(&instr.operand(1)));
                 locs.push((Some(Location::ZF), Direction::Write));
@@ -2818,7 +2846,7 @@ impl ValueLocations for x86_64 {
                 ]
             }
             Opcode::CBW |
-            Opcode::CDW => {
+            Opcode::CDQ => {
                 vec![
                     (Some(Location::Register(RegSpec::rax())), Direction::Read),
                     (Some(Location::Register(RegSpec::rax())), Direction::Write)
@@ -2927,7 +2955,7 @@ impl ValueLocations for x86_64 {
             Opcode::FXSAVE |
             Opcode::FXRSTOR |
             Opcode::XSAVE |
-            Opcode::XSTOR |
+            Opcode::XRSTOR |
             Opcode::XSAVEOPT |
             Opcode::STMXCSR |
             Opcode::SGDT |
@@ -3101,12 +3129,6 @@ impl ValueLocations for x86_64 {
                 locs.append(&mut decompose_read(&instr.operand(1)));
                 locs
             }
-            Opcode::CPUID |
-            Opcode::WBINVD |
-            Opcode::INVD |
-            Opcode::SYSRET |
-            Opcode::CLTS |
-            Opcode::SYSCALL |
             Opcode::CMPS |
             Opcode::SCAS |
             Opcode::MOVS |
@@ -3114,6 +3136,15 @@ impl ValueLocations for x86_64 {
             Opcode::STOS |
             Opcode::INS |
             Opcode::OUTS => {
+                // TODO: incomplete
+                vec![]
+            }
+            Opcode::CPUID |
+            Opcode::WBINVD |
+            Opcode::INVD |
+            Opcode::SYSRET |
+            Opcode::CLTS |
+            Opcode::SYSCALL => {
                 /* TODO: these. */
                 vec![]
             }

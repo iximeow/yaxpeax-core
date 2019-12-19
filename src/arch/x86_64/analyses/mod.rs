@@ -88,7 +88,7 @@ pub fn find_xrefs(
         Opcode::HLT |
         Opcode::WAIT |
         Opcode::CBW |
-        Opcode::CDW |
+        Opcode::CDQ |
         Opcode::INT |
         Opcode::INTO |
         Opcode::IRET | // TODO not sure i fully understand this
@@ -329,7 +329,7 @@ pub fn find_xrefs(
         Opcode::LDMXCSR |
         Opcode::STMXCSR |
         Opcode::XSAVE |
-        Opcode::XSTOR |
+        Opcode::XRSTOR |
         Opcode::XSAVEOPT |
         Opcode::LFENCE |
         Opcode::MFENCE |
