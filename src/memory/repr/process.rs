@@ -169,6 +169,9 @@ impl <A: Address> MemoryRepr<A> for Segment {
     fn size(&self) -> Option<u64> {
         Some(self.data.len() as u64)
     }
+    fn start(&self) -> Option<u64> {
+        Some(self.start as u64)
+    }
 }
 
 #[derive(Debug)]
@@ -192,6 +195,91 @@ impl ModuleInfo {
             ModuleInfo::PE(hint, _, _, _, _, _, _, _) |
             ModuleInfo::ELF(hint, _, _, _, _, _, _, _) => {
                 hint
+            }
+        }
+    }
+}
+
+mod elf {
+    pub(crate) mod program_header {
+        pub(crate) fn type_to_str(machine: u16, tpe: u32) -> String {
+            match tpe {
+                goblin::elf::program_header::PT_NULL => "NULL".to_string(),
+                goblin::elf::program_header::PT_LOAD => "LOAD".to_string(),
+                goblin::elf::program_header::PT_DYNAMIC => "DYNAMIC".to_string(),
+                goblin::elf::program_header::PT_INTERP => "INTERP".to_string(),
+                goblin::elf::program_header::PT_NOTE => "NOTE".to_string(),
+                goblin::elf::program_header::PT_SHLIB => "SHLIB".to_string(),
+                goblin::elf::program_header::PT_PHDR => "PHDR".to_string(),
+                goblin::elf::program_header::PT_TLS => "TLS".to_string(),
+                other => {
+                    if other >= goblin::elf::program_header::PT_LOOS && other <= goblin::elf::program_header::PT_HIOS {
+                        // best-effort, try to match any number
+                        match other {
+                            goblin::elf::program_header::PT_GNU_EH_FRAME => {
+                                "GNU_EH_FRAME".to_string()
+                            }
+                            // not in goblin
+                            // goblin::elf::program_header::PT_SUNW_UNWIND => {
+                            0x6464e550 => {
+                                "SUNW_UNWIND".to_string()
+                            }
+                            goblin::elf::program_header::PT_GNU_STACK => {
+                                "GNU_STACK".to_string()
+                            }
+                            goblin::elf::program_header::PT_GNU_RELRO => {
+                                "GNU_RELRO".to_string()
+                            }
+                            // not in goblin
+                            // goblin::elf::program_header::PT_OPENBSD_RANDOMIZE => {
+                            0x65a3dbe6 => {
+                                "OPENBSD_RANDOMIZE".to_string()
+                            }
+                            // goblin::elf::program_header::PT_OPENBSD_WXNEEDED => {
+                            0x65a3dbe7 => {
+                                "OPENBSD_WXNEEDED".to_string()
+                            }
+                            // goblin::elf::program_header::PT_OPENBSD_BOOTDATA => {
+                            0x65a41be6 => {
+                                "OPENBSD_BOOTDATA".to_string()
+                            }
+                            _ => {
+                                format!("unknown OS section type: {:#x}", other)
+                            }
+                        }
+                    } else if other >= goblin::elf::program_header::PT_LOPROC && other <= goblin::elf::program_header::PT_HIPROC {
+                        match (machine, other) {
+                            (goblin::elf::header::EM_ARM, 0x70000000) => {
+                                "ARM_ARCHEXT".to_string()
+                            }
+                            (goblin::elf::header::EM_ARM, 0x70000001) => {
+                                // These contain stack unwind tables.
+                                "ARM_UNWIND".to_string()
+                            }
+                            (goblin::elf::header::EM_MIPS, 0x70000000) => {
+                                // Register usage information.
+                                "MIPS_REGINFO".to_string()
+                            }
+                            (goblin::elf::header::EM_MIPS, 0x70000001) => {
+                                // Runtime procedure table.
+                                "MIPS_RTPROC".to_string()
+                            }
+                            (goblin::elf::header::EM_MIPS, 0x70000002) => {
+                                // Options segment.
+                                "MIPS_OPTIONS".to_string()
+                            }
+                            (goblin::elf::header::EM_MIPS, 0x70000003) => {
+                                // Abiflags segment.
+                                "MIPS_ABIFLAGS".to_string()
+                            }
+                            (machine, other) => {
+                                format!("unknown machine-dependent section type, machine: {:#x} p_type: {:#x}", machine, other)
+                            }
+                        }
+                    } else {
+                        format!("unknown elf section type: {:#x}", other)
+                    }
+                }
             }
         }
     }
@@ -554,7 +642,7 @@ impl ModuleData {
                     let new_section = Segment {
                         start: section.p_vaddr as usize,
                         data: section_data,
-                        name: "TODO".to_owned()  //std::str::from_utf8(&section.name[..]).unwrap().to_string()
+                        name: elf::program_header::type_to_str(elf.header.e_machine, section.p_type),
                     };
                     println!("mapped section {} to [{}, {})",
                         i,
@@ -670,11 +758,18 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
         }
     }
     fn size(&self) -> Option<u64> {
-        let mut total_size = 0u64;
-        for s in self.segments.iter() {
-            total_size += <Segment as MemoryRepr<A>>::size(s).unwrap();
+        match ((self as &MemoryRepr<A>).end(), (self as &MemoryRepr<A>).start()) {
+            (Some(end), Some(start)) => {
+                Some(end - start)
+            }
+            _ => None
         }
-        Some(total_size)
+    }
+    fn end(&self) -> Option<u64> {
+        self.segments.iter().map(|s| s.end()).max().map(|x| x as u64)
+    }
+    fn start(&self) -> Option<u64> {
+        self.segments.iter().map(|s| s.start()).min().map(|x| x as u64)
     }
 }
 

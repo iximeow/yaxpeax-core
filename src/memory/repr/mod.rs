@@ -34,6 +34,9 @@ impl <A: Address> MemoryRepr<A> for Vec<u8> {
     fn size(&self) -> Option<u64> {
         Some(self.len() as u64)
     }
+    fn start(&self) -> Option<u64> {
+        Some(0)
+    }
 }
 
 impl Named for Vec<u8> {

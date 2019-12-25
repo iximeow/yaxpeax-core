@@ -26,6 +26,8 @@ pub trait MemoryRepr<A: Address>: Named {
     fn to_flat(self) -> Option<FlatMemoryRepr>;
     fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>>;
     fn size(&self) -> Option<u64>;
+    fn start(&self) -> Option<u64> { None }
+    fn end(&self) -> Option<u64> { self.start().and_then(|x| self.size().map(|y| x + y)) }
 }
 
 pub trait Named {
