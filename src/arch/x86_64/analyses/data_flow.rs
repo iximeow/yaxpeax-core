@@ -1613,7 +1613,11 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             panic!();
         }
         Opcode::CMPXCHG => {
-            (Some(Location::ZF), Direction::Write)
+            [
+                (Some(Location::ZF), Direction::Write),
+                // this is over-general
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+            ][i as usize]
         },
         Opcode::CALLF | // TODO: this is wrong
         Opcode::CALL => {
@@ -1955,7 +1959,7 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
             0
         }
         Opcode::CMPXCHG => { // TODO: this is wrong
-            1
+            2
         },
         Opcode::CALLF | // TODO: this is wrong
         Opcode::CALL => {
