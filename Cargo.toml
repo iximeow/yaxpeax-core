@@ -25,6 +25,7 @@ yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }
 "petgraph" = "*"
 "nix" = "*"
 "proc-maps" = "*"
+"tracing" = "0.1.11"
 "siphasher" = "0.3.0"
 
 # [[bin]]

@@ -8,6 +8,7 @@ extern crate petgraph;
 extern crate num_traits;
 extern crate nix;
 extern crate proc_maps;
+extern crate tracing;
 
 extern crate yaxpeax_arch;
 

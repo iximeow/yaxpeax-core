@@ -19,6 +19,8 @@ use data::{Direction, ValueLocations};
 use ContextRead;
 use ContextWrite;
 
+use tracing::{Level, event};
+
 pub mod analyses;
 pub mod cpu;
 pub mod debug;
@@ -736,7 +738,10 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86
                 control_flow::Effect::cont()
             }
             o => {
-                unimplemented!("yet-unsupported opcode {:?}", o);
+//                event!(target: "instruction descriptions", Level::ERROR); //, "missing control flow description", opcode = o);
+                event!(Level::ERROR, opcode = ?o, "missing control flow description"); //, "missing control flow description", opcode = o);
+                // assume the instructions with no control flow information just continue on
+                control_flow::Effect::cont()
             }
         }
     }

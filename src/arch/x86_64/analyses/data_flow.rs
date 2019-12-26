@@ -22,6 +22,7 @@ use std::rc::Rc;
 use std::fmt;
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
+use tracing::{event, Level};
 
 use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
@@ -990,18 +991,15 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
             // TODO: incomplete
             2
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL => {
-            0
-            /* TODO: these. */
-            // vec![]
-        }
+        o @ Opcode::CPUID |
+        o @ Opcode::WBINVD |
+        o @ Opcode::INVD |
+        o @ Opcode::SYSRET |
+        o @ Opcode::CLTS |
+        o @ Opcode::SYSCALL |
         o => {
-            unimplemented!("yet-unsupported opcode {:?}", o);
+            event!(Level::ERROR, opcode = ?o, "missing implicit operand information");
+            0
         }
     }
 }
@@ -1361,7 +1359,9 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
         o @ Opcode::CLTS |
         o @ Opcode::SYSCALL |
         o => {
-            unimplemented!("yet-unsupported opcode {:?}", o);
+//            unimplemented!("yet-unsupported opcode {:?}", o);
+            event!(Level::ERROR, opcode = ?o, "missing operand read/write information");
+            Use::Write
         }
     }
 }
@@ -1820,18 +1820,18 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
             // TODO: incomplete
             (Some(Location::DF), Direction::Read)
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL => {
-            /* TODO: these. */
-            panic!()
-        }
-
+        o @ Opcode::CPUID |
+        o @ Opcode::WBINVD |
+        o @ Opcode::INVD |
+        o @ Opcode::SYSRET |
+        o @ Opcode::CLTS |
+        o @ Opcode::SYSCALL |
         o => {
-            unimplemented!("yet-unsupported opcode {:?}", o);
+            event!(Level::ERROR, opcode = ?o, "missing implicit operand information");
+            /* TODO: these. */
+//            panic!()
+//            assume the worst case, a machine-wide write
+            (None, Direction::Write)
         }
     }
 }
@@ -2129,17 +2129,15 @@ fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
             // TODO: incomplete
             1
         }
-        Opcode::CPUID |
-        Opcode::WBINVD |
-        Opcode::INVD |
-        Opcode::SYSRET |
-        Opcode::CLTS |
-        Opcode::SYSCALL => {
-            0
-        }
-
+        o @ Opcode::CPUID |
+        o @ Opcode::WBINVD |
+        o @ Opcode::INVD |
+        o @ Opcode::SYSRET |
+        o @ Opcode::CLTS |
+        o @ Opcode::SYSCALL |
         o => {
-            unimplemented!("yet-unsupported opcode {:?}", o);
+            event!(Level::ERROR, opcode = ?o, "missing operand information");
+            0
         }
     }
 }
@@ -2264,8 +2262,16 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
             }
             unreachable!("invalid index");
         },
-        _ => {
-            unreachable!()
+        Operand::Nothing |
+        Operand::ImmediateI8(_) |
+        Operand::ImmediateI16(_) |
+        Operand::ImmediateI32(_) |
+        Operand::ImmediateI64(_) |
+        Operand::ImmediateU8(_) |
+        Operand::ImmediateU16(_) |
+        Operand::ImmediateU32(_) |
+        Operand::ImmediateU64(_) => {
+            None
         }
     }
 }
@@ -3143,17 +3149,15 @@ impl ValueLocations for x86_64 {
                 // TODO: incomplete
                 vec![]
             }
-            Opcode::CPUID |
-            Opcode::WBINVD |
-            Opcode::INVD |
-            Opcode::SYSRET |
-            Opcode::CLTS |
-            Opcode::SYSCALL => {
-                /* TODO: these. */
-                vec![]
-            }
+            o @ Opcode::CPUID |
+            o @ Opcode::WBINVD |
+            o @ Opcode::INVD |
+            o @ Opcode::SYSRET |
+            o @ Opcode::CLTS |
+            o @ Opcode::SYSCALL |
             o => {
-                unimplemented!("yet-unsupported opcode {:?}", o);
+                event!(Level::ERROR, opcode = ?o, component = "instruction description", "missing operand decomposition");
+                vec![]
             }
         }
     }

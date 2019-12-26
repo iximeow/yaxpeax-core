@@ -5,6 +5,7 @@ use arch::x86_64::{Update, x86Update};
 use arch::x86_64;
 use arch::BaseUpdate;
 use analyses::xrefs::{RefType, RefAction};
+use tracing::{event, Level};
 
 pub mod data_flow;
 pub mod evaluators;
@@ -367,7 +368,8 @@ pub fn find_xrefs(
             vec![]
         }
         o => {
-            unimplemented!("yet-unsupported opcode {:?}", o);
+            event!(Level::ERROR, opcode = ?o, "missing xref tests"); //, "missing control flow description", opcode = o);
+            vec![]
         }
     }
 }
