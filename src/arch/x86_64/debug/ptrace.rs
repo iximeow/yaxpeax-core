@@ -175,43 +175,24 @@ pub struct DebugeeX86_64 {
 }
 
 impl Peek for Rc<RefCell<DebugeeX86_64>> {
-    fn read<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<u8> {
-        Some(self.borrow_mut().read_qword(addr.to_linear()) as u8)
-    }
-    fn read16<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 2]> {
-        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
-        Some(
-            [
-                ((word >> 0) & 0xff) as u8,
-                ((word >> 8) & 0xff) as u8,
-            ]
-        )
-    }
-    fn read32<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 4]> {
-        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
-        Some(
-            [
-                ((word >> 0) & 0xff) as u8,
-                ((word >> 8) & 0xff) as u8,
-                ((word >> 16) & 0xff) as u8,
-                ((word >> 24) & 0xff) as u8,
-            ]
-        )
-    }
-    fn read64<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<[u8; 8]> {
-        let word: u64 = self.borrow_mut().read_qword(addr.to_linear());
-        Some(
-            [
-                ((word >> 0) & 0xff) as u8,
-                ((word >> 8) & 0xff) as u8,
-                ((word >> 16) & 0xff) as u8,
-                ((word >> 24) & 0xff) as u8,
-                ((word >> 32) & 0xff) as u8,
-                ((word >> 40) & 0xff) as u8,
-                ((word >> 48) & 0xff) as u8,
-                ((word >> 56) & 0xff) as u8
-            ]
-        )
+    fn read_bytes<A: yaxpeax_arch::Address, W: std::io::Write>(&self, addr: A, len: u64, buf: &mut W) -> Option<()> {
+        let reader = self.borrow_mut();
+        let start = addr.to_linear() as u64;
+        for qword in 0..len / 8 {
+            let word = reader.read_qword((start + qword * 8) as usize);
+            if buf.write(&word.to_le_bytes()).ok() != Some(8usize) {
+                // TODO: be better about failed writes
+                return None;
+            }
+        }
+
+        let remainder = (len % 8) as usize;
+        let last_word = reader.read_qword((start + len) as usize + remainder);
+        if buf.write(&last_word.to_le_bytes()[..remainder]).ok() == Some(remainder) {
+            Some(())
+        } else {
+            None
+        }
     }
 }
 

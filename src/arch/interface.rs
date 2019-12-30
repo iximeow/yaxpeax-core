@@ -174,7 +174,8 @@ pub enum Debug {
     ShowMaps,
     ShowModules,
     ShowThreads,
-    ShowInfo
+    ShowInfo,
+    Step,
 }
 
 pub struct DebugHelp;

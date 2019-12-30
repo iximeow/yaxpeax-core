@@ -77,11 +77,51 @@ fn try_unhexlify(bytes: &[u8]) -> Option<Vec<u8>> {
     Some(res)
 }
 
+struct SupportedFeatures {
+    // vCont?
+    // xmlRegisters?
+    // swbreak?
+    // hwbreak?
+    //
+    features: u8
+}
+
+#[derive(Debug, PartialEq)]
+pub enum BreakpointKind {
+    Any,
+    Hardware,
+    Software
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ResumeStyle {
+    Step,
+    Continue,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum QueryKind {
+    /*
+    ‘qfThreadInfo’
+    ‘qsThreadInfo’
+    */
+    // ThreadIds
+    //   qOffsets
+    // SectionRelocations,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Command {
+    DetectSupport,
     MemoryRead(usize, usize),
     RegsGet,
     SelectThread(usize),
+    SetBreakpoint(BreakpointKind, usize),
+    RemoveBreakpoint(BreakpointKind, usize),
+    Continue(ResumeStyle),
+    Signal(u8, ResumeStyle),
+    Stop,
+//    Query(QueryKind),
 }
 
 fn check_checksum(buf: &[u8]) -> Option<&[u8]> {
@@ -136,9 +176,12 @@ impl Command {
         fn reply_looks_complete_inner(cmd: &Command, buf: &[u8]) -> bool {
             // test checksum...
             match cmd {
+                /*
                 Command::MemoryRead(_, _) |
                 Command::RegsGet |
                 Command::SelectThread(_) => {
+                */
+                _ => {
                     check_checksum(buf).is_some()
                 }
             }
@@ -172,6 +215,12 @@ impl Command {
                 // + $ <data> #<checksum>
                 Some(1 + 1 + len * 2 + 3)
             },
+            Command::DetectSupport |
+            Command::SetBreakpoint(_, _) |
+            Command::RemoveBreakpoint(_, _) |
+            Command::Continue(_) |
+            Command::Signal(_, _) |
+            Command::Stop |
             Command::SelectThread(_) |
             Command::RegsGet => {
                 // lol
@@ -181,6 +230,9 @@ impl Command {
     }
     fn serialize(&self) -> String {
         match self {
+            Command::DetectSupport => {
+                "qSupport:vContSupported;swbreak;hwbreak".to_string()
+            }
             Command::MemoryRead(size, len) => {
                 format!("m{:x},{:x}", size, len)
             }
@@ -190,20 +242,95 @@ impl Command {
             Command::SelectThread(id) => {
                 format!("Hg{}", id)
             }
+            Command::SetBreakpoint(kind, address) => {
+                match kind {
+                    BreakpointKind::Any |
+                    BreakpointKind::Software => {
+                        // TODO: support architecture-specific (ARM and MIPS, really) breakpoint
+                        // sizes
+                        format!("Z0,{:x},0", address)
+                    }
+                    BreakpointKind::Hardware => {
+                        // TODO: support architecture-specific (ARM and MIPS, really) breakpoint
+                        // sizes
+                        format!("Z1,{:x},0", address)
+                    }
+                }
+            }
+            Command::RemoveBreakpoint(kind, address) => {
+                match kind {
+                    BreakpointKind::Any |
+                    BreakpointKind::Software => {
+                        // TODO: support architecture-specific (ARM and MIPS, really) breakpoint
+                        // sizes
+                        format!("z0,{:x},0", address)
+                    }
+                    BreakpointKind::Hardware => {
+                        // TODO: support architecture-specific (ARM and MIPS, really) breakpoint
+                        // sizes
+                        format!("z1,{:x},0", address)
+                    }
+                }
+            }
+            Command::Continue(style) => {
+                match style {
+                    ResumeStyle::Step => {
+                        "vCont;s".to_string()
+                    }
+                    ResumeStyle::Continue => {
+                        "vCont;c".to_string()
+                    }
+                }
+            }
+            Command::Signal(signal, style) => {
+                match style {
+                    ResumeStyle::Step => {
+                        format!("vCont;S {:02x}", signal)
+                    }
+                    ResumeStyle::Continue => {
+                        format!("vCont;C {:02x}", signal)
+                    }
+                }
+            }
+            Command::Stop => {
+                "vCont;t".to_string()
+            }
         }
     }
     pub fn causes_response(&self) -> bool {
         match self {
+            Command::DetectSupport |
             Command::SelectThread(_) |
             Command::MemoryRead(_, _) |
-            Command::RegsGet => {
-                    true
-                }
+            Command::RegsGet |
+            Command::SetBreakpoint(_, _) |
+            Command::RemoveBreakpoint(_, _) |
+            Command::Continue(_) |
+            Command::Signal(_, _) |
+            Command::Stop => {
+                true
+            }
         }
     }
 }
 
+struct ProtocolFeatures {
+    features: u8,
+}
+
+impl ProtocolFeatures {
+    fn new() -> Self { Self { features: 0 } }
+    fn set_vcont(&mut self, supported: bool) {
+        self.features &= 0x01;
+        self.features |= if supported { 0x01 } else { 0x00 };
+    }
+    fn vcont(&self) -> bool {
+        self.features & 0x01 != 0
+    }
+}
+
 pub struct GDBRemote {
+    features: ProtocolFeatures,
     stream: TcpStream,
     in_flight: Option<Command>
 }
@@ -211,17 +338,25 @@ pub struct GDBRemote {
 impl GDBRemote {
     pub fn connect(addr: &SocketAddr) -> io::Result<GDBRemote> {
         let stream = TcpStream::connect_timeout(addr, Duration::from_millis(1000))?;
+        let mut connection = GDBRemote {
+            features: ProtocolFeatures::new(),
+            stream,
+            in_flight: None
+        };
+        let features = connection.issue_request_with_response(Command::DetectSupport)?;
+        eprintln!("got feature report: {:?}", unsafe { std::str::from_utf8(features.as_slice()) });
 
-        Ok(GDBRemote { stream, in_flight: None })
+        Ok(connection)
     }
 
     fn issue_request(&mut self, cmd: Command) -> io::Result<()> {
         assert_eq!(self.in_flight, None);
         let serialized = cmd.serialize();
+        let msg = format!("${}#{:02x}", serialized, checksum(serialized.as_bytes()));
+        eprintln!("sending request {:?}: {}", cmd, msg);
         if cmd.causes_response() {
             self.in_flight = Some(cmd);
         }
-        let msg = format!("${}#{:02x}", serialized, checksum(serialized.as_bytes()));
         self.stream.write_all(msg.as_bytes())
     }
 
@@ -232,6 +367,7 @@ impl GDBRemote {
     }
 
     fn issue_request_with_response(&mut self, cmd: Command) -> io::Result<Vec<u8>> {
+//        tracing::event!(tracing::Level::INFO, cmd = ?cmd, "issuing gdb request");
         const PACKET_SIZE: usize = 0x1000;
         let mut result = vec![0; PACKET_SIZE];
         let mut offset = 0;
@@ -259,6 +395,7 @@ impl GDBRemote {
         }
 
         let count = offset;
+//        eprintln!("< {}", unsafe { std::str::from_utf8_unchecked(&result) });
 
         let resp = if result[0] == '+' as u8 {
             // we may be obligated to ack responses
@@ -272,6 +409,7 @@ impl GDBRemote {
             assert!(result.len() == 1);
             Err(Error::new(ErrorKind::Other, format!("invalid request: {:?}", self.in_flight)))
         } else {
+            tracing::event!(tracing::Level::ERROR, result = ?result, "gdb says invalid");
             Err(Error::new(ErrorKind::Other, format!("invalid response: {:?}", result)))
         };
 
@@ -291,6 +429,8 @@ impl GDBRemote {
     }
 
     pub fn read_memory(&mut self, mut addr: usize, len: usize) -> io::Result<Vec<u8>> {
+//        tracing::event!(tracing::Level::INFO, "reading {} bytes at {} from remote gdb tatrget", len, addr);
+//        eprintln!("reading {:#x} bytes at {:#x} from remote gdb tatrget", len, addr);
         if len == 0 { return Ok(vec![]); }
 
         let mut remaining = len;
@@ -306,15 +446,19 @@ impl GDBRemote {
             // we have to request a(nother) packet of data to build up the buffer..
             let res = self.issue_request_with_response(Command::MemoryRead(addr, request_size))?;
 
-            if let Some(errno) = is_err(&res) {
-                return Err(Error::new(ErrorKind::Other, format!("invalid read: {}", errno)));
-            }
+            // if let Some(errno) = is_err(&res) {
+//                tracing::event!(tracing::Level::ERROR, "invalid read: {}", errno);
+            //     return Err(Error::new(ErrorKind::Other, format!("invalid read: {}", errno)));
+            // }
 
             let buf = match try_unhexlify(
                 res.as_slice()
             ) {
-                Some(buf) => buf,
+                Some(buf) => {
+                    buf
+                },
                 None => {
+//                    tracing::event!(tracing::Level::ERROR, "invalid response characters");
                     return Err(Error::new(ErrorKind::Other, "response contained non-hex characters where only hex was expected, or was not an even number of characters"));
                 }
             };
@@ -329,6 +473,7 @@ impl GDBRemote {
             remaining -= request_size;
         }
 
+//        tracing::event!(tracing::Level::INFO, "read ok!");
         Ok(result)
     }
 
@@ -339,11 +484,71 @@ impl GDBRemote {
     // from the remote stub, or by an ISA that knows how to map a gdb
     // register blob
     pub fn get_regs(&mut self) -> Vec<u8> {
-        self.issue_request_with_response(Command::RegsGet).unwrap()
+        let resp = self.issue_request_with_response(Command::RegsGet).unwrap();
+        try_unhexlify(&resp).unwrap()
+    }
+
+    pub fn step(&mut self) -> io::Result<()> {
+        eprintln!("stepping!");
+        self.issue_request_with_response(Command::Continue(ResumeStyle::Step))
+            .map(|resp| {
+                eprintln!("resp: {:?}", std::str::from_utf8(&resp).unwrap());
+            //    assert!(resp.len() == 0)
+            })
+    }
+    pub fn cont(&mut self) -> io::Result<()> {
+        eprintln!("continuing!");
+        self.issue_request_with_response(Command::Continue(ResumeStyle::Continue))
+            .map(|resp| {
+                eprintln!("resp: {:?}", std::str::from_utf8(&resp).unwrap());
+            //    assert!(resp.len() == 0)
+            })
+    }
+    pub fn set_breakpoint(&mut self, addr: usize) -> io::Result<()> {
+        eprintln!("breakpointing at {:#x}!", addr);
+        self.issue_request_with_response(Command::SetBreakpoint(BreakpointKind::Software, addr))
+            .map(|resp| {
+                eprintln!("resp: {:?}", std::str::from_utf8(&resp).unwrap());
+            //    assert!(resp.len() == 0)
+            })
     }
 }
 
 impl Peek for Rc<RefCell<GDBRemote>> {
+    fn read_bytes<A: yaxpeax_arch::Address, W: std::io::Write>(&self, addr: A, len: u64, buf: &mut W) -> Option<()> {
+//        tracing::event!(tracing::Level::INFO, "reading {} bytes at {}", len, addr.stringy());
+//        eprintln!("reading {} bytes at {}", len, addr.stringy());
+        const CHUNKSIZE: usize = 1024;
+        let start = addr.to_linear();
+        let mut reader = self.borrow_mut();
+        for chunk in 0..(len as usize / CHUNKSIZE) {
+            let data = reader.read_memory((start + chunk) as usize, CHUNKSIZE);
+            if let Ok(data) = data {
+                // TODO: correctly handle wrote-some-but-not-all.
+                if buf.write(data.as_slice()).ok() != Some(CHUNKSIZE) {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+
+        let remainder = len as usize % CHUNKSIZE;
+        if remainder == 0 {
+            return Some(());
+        }
+        let data = reader.read_memory(start + len as usize - remainder, remainder);
+        if let Ok(data) = data {
+            // TODO: correctly handle wrote-some-but-not-all.
+            if buf.write(data.as_slice()).ok() != Some(remainder) {
+                return None;
+            }
+        } else {
+            return None;
+        }
+//        tracing::event!(tracing::Level::INFO, "completed read of {} bytes at {}", len, addr.stringy());
+        Some(())
+    }
     fn read<A: yaxpeax_arch::Address>(&self, addr: A) -> Option<u8> {
         self.borrow_mut().read_memory(addr.to_linear(), 1).unwrap().get(0).map(|x| *x)
     }
