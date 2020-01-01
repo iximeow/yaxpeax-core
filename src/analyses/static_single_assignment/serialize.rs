@@ -10,7 +10,9 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Has
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut phi_map = serializer.serialize_map(Some(self.inner.len()))?;
         for (addr, phis) in self.inner.iter() {
-            phi_map.serialize_entry(addr, &MemoizingSerializer::new(unsafe { *self.memos.as_ptr() }, phis))?;
+            self.with_memos(|memos| {
+                phi_map.serialize_entry(addr, &MemoizingSerializer::new(memos, phis))
+            })?;
         }
         phi_map.end()
     }
@@ -34,7 +36,9 @@ impl <'a, 'b, A: Arch + SSAValues> Serialize for MemoizingSerializer<'a, 'b, Has
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut version_maps = serializer.serialize_map(Some(self.inner.len()))?;
         for (k, m) in self.inner.iter() {
-            version_maps.serialize_entry(k, &MemoizingSerializer::new(unsafe { *self.memos.as_ptr() }, m))?;
+            self.with_memos(|memos| {
+                version_maps.serialize_entry(k, &MemoizingSerializer::new(memos, m))
+            })?;
         }
         version_maps.end()
     }

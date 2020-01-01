@@ -160,25 +160,28 @@ impl <T: Hash + PartialEq + Eq> Memos<T> {
 }
 
 pub struct MemoizingSerializer<'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> {
-    pub memos: Cell<&'a mut Memos<M>>,
+    pub memos: Cell<Option<&'a mut Memos<M>>>,
     pub inner: &'b T,
 }
 
 impl <'a, 'b, T: ?Sized, M: Hash + PartialEq + Eq> MemoizingSerializer<'a, 'b, T, M> {
     pub fn new(memos: &'a mut Memos<M>, inner: &'b T) -> Self {
-        MemoizingSerializer { memos: Cell::new(memos), inner }
+        MemoizingSerializer { memos: Cell::new(Some(memos)), inner }
     }
 
-    pub fn memos(&self) -> &'a mut Memos<M> {
-        unsafe {
-            *self.memos.as_ptr()
-        }
+    pub fn with_memos<R, F: FnOnce(&mut Memos<M>) -> R>(&self, f: F) -> R {
+        let memo_ref = if let Some(memo_ref) = self.memos.take() {
+            memo_ref
+        } else {
+            panic!("implementation error: attempted to mutably use memos from two locations at once. this should be impossible!");
+        };
+        let res = f(memo_ref);
+        self.memos.set(Some(memo_ref));
+        res
     }
 
     pub fn id_of(&self, memo: M) -> u32 {
-        unsafe {
-            (*self.memos.as_ptr()).id_of(memo)
-        }
+        self.with_memos(|memos| memos.id_of(memo))
     }
 }
 
