@@ -1,8 +1,8 @@
 use serde::de;
 use std::fmt;
-use serde::de::{MapAccess, SeqAccess, Deserialize, Deserializer, Visitor};
+use serde::de::{MapAccess, SeqAccess, Deserializer, Visitor};
 use std::cell::Cell;
-use serde::{Serialize, Serializer};
+use serde::{Serialize, Deserialize, Serializer};
 use serde::ser::SerializeStruct;
 
 use yaxpeax_arch::Address;
@@ -135,9 +135,10 @@ impl<'de, A: Address + Hash> Deserialize<'de> for GraphDeserializer<A> {
 }
 
 pub trait Memoable: Sized {
-    type Out: Sized + Serialize;
+    type Out: Sized + Serialize + for<'de> Deserialize<'de>;
 
     fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out;
+    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self;
 }
 
 pub struct Memos<T: Hash + PartialEq + Eq> {

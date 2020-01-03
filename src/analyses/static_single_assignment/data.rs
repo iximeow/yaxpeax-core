@@ -203,8 +203,8 @@ impl <A: SSAValues> DFGLValue<A> {
     }
 }
 
-#[derive(Debug)]
-pub struct HashedValue<A> {
+#[derive(Debug, Clone)]
+pub struct HashedValue<A: Clone> {
     pub value: A
 }
 

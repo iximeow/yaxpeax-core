@@ -20,7 +20,7 @@ use arch::CommentQuery;
 
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
-use analyses::static_single_assignment::{DFGRef, HashedValue};
+use analyses::static_single_assignment::{DFGRef, HashedValue, Value};
 use analyses::xrefs;
 
 #[derive(Serialize, Deserialize)]
@@ -351,6 +351,16 @@ impl Memoable for HashedValue<DFGRef<MSP430>> {
 
     fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
         memos[self]
+    }
+    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self {
+        use std::cell::RefCell;
+        HashedValue { value: Rc::new(RefCell::new(Value {
+            name: None,
+            used: true,
+            location: Location::MemoryAny,
+            version: Some(0),
+            data: None,
+        })) }
     }
 }
 

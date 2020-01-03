@@ -5,7 +5,7 @@ use yaxpeax_arch::{Address, Arch};
 
 use arch::{AbiDefaults, FunctionImpl, FunctionQuery};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use std::fmt::Debug;
 
@@ -48,7 +48,7 @@ pub trait AliasInfo where Self: Sized {
 /// with appropriate assumptions to refine the memory access into something appropriate for
 /// analysis.
 pub trait ValueLocations: Arch {
-    type Location: Debug + Hash + Eq + Serialize + Copy + Clone + AliasInfo;
+    type Location: Debug + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Copy + Clone + AliasInfo;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }

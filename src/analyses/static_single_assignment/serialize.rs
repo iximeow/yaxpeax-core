@@ -77,7 +77,7 @@ impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<DFGR
 
         {
             let values = MemoizingSerializer::new(&mut memoizer, &self.instruction_values);
-            ssa_serializer.serialize_field("values", &values)?;
+            ssa_serializer.serialize_field("instruction_values", &values)?;
         }
 
         {
@@ -85,7 +85,7 @@ impl <A: Arch + SSAValues + 'static> Serialize for SSA<A> where HashedValue<DFGR
             ssa_serializer.serialize_field("phis", &phis)?;
         }
 
-        ssa_serializer.serialize_field("values", &memoizer)?;
+        ssa_serializer.serialize_field("memos", &memoizer)?;
 
         ssa_serializer.end()
 

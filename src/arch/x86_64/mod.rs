@@ -32,7 +32,6 @@ pub struct x86_64Data {
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
-#[serde(skip)]
     pub ssa: HashMap<<x86_64 as Arch>::Address, (
         control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
         SSA<x86_64>
@@ -163,6 +162,7 @@ pub enum ModifierExpression {
 pub struct InstructionModifiers {
     before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
     after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
+    #[serde(skip)]
     between: HashMap<<x86_64 as Arch>::Address, HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>>,
     pub calls: HashMap<<x86_64 as Arch>::Address, <x86_64 as Arch>::Address>,
     fn_query: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,

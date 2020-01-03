@@ -27,6 +27,9 @@ use tracing::{event, Level};
 use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
 use serialize::Memoable;
+use serde::{Serialize, Deserialize};
+use serde::de::{self, Deserializer, Visitor, Unexpected};
+use serde::ser::{Serializer};
 
 use data::{Direction, Disambiguator, ValueLocations};
 
@@ -62,13 +65,143 @@ impl fmt::Display for MemoryRegion {
     }
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Location {
     Register(RegSpec),
     Memory(MemoryRegion),
     MemoryLocation(MemoryRegion, u16, i32),
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL
+}
+
+#[derive(Default)]
+struct LocationVisitor {}
+
+impl<'de> Visitor<'de> for LocationVisitor {
+    type Value = Location;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("enum Location")
+    }
+
+    fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
+        // ok. Location is serialized as a letter for the variant and variable data afterward.
+        let mut parts = s.split(":");
+        let start = parts.next().ok_or_else(|| {
+            E::invalid_length(0, &"serialized location should have at least one character")
+        })?;
+
+        fn check_end<'a, E: de::Error>(read: usize, mut parts: impl Iterator<Item=&'a str>) -> Result<(), E> {
+            if parts.next().is_some() {
+                Err(E::invalid_length(read, &"expected end of input"))
+            } else {
+                Ok(())
+            }
+        }
+
+        match start {
+            "R" => {
+                let regstr = parts.next().ok_or(
+                    E::invalid_length(1, &"expected regspec in serialized location")
+                )?;
+                // !!!
+                let regspec: RegSpec = serde_json::from_str(regstr).unwrap();
+                check_end(2, parts)?;
+                Ok(Location::Register(regspec))
+            },
+            "m" => {
+                let memstr = parts.next().ok_or(
+                    E::invalid_length(1, &"expected memory region in serialized location")
+                )?;
+                // !!!
+                let memory: u16 = serde_json::from_str(memstr).unwrap();
+                check_end(2, parts)?;
+                Ok(Location::Memory(MemoryRegion(memory)))
+            },
+            "M" => {
+                let memstr = parts.next().ok_or(
+                    E::invalid_length(1, &"expected memory region in serialized location")
+                )?;
+                // !!!
+                let memory: u16 = serde_json::from_str(memstr).unwrap();
+                let szstr = parts.next().ok_or(
+                    E::invalid_length(2, &"expected memory size in serialized location")
+                )?;
+                // !!!
+                let memory_size: u16 = serde_json::from_str(szstr).unwrap();
+                let addrstr = parts.next().ok_or(
+                    E::invalid_length(3, &"expected memory address in serialized location")
+                )?;
+                // !!!
+                let memory_addr: i32 = serde_json::from_str(szstr).unwrap();
+                check_end(4, parts)?;
+                Ok(Location::MemoryLocation(MemoryRegion(memory), memory_size, memory_addr))
+            },
+            "c" => { check_end(1, parts)?; Ok(Location::CF) }
+            "p" => { check_end(1, parts)?; Ok(Location::PF) }
+            "a" => { check_end(1, parts)?; Ok(Location::AF) }
+            "z" => { check_end(1, parts)?; Ok(Location::ZF) }
+            "s" => { check_end(1, parts)?; Ok(Location::SF) }
+            "t" => { check_end(1, parts)?; Ok(Location::TF) }
+            "i" => { check_end(1, parts)?; Ok(Location::IF) }
+            "d" => { check_end(1, parts)?; Ok(Location::DF) }
+            "o" => { check_end(1, parts)?; Ok(Location::OF) }
+            "p" => { check_end(1, parts)?; Ok(Location::IOPL) }
+            u => { Err(E::invalid_value(Unexpected::Str(u), &"invalid location enum discriminant")) }
+        }
+    }
+}
+
+impl Serialize for Location {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut serialized_loc = String::new();
+        match self {
+            Location::Register(spec) => {
+                serialized_loc.push_str("R:");
+                // !!!
+                serialized_loc.push_str(&serde_json::to_string(&spec).unwrap());
+            }
+            Location::Memory(region) => {
+                serialized_loc.push_str("m:");
+                // !!!
+                serialized_loc.push_str(&serde_json::to_string(&region.0).unwrap());
+            }
+            Location::MemoryLocation(region, size, offset) => {
+                serialized_loc.push_str("M:");
+
+                // !!!
+                serialized_loc.push_str(&serde_json::to_string(&region.0).unwrap());
+                serialized_loc.push_str(":");
+                // !!!
+                serialized_loc.push_str(&serde_json::to_string(size).unwrap());
+                serialized_loc.push_str(":");
+                // !!!
+                serialized_loc.push_str(&serde_json::to_string(offset).unwrap());
+            },
+            Location::CF => { serialized_loc.push_str("c"); }
+            Location::PF => { serialized_loc.push_str("p"); }
+            Location::AF => { serialized_loc.push_str("a"); }
+            Location::ZF => { serialized_loc.push_str("z"); }
+            Location::SF => { serialized_loc.push_str("s"); }
+            Location::TF => { serialized_loc.push_str("t"); }
+            Location::IF => { serialized_loc.push_str("i"); }
+            Location::DF => { serialized_loc.push_str("d"); }
+            Location::OF => { serialized_loc.push_str("o"); }
+            Location::IOPL => { serialized_loc.push_str("p"); }
+        }
+        serializer.serialize_str(&serialized_loc)
+    }
+}
+
+impl<'de> Deserialize<'de> for Location {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_str(
+            LocationVisitor::default()
+        )
+    }
 }
 
 impl fmt::Display for Location {
@@ -253,7 +386,7 @@ impl AliasInfo for Location {
 // SymbolicExpression::Deref(
 //   SymbolicExpression::Add(rdi_input, 0x8)
 // ) => HANDLE ?
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SymbolicExpression {
     // Used to declare that a value has some type, but no additional information about it
     // For example, declaring the type of a global struct. This might be written as:
@@ -496,7 +629,7 @@ impl Typed for Data {
 }
 
 // TODO: update memo
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum DataMemo {
     Concrete(u64, Option<TypeSpec>),
     Str(String),
@@ -505,13 +638,13 @@ pub enum DataMemo {
     ValueSet(Vec<ValueRangeMemo>)
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ValueRangeMemo {
     Between(DataMemo, DataMemo),
     Precisely(DataMemo),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ValueMemo {
     pub location: Location,
     pub version: Option<u32>,
@@ -553,6 +686,64 @@ impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
             location: selfref.location,
             version: selfref.version,
             data: newdata
+        }
+    }
+    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self {
+        fn dememoize_data(data: &DataMemo, memos: &[ValueMemo], dememoized: &mut HashMap<u32, HashedValue<Rc<RefCell<Value<x86_64>>>>>) -> Data {
+            match data {
+                DataMemo::Concrete(v, ty) => Data::Concrete(*v, ty.to_owned()),
+                DataMemo::Str(string) => Data::Str(string.to_owned()),
+                DataMemo::Expression(expr) => Data::Expression(expr.to_owned()),
+                DataMemo::Alias(idx) => {
+                    Data::Alias(<HashedValue<Rc<RefCell<Value<x86_64>>>> as Memoable>::dememoize(*idx, memos, dememoized).value)
+                }
+                DataMemo::ValueSet(values) => {
+                    let mut memoized_values: Vec<ValueRange> = vec![];
+                    for value in values {
+                        let memoized_value = match value {
+                            ValueRangeMemo::Between(start, end) => {
+                                ValueRange::Between(dememoize_data(start, memos, dememoized), dememoize_data(end, memos, dememoized))
+                            }
+                            ValueRangeMemo::Precisely(v) => {
+                                ValueRange::Precisely(dememoize_data(v, memos, dememoized))
+                            }
+                        };
+                        memoized_values.push(memoized_value)
+                    }
+                    Data::ValueSet(memoized_values)
+                }
+            }
+        }
+
+        let memo = &memos[idx as usize];
+
+        use std::collections::hash_map::Entry;
+        match dememoized.entry(idx) {
+            Entry::Occupied(v) => {
+                // something already caused us to dememoize this value. it's part of a
+                // cycle or something.
+                HashedValue { value: Rc::clone(&v.get().value) }
+            }
+            Entry::Vacant(e) => {
+                let loc = memo.location;
+                let version = memo.version;
+
+                let dememo = Rc::new(RefCell::new(Value {
+                    name: None,
+                    used: true,
+                    location: loc,
+                    version: version,
+                    data: None
+                }));
+
+                e.insert(HashedValue { value: Rc::clone(&dememo) });
+
+                if let Some(data) = &memo.data {
+                    (&mut *dememo.borrow_mut()).data = Some(dememoize_data(data, memos, dememoized));
+                }
+
+                HashedValue { value: dememo }
+            }
         }
     }
 }
