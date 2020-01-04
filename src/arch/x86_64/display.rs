@@ -1647,7 +1647,7 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     colors: Option<&ColorSettings>
 ) {
     match <x86_64Arch as Arch>::Decoder::default().decode(data.range_from(address).unwrap()) {
-        Some(instr) => {
+        Ok(instr) => {
             let mut instr_text = String::new();
             x86_64Arch::render_frame(
                 &mut instr_text,
@@ -1666,8 +1666,8 @@ pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
                 highlight: &NoHighlights,
             });
         },
-        None => {
-            println!("Decode error at {}", address);
+        Err(e) => {
+            println!("Decode error at {}, {}", address, e);
         }
     };
 }

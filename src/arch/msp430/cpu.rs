@@ -270,17 +270,13 @@ impl MCU for CPU {
     }
 
     fn decode(&self) -> Result<Self::Instruction, String> {
-        match <MSP430 as Arch>::Decoder::default().decode(self.memory.range_from(self.ip()).unwrap()) {
-            Some(result) => Ok(result),
-            None => {
-                Err(
-                    format!(
-                        "Unable to decode bytes at 0x{:x}: {:x?}",
-                        self.ip(),
-                        self.memory[(self.ip() as usize)..((self.ip() + 4) as usize)].iter().collect::<Vec<&u8>>()
-                    )
+        <MSP430 as Arch>::Decoder::default().decode(self.memory.range_from(self.ip()).unwrap())
+            .map_err(|e| {
+                format!(
+                    "Unable to decode bytes at 0x{:x}: {:x?}",
+                    self.ip(),
+                    self.memory[(self.ip() as usize)..((self.ip() + 4) as usize)].iter().collect::<Vec<&u8>>()
                 )
-            }
-        }
+            })
     }
 }

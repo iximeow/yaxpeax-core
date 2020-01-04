@@ -1471,11 +1471,12 @@ impl MCU for CPU {
 
     fn decode(&self) -> Result<Self::Instruction, String> {
         <PIC18 as Arch>::Decoder::default().decode(self.program.range_from(self.ip).unwrap())
-            .ok_or_else(|| {
+            .map_err(|e| {
                 format!(
-                    "Unable to decode bytes at 0x{:x}: {:x?}",
+                    "Unable to decode bytes at 0x{:x}: {:x?}, {}",
                     self.ip,
-                    self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>()
+                    self.program[(self.ip as usize)..((self.ip + 4) as usize)].iter().collect::<Vec<&u8>>(),
+                    e
                 )
             })
     }

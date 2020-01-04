@@ -484,7 +484,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
             }
         };
         match A::Decoder::default().decode(range) {
-            Some(instr) => {
+            Ok(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);
                     instr.control_flow(Some(&ctx))
@@ -504,7 +504,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                     }
                 }
             },
-            None => {
+            Err(_) => {
                 return vec![];
             }
         }

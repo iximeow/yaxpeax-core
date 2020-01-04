@@ -679,10 +679,10 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
                         self.current = next;
                         if let Some(range) = self.data.range_from(self.current) {
                             match self.decoder.decode_into(instr, range) {
-                                Some(_) => {
+                                Ok(()) => {
                                     Some((self.current, instr))
                                 },
-                                None => None
+                                Err(_) => None
                             }
                         } else {
                             println!("BUG: No data available for {}", self.current.stringy());
@@ -697,7 +697,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
         } else {
             if self.current <= self.end {
                 if let Some(range) = self.data.range_from(self.current) {
-                    self.elem = self.decoder.decode(range);
+                    self.elem = self.decoder.decode(range).ok();
                     match self.elem {
                         Some(ref instr) => {
                             Some((self.current, &instr))

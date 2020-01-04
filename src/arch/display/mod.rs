@@ -63,7 +63,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
     A::Instruction: ShowContextual<A::Address, Contexts, String> {
     match A::Decoder::default().decode(data.range_from(address).unwrap()) {
-        Some(instr) => {
+        Ok(instr) => {
             let mut instr_text = String::new();
             A::render_frame(
                 &mut instr_text,
@@ -75,8 +75,8 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
             println!(" {}", instr_text);
         },
-        None => {
-            println!("Decode error at {}", address);
+        Err(e) => {
+            println!("Decode error at {}, {}", address, e);
         }
     };
 }

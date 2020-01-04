@@ -29,7 +29,7 @@ pub trait ConditionalBoundInference<A: Arch + SSAValues, U> {
         match Self::conditional_source_for(conditional_instr, conditional, dfg) {
             Some((src_addr, DefSource::Instruction)) => {
                 if let Some(range) = data.range_from(src_addr) {
-                    if let Some(test_instr) = A::Decoder::default().decode(range) {
+                    if let Ok(test_instr) = A::Decoder::default().decode(range) {
                         // and now that we have the instruction...
                         Self::infer_conditional_bounds(block_start, &test_instr, src_addr, conditional_instr, conditional, cfg, dfg, aux_data)
                     } else {
