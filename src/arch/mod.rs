@@ -22,7 +22,7 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Address, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Arch, Address, AddressDisplay, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 
@@ -32,6 +32,18 @@ pub trait FunctionQuery<A: Address> {
     type Function;
     fn function_at(&self, addr: A) -> Option<&Self::Function>;
     fn all_functions(&self) -> Vec<&Self::Function>;
+}
+
+impl<Addr: Address, Loc: AbiDefaults> FunctionQuery<Addr> for std::collections::HashMap<Addr, FunctionImpl<Loc>> {
+    type Function = FunctionImpl<Loc>;
+
+    fn function_at(&self, addr: Addr) -> Option<&Self::Function> {
+        self.get(&addr)
+    }
+
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        self.values().collect()
+    }
 }
 
 pub trait SymbolQuery<A: Address> {
@@ -221,7 +233,7 @@ impl <Loc: AbiDefaults> FunctionImpl<Loc> {
         self.layout.borrow_mut().returns[ret_idx] = ret;
     }
 
-    fn layout(&self) -> Ref<FunctionLayout<Loc>> {
+    pub fn layout(&self) -> Ref<FunctionLayout<Loc>> {
         self.layout.borrow()
     }
 
@@ -617,7 +629,7 @@ impl ISA {
     }
 }
 
-pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr, D: Decoder<Instr>> {
+pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr: Default, D: Decoder<Instr>> {
     data: &'a M,
     decoder: D,
     current: Addr,
@@ -626,11 +638,11 @@ pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?
 }
 
 pub trait InstructionSpan<'a, Addr: Address> where Self: MemoryRepr<Addr> {
-    fn instructions_spanning<Instr, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr, D>;
+    fn instructions_spanning<Instr: Default, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr, D>;
 }
 
 impl <'a, Addr: Address, M: MemoryRepr<Addr>> InstructionSpan<'a, Addr> for M {
-    fn instructions_spanning<Instr, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr, D> {
+    fn instructions_spanning<Instr: Default, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr, D> {
         InstructionIteratorSpanned {
             data: self,
             decoder,
@@ -656,7 +668,7 @@ pub trait ControlFlowDeterminant {
 trait MCU {
     type Addr;
     type Decoder: Decoder<Self::Instruction>;
-    type Instruction;
+    type Instruction: Default;
     fn emulate(&mut self) -> Result<(), String>;
     fn decode(&self) -> Result<Self::Instruction, String>;
 }
@@ -668,7 +680,7 @@ pub trait SimpleStreamingIterator {
     fn next<'b>(&mut self) -> Option<&'b Self::Item>;
 }
 
-impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=Addr> {
+impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=Addr> + Default {
     pub fn next<'b>(&mut self) -> Option<(Addr, &Instr)> {
         if self.elem.is_some() {
             let instr: &mut Instr = self.elem.as_mut().unwrap();
@@ -685,7 +697,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
                                 Err(_) => None
                             }
                         } else {
-                            println!("BUG: No data available for {}", self.current.stringy());
+                            println!("BUG: No data available for {}", self.current.show());
                             None
                         }
                     } else {
@@ -705,7 +717,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
                         None => None
                     }
                 } else {
-                    println!("BUG: No data available for {}", self.current.stringy());
+                    println!("BUG: No data available for {}", self.current.show());
                     None
                 }
             } else {

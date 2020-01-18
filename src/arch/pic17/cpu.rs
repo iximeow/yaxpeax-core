@@ -454,7 +454,7 @@ impl CPU {
                 let _ctx: Option<&pic17::cpu::CPU> = Some(self);
                 let mut s = String::new();
                 let ctx: Option<&MergedContextTable> = None;
-                instr.contextualize(None, self.ip, /* TODO: ctx */ ctx, &mut s).unwrap();
+                instr.contextualize(&yaxpeax_arch::NoColors, self.ip, /* TODO: ctx */ ctx, &mut s).unwrap();
                 println!("instruction: {}", s);
             },
             Err(e) => println!("[invalid: {}]", e)

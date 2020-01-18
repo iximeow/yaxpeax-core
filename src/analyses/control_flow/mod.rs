@@ -5,13 +5,12 @@ use std::hash::Hash;
 use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
-use yaxpeax_arch::{Address, Arch, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, AddressDisplay, Arch, Decoder, LengthedInstruction};
 
 use num_traits::{WrappingAdd, Zero, One};
 
 use ContextRead;
 use ContextWrite;
-use yaxpeax_arch::AddressDisplay;
 
 use memory::MemoryRange;
 
@@ -474,7 +473,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
             Some(range) => range,
             None => {
                 use petgraph::Direction;
-                println!("Reached {}, which is not a valid address - marking start ({}) as hazard.", addr.stringy(), start.stringy());
+                println!("Reached {}, which is not a valid address - marking start ({}) as hazard.", addr.show(), start.show());
                 let problem_blocks = cfg.graph.neighbors_directed(start, Direction::Incoming).collect::<Vec<A::Address>>();
                 println!("Problem blocks: {:?}", problem_blocks);
                 for problem in problem_blocks.iter() {

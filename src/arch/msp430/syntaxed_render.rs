@@ -1,5 +1,5 @@
 use termion::color;
-use yaxpeax_msp430_mc::{Opcode, Operand, Instruction, Width};
+use yaxpeax_msp430::{Opcode, Operand, Instruction, Width};
 use std::collections::HashMap;
 
 pub fn opcode_color(opcode: Opcode) -> &'static color::Fg<&'static dyn color::Color> {

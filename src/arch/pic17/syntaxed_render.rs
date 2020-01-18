@@ -2,6 +2,7 @@ use termion::color;
 use yaxpeax_arch::Arch;
 use yaxpeax_arch::ColorSettings;
 use yaxpeax_arch::ShowContextual;
+use yaxpeax_arch::YaxColors;
 use yaxpeax_pic17::PIC17;
 use yaxpeax_pic17::{Opcode, Operand, Instruction};
 use arch::pic17::MergedContextTable;
@@ -10,8 +11,8 @@ use ContextRead;
 
 use std::fmt;
 
-impl <T: fmt::Write> ShowContextual<u16, MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: <PIC17 as Arch>::Address, context: Option<&MergedContextTable>, out: &mut T) -> fmt::Result {
+impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u16, MergedContextTable, C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, address: <PIC17 as Arch>::Address, context: Option<&MergedContextTable>, out: &mut T) -> fmt::Result {
         let operand_replacements: Option<[Option<String>; 2]> = match context {
             Some(context) => {
                 use analyses::control_flow;

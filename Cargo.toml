@@ -8,10 +8,10 @@ repository = ""
 description = "program analysis for machine code"
 
 [dependencies]
-yaxpeax-arch = { path = "../yaxpeax-arch", features = ["use-serde"] }
+yaxpeax-arch = { version = "0.0.2", features = ["use-serde"] }
 yaxpeax-arm = { path = "../arch/arm", features = ["use-serde"] }
-yaxpeax-x86 = { path = "../arch/x86", features = ["use-serde"] }
-yaxpeax-msp430-mc = { path = "../arch/msp430", features = ["use-serde"] }
+yaxpeax-x86 = { version = "0.0.3", features = ["use-serde"] }
+yaxpeax-msp430 = { path = "../arch/msp430", features = ["use-serde"] }
 yaxpeax-pic17 = { path = "../arch/pic17", features = ["use-serde"] }
 yaxpeax-pic18 = { path = "../arch/pic18", features = ["use-serde"] }
 yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }

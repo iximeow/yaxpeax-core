@@ -16,7 +16,8 @@ use arch::{FunctionImpl, FunctionQuery};
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::{ConditionCode, RegSpec, RegisterBank, x86_64, Opcode, Operand};
+use yaxpeax_x86::long_mode::{ConditionCode, RegSpec, RegisterBank, Instruction, Opcode, Operand};
+use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;
 use std::fmt;
@@ -32,6 +33,7 @@ use serde::de::{self, Deserializer, Visitor, Unexpected};
 use serde::ser::{Serializer};
 
 use data::{Direction, Disambiguator, ValueLocations};
+use analyses::data_flow::Use;
 
 pub const FLAGS: [Location; 10] = [
     Location::CF,
@@ -854,24 +856,6 @@ fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>, Direction)
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
-enum Use {
-    Read, Write, ReadWrite
-}
-
-impl Use {
-    pub fn first_use(&self) -> Direction {
-        match self {
-            Use::Read | Use::ReadWrite => {
-                Direction::Read
-            },
-            Use::Write => {
-                Direction::Write
-            }
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct NoDisambiguation { }
 impl Disambiguator<Location, (u8, u8)> for NoDisambiguation {
@@ -894,18 +878,18 @@ impl <'a> Disambiguator<Location, (u8, u8)> for ContextualDisambiguation<'a> {
 
 pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address> + ?Sized> {
     addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address,
-    inst: &'a yaxpeax_x86::Instruction,
+    inst: &'a Instruction,
     op_count: u8,
     op_idx: u8,
     loc_count: u8,
     loc_idx: u8,
-    curr_op: Option<yaxpeax_x86::Operand>,
+    curr_op: Option<Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
     fn_query: &'c F,
 }
 
-fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
+fn operands_in(instr: &Instruction) -> u8 {
     match instr.opcode {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
@@ -1195,7 +1179,7 @@ fn operands_in(instr: &yaxpeax_x86::Instruction) -> u8 {
     }
 }
 
-fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
+fn locations_in(op: &Operand, usage: Use) -> u8 {
     (if usage == Use::ReadWrite { 1 } else { 0 }) + match op {
         Operand::Register(_spec) => {
             // reg
@@ -1220,13 +1204,6 @@ fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
             // reg, reg, mem
             3
         },
-        Operand::Many(ops) => {
-            let mut count = 0;
-            for op in ops {
-                count += locations_in(op, usage);
-            }
-            count
-        },
         _ => {
             0
         }
@@ -1234,7 +1211,7 @@ fn locations_in(op: &yaxpeax_x86::Operand, usage: Use) -> u8 {
 }
 
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_x86::Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
+    pub fn new(addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
         LocationIter {
             addr,
             inst,
@@ -1253,7 +1230,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
     }
 }
 
-fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
+fn use_of(instr: &Instruction, idx: u8) -> Use {
     match instr.opcode {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
@@ -1557,7 +1534,7 @@ fn use_of(instr: &yaxpeax_x86::Instruction, idx: u8) -> Use {
     }
 }
 
-fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction) {
+fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
     match op {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
@@ -2027,7 +2004,7 @@ fn implicit_loc(op: yaxpeax_x86::Opcode, i: u8) -> (Option<Location>, Direction)
     }
 }
 
-fn implicit_locs(op: yaxpeax_x86::Opcode) -> u8 {
+fn implicit_locs(op: Opcode) -> u8 {
     match op {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
@@ -2441,18 +2418,6 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
                 }
             }
         },
-        Operand::Many(ops) => {
-            let mut idx = idx;
-            for op in ops {
-                if idx > locations_in(op, usage) {
-                    idx -= locations_in(op, usage);
-                    continue;
-                }
-
-                return loc_by_id(idx, usage, op);
-            }
-            unreachable!("invalid index");
-        },
         Operand::Nothing |
         Operand::ImmediateI8(_) |
         Operand::ImmediateI16(_) |
@@ -2467,7 +2432,7 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
     }
 }
 
-impl <'a, 'b, 'c, D: 'b + Disambiguator<Location, (u8, u8)>, F: 'c + FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Function=FunctionImpl<Location>>> crate::data::LocIterator<'b, 'c, <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Location, D, F> for &'a yaxpeax_x86::Instruction {
+impl <'a, 'b, 'c, D: 'b + Disambiguator<Location, (u8, u8)>, F: 'c + FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Function=FunctionImpl<Location>>> crate::data::LocIterator<'b, 'c, <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, Location, D, F> for &'a Instruction {
     type Item = (Option<Location>, Direction);
     type LocSpec = (u8, u8);
     type Iter = LocationIter<'a, 'b, 'c, D, F>;
@@ -2609,13 +2574,6 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Memory(ANY)), Direction::Write)
                     ]
                 },
-                Operand::Many(ops) => {
-                    let mut res = Vec::new();
-                    for op in ops {
-                        res.extend_from_slice(&decompose_write(op));
-                    }
-                    res
-                },
                 Operand::Nothing => {
                     vec![]
                 }
@@ -2692,13 +2650,6 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Register(*index)), Direction::Read),
                         (Some(Location::Memory(ANY)), Direction::Read)
                     ]
-                },
-                Operand::Many(ops) => {
-                    let mut res = Vec::new();
-                    for op in ops {
-                        res.extend_from_slice(&decompose_read(op));
-                    }
-                    res
                 },
                 Operand::Nothing => {
                     vec![]
@@ -2791,13 +2742,6 @@ impl ValueLocations for x86_64 {
                         (Some(Location::Memory(ANY)), Direction::Read),
                         (Some(Location::Memory(ANY)), Direction::Write)
                     ]
-                },
-                Operand::Many(ops) => {
-                    let mut res = Vec::new();
-                    for op in ops {
-                        res.extend_from_slice(&decompose_readwrite(op));
-                    }
-                    res
                 },
                 Operand::Nothing => {
                     vec![]

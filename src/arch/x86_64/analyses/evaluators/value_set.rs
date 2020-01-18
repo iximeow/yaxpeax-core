@@ -1,10 +1,11 @@
-use yaxpeax_arch::{AddressDisplay, Arch};
-use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_arch::{Arch, AddressDisplay};
+use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, ValueRange};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
 use data::Direction;
-use arch::x86_64::ModifierExpression;
+use data::modifier::ModifierExpression;
 use data::ValueLocations;
 use memory::MemoryRange;
 
@@ -251,7 +252,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                     use arch::x86_64::display::DataDisplay;
                                     println!(
                                         "at {}, Derefed value set {} to read {}",
-                                        addr.stringy(),
+                                        addr.show(),
                                         DataDisplay { data: &Data::ValueSet(values), colors: None },
                                         DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
                                     );

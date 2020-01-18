@@ -1,4 +1,4 @@
-use yaxpeax_arch::Address;
+use yaxpeax_arch::{Address, AddressBase};
 use std::cell::RefCell;
 use memory::repr::FlatMemoryRepr;
 use memory::{MemoryRange, MemoryRepr, Named};

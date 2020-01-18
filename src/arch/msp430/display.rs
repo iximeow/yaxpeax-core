@@ -4,7 +4,7 @@ use std::rc::Rc;
 use termion::color;
 
 use SyntaxedSSARender;
-use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual};
+use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction, ShowContextual, YaxColors};
 use arch::display::BaseDisplay;
 use arch::CommentQuery;
 use arch::Function;
@@ -14,7 +14,7 @@ use arch::InstructionSpan;
 use arch::msp430;
 use arch::msp430::syntaxed_render;
 use arch::msp430::{PartialInstructionContext};
-use yaxpeax_msp430_mc::{Instruction, Opcode, Operand, Width, MSP430};
+use yaxpeax_msp430::{Instruction, Opcode, Operand, Width, MSP430, NoContext};
 use analyses::control_flow::ControlFlowGraph;
 use analyses::static_single_assignment::SSA;
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ use memory::MemoryRange;
 use data::{Direction, ValueLocations};
 use std::fmt;
 
-impl <T> SyntaxedSSARender<MSP430, T, Function> for yaxpeax_msp430_mc::Instruction where T: msp430::PartialInstructionContext {
+impl <T> SyntaxedSSARender<MSP430, T, Function> for yaxpeax_msp430::Instruction where T: msp430::PartialInstructionContext {
     fn render_with_ssa_values(
         &self,
         address: <MSP430 as Arch>::Address,
@@ -206,10 +206,10 @@ impl <T> SyntaxedSSARender<MSP430, T, Function> for yaxpeax_msp430_mc::Instructi
     }
 }
 
-impl <T: std::fmt::Write> ShowContextual<u16, msp430::MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: <MSP430 as Arch>::Address, _context: Option<&msp430::MergedContextTable>, out: &mut T) -> std::fmt::Result {
+impl <T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u16, msp430::MergedContextTable, C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, address: <MSP430 as Arch>::Address, ctx: Option<&msp430::MergedContextTable>, out: &mut T) -> std::fmt::Result {
         let ctxs: [Option<String>; 3] = [None, None, None];
-        self.contextualize(colors, address, Some(&ctxs[..]), out)
+        self.contextualize(colors, address, ctx, out)
     }
 }
 impl <F: FunctionRepr, T> BaseDisplay<Function, T> for MSP430 where T: FunctionQuery<<MSP430 as Arch>::Address, Function=F> + CommentQuery<<MSP430 as Arch>::Address> {
@@ -383,12 +383,12 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
     }
 }
 
-pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
+pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>, C: fmt::Display, Y: YaxColors<C>>(
     data: &M,
     _user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     addr: <MSP430 as Arch>::Address,
-    colors: Option<&ColorSettings>) {
+    colors: &Y) {
 
     let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());
 
@@ -412,7 +412,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>>(
                 &mut data.range(address..(address + instr.len())).unwrap(),
                 Option::<&msp430::MergedContextTable>::None,
             ).unwrap();
-            instr.contextualize(colors, address, None::<&[Option<String>]>, &mut instr_text).unwrap();
+            instr.contextualize(colors, address, Some(&NoContext), &mut instr_text).unwrap();
             println!(" {}", instr_text);
            //println!("{:#04x}: {}", address, instr);
         }

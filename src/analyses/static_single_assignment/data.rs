@@ -22,7 +22,7 @@ pub struct PhiOp<A: SSAValues> { pub out: DFGRef<A>, pub ins: Vec<DFGRef<A>> }
 pub type PhiLocations<A> = HashMap<<A as ValueLocations>::Location, PhiOp<A>>;
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum DefSource<A: AddressDisplay> {
+pub enum DefSource<A> {
     /// The defined value comes from an instruction in the underlying binary
     Instruction,
     /// The defined value comes from a phi pseudo-op
@@ -35,14 +35,14 @@ pub enum DefSource<A: AddressDisplay> {
     Between(A)
 }
 
-impl <A: AddressDisplay> fmt::Display for DefSource<A> {
+impl <A: yaxpeax_arch::AddressDisplay> fmt::Display for DefSource<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             DefSource::Instruction => write!(f, "instruction"),
             DefSource::Phi => write!(f, "phi"),
             DefSource::Modifier(modifier::Precedence::Before) => write!(f, "modifier (before)"),
             DefSource::Modifier(modifier::Precedence::After) => write!(f, "modifier (after)"),
-            DefSource::Between(addr) => write!(f, "between ({:?})", addr.stringy())
+            DefSource::Between(addr) => write!(f, "between ({})", addr.show())
         }
     }
 }
@@ -339,7 +339,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         DFGLValue {
             value: self.get_value(addr, loc, Direction::Write)
                 .unwrap_or_else(|| {
-                    panic!("Failed to get def of {:?} at {}", loc, addr.stringy())
+                    panic!("Failed to get def of {:?} at {}", loc, addr.show())
                 })
         }
     }
@@ -347,7 +347,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         DFGLValue {
             value: self.get_value(addr, loc, Direction::Read)
                 .unwrap_or_else(|| {
-                    panic!("Failed to get use of {:?} at {}", loc, addr.stringy())
+                    panic!("Failed to get use of {:?} at {}", loc, addr.show())
                 })
         }
     }

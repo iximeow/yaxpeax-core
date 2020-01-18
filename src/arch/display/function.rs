@@ -136,11 +136,11 @@ impl <
                                 match dir {
                                     Direction::Read => {
                                         strings.push(format!("read: {}", value.borrow().display()));
-                                        strings.push(format!("  via edge {} -> {}", source.stringy(), block.start.stringy()));
+                                        strings.push(format!("  via edge {} -> {}", source.show(), block.start.show()));
                                     }
                                     Direction::Write => {
                                         strings.push(format!("write: {}", value.borrow().display()));
-                                        strings.push(format!("  via edge {} -> {}", source.stringy(), block.start.stringy()));
+                                        strings.push(format!("  via edge {} -> {}", source.show(), block.start.show()));
                                     }
                                 }
                             }
@@ -149,7 +149,7 @@ impl <
 
                     if let Some(phis) = ssa.phi.get(&block.start) {
                         // TODO rephrase this to A::blank_frame(addr).
-                        let frame = format!("{}:                                 : | |", block.start.stringy());
+                        let frame = format!("{}:                                 : | |", block.start.show());
                         let mut hiddens: Vec<A::Location> = Vec::new();
                         for (_, phi_op) in phis.iter() {
                             let out = phi_op.out.borrow();

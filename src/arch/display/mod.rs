@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Decoder, LengthedInstruction, ShowContextual};
+use yaxpeax_arch::{Arch, AddressBase, AddressDisplay, ColorSettings, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
 use arch::InstructionSpan;
@@ -22,20 +22,20 @@ pub trait BaseDisplay<F, U> where
     ) -> fmt::Result;
 }
 
-pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
+pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts, C: fmt::Display, Y: YaxColors<C>>(
     data: &M,
     ctx: &Contexts,
     _function_table: &HashMap<A::Address, F>,
     cfg: &ControlFlowGraph<A::Address>,
     block: &BasicBlock<A::Address>,
-    colors: Option<&ColorSettings>
+    colors: &Y
 ) where 
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: Determinant<Contexts, A::Address> + ShowContextual<A::Address, Contexts, String> {
-    println!("Basic block --\n  start: {}\n  end:   {}", block.start.stringy(), block.end.stringy());
+    A::Instruction: Determinant<Contexts, A::Address> + ShowContextual<A::Address, Contexts, C, String, Y> {
+    println!("Basic block --\n  start: {}\n  end:   {}", block.start.show(), block.end.show());
     println!("  next:");
     for neighbor in cfg.graph.neighbors(block.start) {
-        println!("    {}", neighbor.stringy());
+        println!("    {}", neighbor.show());
     }
     let mut iter = data.instructions_spanning(A::Decoder::default(), block.start, block.end);
     while let Some((address, instr)) = iter.next() {
@@ -53,15 +53,15 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>
     }
 }
 
-pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
+pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts, C: fmt::Display, Y: YaxColors<C>>(
     data: &M,
     ctx: &Contexts,
     address: A::Address,
     _function_table: &HashMap<A::Address, F>,
-    colors: Option<&ColorSettings>
+    colors: &Y
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: ShowContextual<A::Address, Contexts, String> {
+    A::Instruction: ShowContextual<A::Address, Contexts, C, String, Y> {
     match A::Decoder::default().decode(data.range_from(address).unwrap()) {
         Ok(instr) => {
             let mut instr_text = String::new();
@@ -76,21 +76,21 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
             println!(" {}", instr_text);
         },
         Err(e) => {
-            println!("Decode error at {}, {}", address, e);
+            println!("Decode error at {}, {}", address.show(), e);
         }
     };
 }
 
-pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, FnQuery: FunctionQuery<A::Address, Function=F>, Contexts>(
+pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, FnQuery: FunctionQuery<A::Address, Function=F>, Contexts, C: fmt::Display, Y: YaxColors<C>>(
     data: &M,
     ctx: &Contexts,
     start_addr: A::Address,
     end_addr: A::Address,
     _function_table: &FnQuery,
-    colors: Option<&ColorSettings>
+    colors: &Y
 ) -> Vec<(A::Address, Vec<String>)> where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: ShowContextual<A::Address, Contexts, String> {
+    A::Instruction: ShowContextual<A::Address, Contexts, C, String, Y> {
     let mut result: Vec<(A::Address, Vec<String>)> = Vec::new();
     let mut continuation = start_addr;
     while continuation < end_addr {
@@ -104,12 +104,12 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
                     if data.read(continuation).is_some() {
                         result.push((
                             continuation,
-                            vec![format!("Decode error for data starting at {}, byte: {:#02x}", continuation.stringy(), data.read(continuation).unwrap())]
+                            vec![format!("Decode error for data starting at {}, byte: {:#02x}", continuation.show(), data.read(continuation).unwrap())]
                         ));
                     } else {
                         result.push((
                             continuation,
-                            vec![format!("Out of bytes at {}", continuation.stringy())]
+                            vec![format!("Out of bytes at {}", continuation.show())]
                         ));
                         return result;
                     }
@@ -137,7 +137,7 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
 //            println!("bytes: {}", instr_text);
             instr_text.push(' ');
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
-//            println!("instr at {}, {}, len={}", address.stringy(), instr_text, instr.len());
+//            println!("instr at {}, {}, len={}", address.show(), instr_text, instr.len());
             use yaxpeax_arch::Address;
             if instr.len().to_linear() == 0 {
                 panic!("oh no");
@@ -152,16 +152,16 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
     result
 }
 
-pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts>(
+pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>, F, Contexts, C: fmt::Display, Y: YaxColors<C>>(
     data: &M,
     ctx: &Contexts,
     function_table: &HashMap<A::Address, F>,
     cfg: &ControlFlowGraph<A::Address>,
     addr: A::Address,
-    colors: Option<&ColorSettings>
+    colors: &Y
 ) where
     A::Address: std::hash::Hash + petgraph::graphmap::NodeTrait,
-    A::Instruction: ShowContextual<A::Address, Contexts, String> {
+    A::Instruction: ShowContextual<A::Address, Contexts, C, String, Y> {
 
     let fn_graph = cfg.get_function(addr, function_table);
 
@@ -170,7 +170,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
 
     for blockaddr in blocks.iter() {
         let block = cfg.get_block(*blockaddr);
-        println!("  -- block: {} --", blockaddr.stringy());
+        println!("  -- block: {} --", blockaddr.show());
         if block.start == A::Address::zero() { continue; }
 //        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
 //        continue;
@@ -191,7 +191,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
         }
         let next: Vec<A::Address> = cfg.destinations(*blockaddr);
         for n in next {
-            println!("  -> {}", n.stringy());
+            println!("  -> {}", n.show());
         }
         println!("  ------------");
     }

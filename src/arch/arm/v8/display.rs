@@ -1,5 +1,5 @@
-use yaxpeax_arm::armv8::a64::{ARMv8, Instruction};
-use yaxpeax_arch::{Arch, ColorSettings, ShowContextual};
+use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, NoContext};
+use yaxpeax_arch::{Arch, ColorSettings, ShowContextual, YaxColors};
 
 use arch::display::BaseDisplay;
 use arch::arm;
@@ -46,9 +46,8 @@ impl <F: FunctionRepr, T: FunctionQuery<<ARMv8 as Arch>::Address, Function=F>> B
     }
 }
 
-impl <T: std::fmt::Write> ShowContextual<u64, MergedContextTable, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, address: u64, _context: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
-        let ctxs: Vec<Option<String>> = vec![];
-        self.contextualize(colors, address, Some(&ctxs[..]), out)
+impl <T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, MergedContextTable, C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, address: u64, ctx: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
+        self.contextualize(colors, address, ctx, out)
     }
 }

@@ -3,7 +3,7 @@ use memory::{MemoryRange, MemoryRepr};
 use debug;
 use debug::DebugTarget;
 use arch::msp430;
-use yaxpeax_msp430_mc::{MSP430, Operand, Opcode, Width};
+use yaxpeax_msp430::{MSP430, Operand, Opcode, Width};
 use yaxpeax_arch::Arch;
 
 pub struct MSP430DebugTarget<'a> {
@@ -76,11 +76,11 @@ trait Contextual<T> {
     fn contextualize(&self, &T) -> String;
 }
 
-impl <T> Contextual<T> for yaxpeax_msp430_mc::Instruction
+impl <T> Contextual<T> for yaxpeax_msp430::Instruction
     where T: InstructionContext
 {
     fn contextualize(&self, ctx: &T) -> String {
-        fn contextualize_op<T: InstructionContext>(_op: yaxpeax_msp430_mc::Operand, _ctx: &T) -> String {
+        fn contextualize_op<T: InstructionContext>(_op: yaxpeax_msp430::Operand, _ctx: &T) -> String {
             panic!("unimplemented");
         }
 
@@ -233,7 +233,7 @@ impl CPU {
                 }
                 println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
                 for i in 0..data.len() {
-                    self.memory[i] = data.read(i as <yaxpeax_msp430_mc::MSP430 as Arch>::Address).unwrap();
+                    self.memory[i] = data.read(i as <yaxpeax_msp430::MSP430 as Arch>::Address).unwrap();
                 }
             },
             None => {

@@ -5,8 +5,8 @@ use termion::color;
 
 use arch::FunctionImpl;
 use memory::MemoryRepr;
-use yaxpeax_arch::{ColorSettings, Colorize, Colored};
-use yaxpeax_arch::{AddressDisplay, Arch, Decoder, LengthedInstruction, YaxColors};
+use yaxpeax_arch::{ColorSettings, Colorize};
+use yaxpeax_arch::{Arch, AddressDisplay, Decoder, LengthedInstruction, NoColors, YaxColors};
 use yaxpeax_arch::display::*;
 use arch::display::BaseDisplay;
 use arch::FunctionRepr;
@@ -18,8 +18,8 @@ use arch::AddressNamer;
 use arch::x86_64::{ContextRead, DisplayCtx, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
 use analyses::control_flow::Determinant;
-use yaxpeax_x86::{Instruction, Opcode, Operand};
-use yaxpeax_x86::{RegSpec, RegisterBank, Segment};
+use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
+use yaxpeax_x86::long_mode::{RegSpec, RegisterBank, Segment};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
@@ -38,8 +38,8 @@ use std::fmt::Write;
 use std::marker::PhantomData;
 
 use yaxpeax_arch::ShowContextual;
-impl <'a, T: std::fmt::Write> ShowContextual<u64, DisplayCtx<'a>, T> for Instruction {
-    fn contextualize(&self, colors: Option<&ColorSettings>, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
+impl <'a, T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, DisplayCtx<'a>, C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Option::<&[Option<String>]>::None, out)
     }
 }
@@ -55,7 +55,7 @@ impl <F: FunctionRepr, T: FunctionQuery<<x86_64Arch as Arch>::Address, Function=
         if let Some(ctx) = ctx {
             if let Some(comment) = ctx.comment_for(addr) {
                 writeln!(dest, "{}: {}{}{}",
-                    addr.stringy(),
+                    addr.show(),
                     color::Fg(&color::Blue as &dyn color::Color),
                     comment,
                     color::Fg(&color::Reset as &dyn color::Color)
@@ -70,7 +70,7 @@ impl <F: FunctionRepr, T: FunctionQuery<<x86_64Arch as Arch>::Address, Function=
                 )?;
             }
         }
-        write!(dest, "{}: ", addr.stringy())?;
+        write!(dest, "{}: ", addr.show())?;
         for i in 0..16 {
             if i < instr.len() {
                 match bytes.next() {
@@ -102,7 +102,7 @@ impl <'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<x86_64Arch as Arch>::Address>, 
         &self,
         reg: RegSpec,
         direction: Direction
-    ) -> Colored<String> {
+    ) -> impl fmt::Display {
         let text = self.ssa.map(|ssa| {
             let num = ssa.get_value(self.addr, Location::Register(reg), direction)
                 .map(|data| data.borrow().version());
@@ -580,11 +580,6 @@ pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec
                 locs.push((Location::Register(*base), Direction::Read));
                 locs.push((Location::Register(*index), Direction::Read));
             }
-            Operand::Many(ops) => {
-                for op in ops {
-                    push_operand_locs(op, usage, locs);
-                }
-            }
             Operand::Nothing => {
                 panic!("Logical error: requested locations present in a Nothing operand");
             }
@@ -1031,7 +1026,7 @@ impl <
                     let text = ctx.contexts
                         .and_then(|ctx| ctx.symbol_for(addr))
                         .map(|sym| { ctx.colors.symbol(format!("&{}", sym)) })
-                        .unwrap_or_else(|| { ctx.colors.address(addr.stringy()) });
+                        .unwrap_or_else(|| { ctx.colors.address(addr.show().to_string()) });
                     let text = ctx.highlight.location(
                         &(Location::Register(RegSpec::rip()), Direction::Read),
                         &text
@@ -1112,32 +1107,46 @@ impl <
                     }
 
                     if !drawn {
-                        let text = format!("[{} {}]",
-                            reg,
-                            format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                        );
+                        struct Formatted<'a, Data: fmt::Display> {
+                            reg: &'a Data,
+                            disp: i32,
+                        }
+
+                        impl<'a, Data: fmt::Display> fmt::Display for Formatted<'a, Data> {
+                            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                                write!(f, "[{} ", self.reg)?;
+                                format_number_i32(&NoColors, f, self.disp, NumberStyleHint::HexSignedWithSignSplit)?;
+                                write!(f, "]")
+                            }
+                        }
+
+                        let fmt_struct = Formatted {
+                            reg: &reg,
+                            disp: *disp,
+                        };
+
                         match usage {
                             Use::Read => {
                                 write!(fmt, "{}", ctx.highlight.location(
                                     &(Location::Memory(ANY), Direction::Read),
-                                    &text,
+                                    &fmt_struct,
                                 ))?;
                             },
                             Use::Write => {
                                 write!(fmt, "{}", ctx.highlight.location(
                                     &(Location::Memory(ANY), Direction::Write),
-                                    &text,
+                                    &fmt_struct,
                                 ))?;
                             },
                             Use::ReadWrite => {
                                 write!(fmt, "{} (-> {})",
                                     ctx.highlight.location(
                                         &(Location::Memory(ANY), Direction::Read),
-                                        &text,
+                                        &fmt_struct,
                                     ),
                                     ctx.highlight.location(
                                         &(Location::Memory(ANY), Direction::Write),
-                                        &text,
+                                        &fmt_struct,
                                     ),
                                 )?;
                             }
@@ -1166,11 +1175,12 @@ impl <
                         &(Location::Register(*spec), Direction::Read),
                         &reg_text
                     );
-                    write!(fmt, "[{} * {} {}]",
+                    write!(fmt, "[{} * {} ",
                         reg,
                         scale,
-                        format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                    )
+                    )?;
+                    format_number_i32(&ctx.colors, fmt, *disp, NumberStyleHint::HexSignedWithSignSplit)?;
+                    write!(fmt, "]")
                 },
                 Operand::RegIndexBase(base, index) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
@@ -1202,11 +1212,12 @@ impl <
                         &(Location::Register(*index), Direction::Read),
                         &index_text,
                     );
-                    write!(fmt, "[{} + {} {}]",
+                    write!(fmt, "[{} + {} ",
                         base,
                         index,
-                        format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                    )
+                    )?;
+                    format_number_i32(&ctx.colors, fmt, *disp, NumberStyleHint::HexSignedWithSignSplit)?;
+                    write!(fmt, "]")
                 }
                 Operand::RegIndexBaseScale(base, index, scale) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
@@ -1242,23 +1253,17 @@ impl <
                         &(Location::Register(*index), Direction::Read),
                         &index_text,
                     );
-                    write!(fmt, "[{} + {} * {} {}]",
+                    write!(fmt, "[{} + {} * {}",
                         base,
                         index,
-                        scale,
-                        format_number_i32(*disp, NumberStyleHint::HexSignedWithSignSplit)
-                    )
+                        scale
+                    )?;
+                    format_number_i32(&ctx.colors, fmt, *disp, NumberStyleHint::HexSignedWithSignSplit)?;
+                    write!(fmt, "]")
                 }
                 Operand::Nothing => {
                     Ok(())
                 },
-                Operand::Many(ops) => {
-                    for (i, op) in ops.iter().enumerate() {
-                        write!(fmt, ", ")?;
-                        contextualize_operand(op, op_idx + i as u8, ctx, usage, fmt)?;
-                    }
-                    Ok(())
-                }
             }?;
 
             Ok(())
@@ -1268,7 +1273,7 @@ impl <
          *     ... ...
          * }
          */
-        self.instr.opcode.colorize(self.colors, fmt)?;
+        self.instr.opcode.colorize(&self.colors, fmt)?;
 
         match self.instr.opcode {
             Opcode::CALL |
@@ -1297,7 +1302,7 @@ impl <
                             .or_else(|| {
                                 context.address_name(addr).map(|name| self.colors.function(name))
                             })
-                    }).unwrap_or_else(|| { self.colors.address(addr.stringy()) })
+                    }).unwrap_or_else(|| { self.colors.address(addr.show().to_string()) })
                 };
                 let relative_namer = |i| {
                     let addr = (i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
@@ -1612,10 +1617,10 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     block: &BasicBlock<<x86_64Arch as Arch>::Address>,
     colors: Option<&ColorSettings>
 ) {
-    println!("Basic block --\n  start: {}\n  end:   {}", block.start.stringy(), block.end.stringy());
+    println!("Basic block --\n  start: {}\n  end:   {}", block.start.show(), block.end.show());
     println!("  next:");
     for neighbor in cfg.graph.neighbors(block.start) {
-        println!("    {}", neighbor.stringy());
+        println!("    {}", neighbor.show());
     }
     let mut iter = data.instructions_spanning(<x86_64Arch as Arch>::Decoder::default(), block.start, block.end);
     while let Some((address, instr)) = iter.next() {

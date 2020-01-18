@@ -10,7 +10,7 @@ use serialize::Memoable;
 use num_traits::Zero;
 
 use yaxpeax_arch::Arch;
-use yaxpeax_msp430_mc::{Opcode, Operand, MSP430};
+use yaxpeax_msp430::{Opcode, Operand, MSP430};
 use ContextRead;
 use ContextWrite;
 
@@ -73,7 +73,7 @@ impl Default for MSP430Data {
     }
 }
 
-impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430_mc::Instruction {
+impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430::Instruction {
     fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<u16> {
         match self.opcode {
             Opcode::JMP => {
@@ -375,7 +375,7 @@ impl ValueLocations for MSP430 {
     type Location = Location;
 
     fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
-        use yaxpeax_msp430_mc::Width;
+        use yaxpeax_msp430::Width;
         fn decompose_operand(op: Operand, width: Width, direction: Direction) -> Vec<(Option<Location>, Direction)> {
             match op {
                 Operand::Immediate(_) | Operand::Const0 | Operand::Const1

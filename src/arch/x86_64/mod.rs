@@ -7,7 +7,8 @@ use self::analyses::data_flow::DefaultCallingConvention;
 use petgraph::graphmap::GraphMap;
 
 use std::collections::HashMap;
-use yaxpeax_x86::{x86_64, Opcode, Operand};
+use yaxpeax_x86::x86_64;
+use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::cell::Ref;
@@ -15,6 +16,7 @@ use num_traits::Zero;
 
 use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
 use data::{Direction, ValueLocations};
+use data::modifier::InstructionModifiers;
 
 use ContextRead;
 use ContextWrite;
@@ -66,17 +68,6 @@ impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
     fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
         panic!("TODO");
 //        self.get(&addr)
-    }
-    fn all_functions(&self) -> Vec<&Self::Function> {
-        panic!("TODO");
-        // self.values().collect::<Vec<_>>()
-    }
-}
-
-impl FunctionQuery<<x86_64 as Arch>::Address> for HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>> {
-    type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
-        self.get(&addr)
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
         panic!("TODO");
@@ -141,145 +132,6 @@ impl Default for x86_64Data {
     }
 }
 
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum ModifierExpression {
-    /* At some point these should go through MemoSerialize, so these can be arbitrary expressions
-    Below(analyses::data_flow::Data),
-    Above(analyses::data_flow::Data),
-    Is(analyses::data_flow::Data),
-    IsNot(analyses::data_flow::Data)
-    */
-    Below(u64),
-    Above(u64),
-    Is(u64),
-    IsNot(u64),
-}
-
-/// The `Vec<ModifierExpression>` are _conjunctions_. This differs from `ValueSet`, which uses a
-/// sequence of values as disjunctions. This means there's no way to express a sparseset of values
-/// as ModifierExpression, for the time being.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct InstructionModifiers {
-    before: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
-    after: HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>,
-    #[serde(skip)]
-    between: HashMap<<x86_64 as Arch>::Address, HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>>>,
-    pub calls: HashMap<<x86_64 as Arch>::Address, <x86_64 as Arch>::Address>,
-    fn_query: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,
-}
-
-impl InstructionModifiers {
-    pub fn new(fn_query: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>) -> Self {
-        InstructionModifiers {
-            before: HashMap::new(),
-            after: HashMap::new(),
-            between: HashMap::new(),
-            calls: HashMap::new(),
-            fn_query,
-        }
-    }
-
-    pub fn modifiers_between(&self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Option<&HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>> {
-        self.between.get(&from).and_then(|tos| tos.get(&to))
-    }
-
-    pub fn add_edge_modifier(&mut self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, loc: Option<<x86_64 as ValueLocations>::Location>, expr: ModifierExpression) {
-        let edges: &mut HashMap<<x86_64 as Arch>::Address, HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>>> = self.between.entry(from).or_insert_with(|| HashMap::new());
-        let edge: &mut HashMap<Option<<x86_64 as ValueLocations>::Location>, Vec<ModifierExpression>> = edges.entry(to).or_insert_with(|| HashMap::new());
-        let modifiers: &mut Vec<ModifierExpression> = edge.entry(loc).or_insert_with(|| Vec::new());
-        modifiers.push(expr);
-    }
-}
-
-use data::modifier::ModifierCollection;
-
-impl ModifierCollection<x86_64> for InstructionModifiers {
-    fn between(&self, from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
-        let mut res = vec![];
-        if let Some(modifiers) = self.modifiers_between(from, to) {
-             for (k, vs) in modifiers.iter() {
-                for v in vs {
-                    match v {
-                        ModifierExpression::IsNot(_) |
-                        ModifierExpression::Below(_) |
-                        ModifierExpression::Above(_) => {
-                            res.push((k.to_owned(), Direction::Read));
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                        ModifierExpression::Is(_) => {
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                    }
-                }
-            }
-        }
-        res
-   }
-
-    fn before(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
-        let mut res = vec![];
-        if let Some(modifiers) = self.before.get(&addr) {
-            for (k, vs) in modifiers.iter() {
-                for v in vs {
-                    match v {
-                        ModifierExpression::IsNot(_) |
-                        ModifierExpression::Below(_) |
-                        ModifierExpression::Above(_) => {
-                            res.push((k.to_owned(), Direction::Read));
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                        ModifierExpression::Is(_) => {
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                    }
-                }
-            }
-        }
-        res
-    }
-    fn after(&self, addr: <x86_64 as Arch>::Address) -> Vec<(Option<<x86_64 as ValueLocations>::Location>, Direction)> {
-        let mut res = vec![];
-        if let Some(modifiers) = self.before.get(&addr) {
-            for (k, vs) in modifiers.iter() {
-                for v in vs {
-                    match v {
-                        ModifierExpression::IsNot(_) |
-                        ModifierExpression::Below(_) |
-                        ModifierExpression::Above(_) => {
-                            res.push((k.to_owned(), Direction::Read));
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                        ModifierExpression::Is(_) => {
-                            res.push((k.to_owned(), Direction::Write));
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(target) = self.calls.get(&addr) {
-            if let Some(f) = (&*self.fn_query.borrow()).function_at(*target) {
-                let layout = f.layout();
-                for arg in layout.arguments.iter() {
-                    res.push((arg.to_owned(), Direction::Read));
-                }
-                for arg in layout.clobbers.iter() {
-                    res.push((arg.to_owned(), Direction::Write));
-                }
-                for arg in layout.returns.iter() {
-                    res.push((arg.to_owned(), Direction::Write));
-                }
-                if let Some(ret) = layout.return_address {
-                    res.push((Some(ret), Direction::Read));
-                }
-                // we can add all the reads/writes of f.
-            } else {
-                // !! log an error somewhere !!
-            }
-        }
-        res
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<x86_64 as Arch>::Address, Rc<()>>,
@@ -293,7 +145,7 @@ pub struct MergedContextTable {
     #[serde(skip)]
     pub reverse_symbols: HashMap<Symbol, <x86_64 as Arch>::Address>,
     pub functions: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,
-    pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers>>,
+    pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers<x86_64>>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
     pub default_abi: Option<DefaultCallingConvention>,
 }
@@ -425,7 +277,7 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
     }
 }
 
-impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for yaxpeax_x86::Instruction {
+impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction {
     // TODO: this assumes that instructions won't fault
     // we really don't know that, but also no T provided here gives
     // context such that we can make that determination

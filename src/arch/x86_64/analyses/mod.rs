@@ -1,5 +1,6 @@
 use yaxpeax_arch::{Arch, LengthedInstruction};
-use yaxpeax_x86::{x86_64 as x86_64Arch, Opcode, Operand, RegisterBank, RegSpec};
+use yaxpeax_x86::long_mode::{Opcode, Operand, RegisterBank, RegSpec};
+use yaxpeax_x86::{x86_64 as x86_64Arch};
 use analyses::control_flow::Effect;
 use arch::x86_64::{Update, x86Update};
 use arch::x86_64;

@@ -646,8 +646,8 @@ impl ModuleData {
                     };
                     println!("mapped section {} to [{}, {})",
                         i,
-                        new_section.start.stringy(),
-                        (new_section.start as u64 + new_section.data.len() as u64).stringy()
+                        new_section.start.show(),
+                        (new_section.start as u64 + new_section.data.len() as u64).show()
                     );
                     module.segments.push(new_section);
                 }
@@ -697,8 +697,8 @@ impl ModuleData {
                     };
                     println!("mapped {} to [{}, {})",
                         std::str::from_utf8(&section.name[..]).unwrap(),
-                        new_section.start.stringy(),
-                        (new_section.start as u64 + new_section.data.len() as u64).stringy()
+                        new_section.start.show(),
+                        (new_section.start as u64 + new_section.data.len() as u64).show()
                     );
                     module.segments.push(new_section);
                 }

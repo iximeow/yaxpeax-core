@@ -1,7 +1,8 @@
 use yaxpeax_arch::{Arch, LengthedInstruction};
-use yaxpeax_x86::{x86_64, Opcode, Instruction, Operand, ConditionCode};
+use yaxpeax_x86::long_mode::{Opcode, Instruction, Operand, ConditionCode};
+use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::Location;
-use arch::x86_64::{ModifierExpression, InstructionModifiers};
+use data::modifier::{ModifierExpression, InstructionModifiers};
 use data::{Direction, ValueLocations};
 use analyses::control_flow::{ControlFlowGraph, Determinant, Target};
 use analyses::static_single_assignment::{DefSource, SSA};
@@ -9,7 +10,7 @@ use analyses::value_range::ConditionalBoundInference;
 
 pub struct ConditionalInference;
 
-impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInference {
+impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for ConditionalInference {
     fn inferrable_conditional(conditional_instr: &<x86_64 as Arch>::Instruction) -> bool {
         if !conditional_instr.opcode.condition().is_some() {
             return false;
@@ -66,7 +67,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers> for ConditionalInfe
         conditional_addr: <x86_64 as Arch>::Address,
         _cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>,
         _dfg: &SSA<x86_64>,
-        aux_data: &mut InstructionModifiers,
+        aux_data: &mut InstructionModifiers<x86_64>,
     ) -> bool {
         if test_addr == 0x140486bad {
             println!("inferring bounds for 0x140486bad");

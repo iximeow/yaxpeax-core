@@ -1,6 +1,7 @@
 use yaxpeax_arch::Arch;
-use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
-use arch::x86_64::ModifierExpression;
+use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::x86_64;
+use data::modifier::ModifierExpression;
 use arch::x86_64::analyses::data_flow::{Data, Location};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;

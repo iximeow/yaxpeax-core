@@ -1,10 +1,11 @@
 use yaxpeax_arch::Arch;
-use yaxpeax_x86::{x86_64, Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
 use data;
-use arch::x86_64::ModifierExpression;
+use data::modifier::ModifierExpression;
 use data::ValueLocations;
 use data::types::TypeSpec;
 use memory::MemoryRange;
@@ -143,7 +144,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
 
     }
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
-        use yaxpeax_x86::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
+        use yaxpeax_x86::long_mode::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr.opcode {
             Opcode::MOV => {
