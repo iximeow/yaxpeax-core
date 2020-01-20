@@ -42,6 +42,7 @@ pub trait ConditionalBoundInference<A: Arch + SSAValues, U> {
                     unreachable!();
                 }
             }
+            Some((_, DefSource::External)) |
             Some((_, DefSource::Phi)) |
             Some((_, DefSource::Modifier(_))) |
             Some((_, DefSource::Between(_))) => {

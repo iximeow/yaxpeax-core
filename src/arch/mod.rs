@@ -209,7 +209,7 @@ impl <Loc: Debug + Copy + Clone> FunctionAbiReference<Loc> for NilAbi {
     fn clobber_at(&mut self, _: usize) -> Option<Loc> { None }
 }
 
-impl <Loc: AbiDefaults> FunctionImpl<Loc> {
+impl <Loc: AbiDefaults + PartialEq> FunctionImpl<Loc> {
     pub fn new(name: String) -> Self {
         Function::of(name, vec![], vec![])
             .unimplemented()
@@ -224,6 +224,10 @@ impl <Loc: AbiDefaults> FunctionImpl<Loc> {
         let arg_idx = self.names.arguments.len() - 1;
         let arg = new_arg.0.or_else(|| { self.layout.borrow_mut().argument_at(arg_idx) });
         self.layout.borrow_mut().arguments[arg_idx] = arg;
+    }
+
+    pub fn has_arg_at(&self, loc: Loc) -> bool {
+        self.layout.borrow().arguments.contains(&Some(loc))
     }
 
     pub fn append_ret(&mut self, new_ret: (Option<Loc>, Parameter)) {
@@ -341,7 +345,7 @@ impl <T: AbiDefaults + Debug, V: ValueDescriptionQuery<T>> FunctionRepr for Func
 
 // TODO:
 // impl <T: Display> FunctionRepr for FunctionImpl<T> {
-impl <T: AbiDefaults + Debug> FunctionRepr for FunctionImpl<T> {
+impl <T: AbiDefaults + Debug + PartialEq> FunctionRepr for FunctionImpl<T> {
     fn decl_string(&self, show_locations: bool) -> String {
         self.with_value_names(Some(NoValueDescriptions)).decl_string(show_locations)
     }

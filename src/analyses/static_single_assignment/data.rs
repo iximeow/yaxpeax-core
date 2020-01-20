@@ -15,6 +15,8 @@ use data::Direction;
 
 use arch::x86_64::display::DataDisplay;
 
+use num_traits::Zero;
+
 pub type DFGRef<A> = Rc<RefCell<Value<A>>>;
 pub type RWMap<A> = HashMap<(<A as ValueLocations>::Location, Direction), DFGRef<A>>;
 #[derive(Clone, Debug)]
@@ -32,7 +34,9 @@ pub enum DefSource<A> {
     Modifier(modifier::Precedence),
     /// Defined on the edge between two basic blocks - due to some value modifier, likely from
     /// conditionally defining a value after a conditional branch
-    Between(A)
+    Between(A),
+    /// Definition comes from some site before this DFG, such as the case for function arguments.
+    External,
 }
 
 impl <A: yaxpeax_arch::AddressDisplay> fmt::Display for DefSource<A> {
@@ -42,7 +46,8 @@ impl <A: yaxpeax_arch::AddressDisplay> fmt::Display for DefSource<A> {
             DefSource::Phi => write!(f, "phi"),
             DefSource::Modifier(modifier::Precedence::Before) => write!(f, "modifier (before)"),
             DefSource::Modifier(modifier::Precedence::After) => write!(f, "modifier (after)"),
-            DefSource::Between(addr) => write!(f, "between ({})", addr.show())
+            DefSource::Between(addr) => write!(f, "between ({})", addr.show()),
+            DefSource::External => write!(f, "external")
         }
     }
 }
@@ -308,6 +313,52 @@ pub trait SSAValues where Self: Arch + ValueLocations {
 }
 
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
+    /// collect all locations that have uses of undefined data
+    pub fn get_undefineds(&self) -> Vec<A::Location> {
+        let mut undefineds = Vec::new();
+
+        for map in self.instruction_values.values() {
+            for dfgref in map.values() {
+                let dfgref = dfgref.borrow();
+                if dfgref.version == None {
+                    undefineds.push(dfgref.location);
+                }
+            }
+        }
+
+        for map in self.modifier_values.values() {
+            for dfgref in map.values() {
+                let dfgref = dfgref.borrow();
+                if dfgref.version == None {
+                    undefineds.push(dfgref.location);
+                }
+            }
+        }
+
+        for map in self.control_dependent_values.values() {
+            for innermap in map.values() {
+                for dfgref in innermap.values() {
+                    let dfgref = dfgref.borrow();
+                    if dfgref.version == None {
+                        undefineds.push(dfgref.location);
+                    }
+                }
+            }
+        }
+
+        for map in self.phi.values() {
+            for (loc, phiop) in map.iter() {
+                for inref in phiop.ins.iter() {
+                    if inref.borrow().version == None {
+                        undefineds.push(*loc);
+                    }
+                }
+            }
+        }
+
+        undefineds
+    }
+
     pub fn query_at<'a>(&'a self, addr: A::Address) -> SSAQuery<'a, A> {
         SSAQuery {
             ssa: self,
@@ -371,7 +422,11 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
                 // well. it should be a bug. this is probably reachable if the def is actually
                 // external to the current control flow graph (for example, function arguments)
                 // this should be backed by a set of fake defs at function entry
-                unreachable!("use with no def");
+                //
+                // for now, return an `External` def source. the use of address zero is kind of a
+                // lazy hack around this function returning a concrete address. a better address to
+                // return might be the entrypoint of this DFG?
+                (A::Address::zero(), DefSource::External)
             }
         }
     }
