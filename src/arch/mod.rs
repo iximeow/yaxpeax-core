@@ -9,7 +9,7 @@ pub mod x86_64;
 pub mod display;
 pub mod interface;
 
-use std::cell::{Ref, RefCell};
+use std::cell::{Ref, RefCell, RefMut};
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -117,7 +117,7 @@ pub struct FunctionImplDescription<'a, Loc: AbiDefaults, V: ValueDescriptionQuer
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionLayout<Loc: AbiDefaults> {
-    pub(crate) arguments: Vec<Option<Loc>>,
+    pub arguments: Vec<Option<Loc>>,
     pub(crate) returns: Vec<Option<Loc>>,
     pub(crate) clobbers: Vec<Option<Loc>>,
     pub(crate) return_address: Option<Loc>,
@@ -222,8 +222,12 @@ impl <Loc: AbiDefaults + PartialEq> FunctionImpl<Loc> {
     pub fn append_arg(&mut self, new_arg: (Option<Loc>, Parameter)) {
         self.names.arguments.push(Some(new_arg.1));
         let arg_idx = self.names.arguments.len() - 1;
-        let arg = new_arg.0.or_else(|| { self.layout.borrow_mut().argument_at(arg_idx) });
-        self.layout.borrow_mut().arguments[arg_idx] = arg;
+        let mut layout_mut = self.layout.borrow_mut();
+        let arg = new_arg.0.or_else(|| { layout_mut.argument_at(arg_idx) });
+        while arg_idx >= layout_mut.arguments.len() {
+            layout_mut.arguments.push(None);
+        }
+        layout_mut.arguments[arg_idx] = arg;
     }
 
     pub fn has_arg_at(&self, loc: Loc) -> bool {
@@ -239,6 +243,10 @@ impl <Loc: AbiDefaults + PartialEq> FunctionImpl<Loc> {
 
     pub fn layout(&self) -> Ref<FunctionLayout<Loc>> {
         self.layout.borrow()
+    }
+
+    pub fn layout_mut(&self) -> RefMut<FunctionLayout<Loc>> {
+        self.layout.borrow_mut()
     }
 
     pub fn with_value_names<V: ValueDescriptionQuery<Loc>>(&self, value_descs: Option<V>) -> FunctionImplDescription<Loc, V> {

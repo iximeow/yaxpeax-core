@@ -320,7 +320,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         for map in self.instruction_values.values() {
             for dfgref in map.values() {
                 let dfgref = dfgref.borrow();
-                if dfgref.version == None {
+                if dfgref.version == None && dfgref.used {
                     undefineds.push(dfgref.location);
                 }
             }
@@ -329,7 +329,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         for map in self.modifier_values.values() {
             for dfgref in map.values() {
                 let dfgref = dfgref.borrow();
-                if dfgref.version == None {
+                if dfgref.version == None && dfgref.used {
                     undefineds.push(dfgref.location);
                 }
             }
@@ -339,7 +339,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
             for innermap in map.values() {
                 for dfgref in innermap.values() {
                     let dfgref = dfgref.borrow();
-                    if dfgref.version == None {
+                    if dfgref.version == None && dfgref.used {
                         undefineds.push(dfgref.location);
                     }
                 }
@@ -348,6 +348,9 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
 
         for map in self.phi.values() {
             for (loc, phiop) in map.iter() {
+                if !phiop.out.borrow().used {
+                    continue;
+                }
                 for inref in phiop.ins.iter() {
                     if inref.borrow().version == None {
                         undefineds.push(*loc);
