@@ -8,9 +8,10 @@ repository = ""
 description = "program analysis for machine code"
 
 [dependencies]
-yaxpeax-arch = { version = "0.0.2", features = ["use-serde"] }
+# yaxpeax-arch = { path = "../yaxpeax-arch", features = ["use-serde"] }
+yaxpeax-arch = { version = "0.0.3", features = ["use-serde"] }
 yaxpeax-arm = { path = "../arch/arm", features = ["use-serde"] }
-yaxpeax-x86 = { version = "0.0.3", features = ["use-serde"] }
+yaxpeax-x86 = { path = "../arch/x86", features = ["use-serde"] }
 yaxpeax-msp430 = { path = "../arch/msp430", features = ["use-serde"] }
 yaxpeax-pic17 = { path = "../arch/pic17", features = ["use-serde"] }
 yaxpeax-pic18 = { path = "../arch/pic18", features = ["use-serde"] }
@@ -18,13 +19,13 @@ yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }
 "goblin" = "0.0.20"
 "num-traits" = "0.2"
 "termios" = "0.2.2"
-"termion" = "1.5.0"
-"serde" = { version = "*", features = ["rc"] }
-"serde_json" = "*"
-"serde_derive" = "*"
-"petgraph" = "*"
-"nix" = "*"
-"proc-maps" = "*"
+"termion" = "1.5.2"
+"serde" = { version = "1.0", features = ["rc"] }
+"serde_json" = "1.0"
+"serde_derive" = "1.0"
+"petgraph" = "0.4.13"
+"nix" = "0.12.0"
+"proc-maps" = "0.1.5"
 "tracing" = "0.1.11"
 "siphasher" = "0.3.0"
 

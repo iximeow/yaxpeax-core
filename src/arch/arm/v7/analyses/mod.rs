@@ -4,7 +4,7 @@ use analyses::xrefs;
 use arch::arm::v7::Update;
 use arch::arm;
 
-use yaxpeax_arm::armv7::{ARMv7, Opcode, Operands};
+use yaxpeax_arm::armv7::{ARMv7, Opcode, Operand};
 use yaxpeax_arch::Arch;
 
 use tracing::{Level, event};

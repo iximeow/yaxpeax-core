@@ -1,5 +1,5 @@
 use yaxpeax_arch::{Arch, LengthedInstruction};
-use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operands, ConditionCode};
+use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operand, ConditionCode};
 
 use arch::{Symbol, SymbolQuery};
 use arch::Function;
@@ -145,12 +145,14 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
 
     fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<ARMv7 as Arch>::Address> {
         let conditional = self.condition != ConditionCode::AL;
+        panic!("aaaaasfasfa");
+        /*
         match self.opcode {
             Opcode::B => {
-                match self.operands {
+                match &self.operands {
                     Operands::BranchOffset(offs) => {
                         control_flow::Effect::stop_and(
-                            control_flow::Target::Relative(offs as u32)
+                            control_flow::Target::Relative(*offs as u32)
                         )
                     }
                     _ => {
@@ -191,20 +193,20 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
             Opcode::RRX |
             Opcode::ROR |
             Opcode::ADR => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
                     Operands::RegImm(Rd, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
                     Operands::TwoOperand(Rd, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
                     Operands::ThreeOperand(Rd, _, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
                     Operands::ThreeOperandWithShift(Rd, _, _, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
-                    _ => { unreachable!(); }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
                 if conditional {
                     (if stop {
@@ -225,15 +227,15 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
             Opcode::LDREXB |
             Opcode::LDREXD |
             Opcode::LDREX => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
                     Operands::ThreeOperand(_, Rd, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
                     // TODO: verify
                     Operands::ThreeOperandWithShift(_, Rd, _, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
-                    _ => { unreachable!(); }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
                 if conditional {
                     (if stop {
@@ -275,12 +277,12 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
             },
             Opcode::LDRT(_) |
             Opcode::LDRBT(_) => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
                     // TODO: verify
                     Operands::ThreeOperandWithShift(_Rn, Rd, _, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
-                    _ => { unreachable!(); }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
                 if conditional {
                     (if stop {
@@ -299,11 +301,11 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
 
             Opcode::SWP |
             Opcode::SWPB => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
                     Operands::ThreeOperand(Rn, _Rd, _Offset) => {
-                        Rn == 15
+                        *Rn == 15
                     },
-                    _ => { unreachable!() }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
                 if conditional {
                     (if stop {
@@ -324,11 +326,11 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
             Opcode::STREXB |
             Opcode::STREXD |
             Opcode::STREX => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
                     Operands::ThreeOperand(_, Rd, _) => {
-                        Rd == 15
+                        *Rd == 15
                     },
-                    _ => { unreachable!(); }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
 
                 if conditional {
@@ -348,14 +350,20 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
             Opcode::STM(_, _, wback, _) |
             Opcode::STR(_, _, wback) |
             Opcode::STRB(_, _, wback) => {
-                let stop = match self.operands {
+                let stop = match &self.operands {
+                    Operands::ThreeOperand(Rd, _, _) => {
+                        *Rd == 15
+                    },
+                    Operands::ThreeOperandWithShift(Rd, _, _, _) => {
+                        *Rd == 15
+                    },
                     Operands::TwoRegImm(_, Rt, _) => {
-                        Rt == 15 && wback
+                        *Rt == 15 && wback
                     },
                     Operands::RegRegList(Rd, _) => {
-                        Rd == 15 && wback
+                        *Rd == 15 && wback
                     },
-                    _ => { unreachable!(); }
+                    o => { unreachable!("unreachable operand {:?} in opcode {:?}", o, self.opcode); }
                 };
 
                 if conditional {
@@ -392,6 +400,7 @@ impl <T> control_flow::Determinant<T, <ARMv7 as Arch>::Address> for Instruction 
                 }
             }
         }
+    */
     }
 }
 

@@ -1,4 +1,4 @@
-use yaxpeax_arm::armv7::{ARMv7, Instruction, ConditionedOpcode, Operands, Opcode};
+use yaxpeax_arm::armv7::{ARMv7, Instruction, ConditionedOpcode, Operand, Opcode};
 use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use arch::display::BaseDisplay;
@@ -281,13 +281,15 @@ impl <
             C: FunctionQuery<<ARMv7 as Arch>::Address, Function=F> + SymbolQuery<<ARMv7 as Arch>::Address>,
             Highlighter: LocationHighlighter<<ARMv7 as ValueLocations>::Location>
         >(
-            op: &Operands,
+            op: &[Operand; 4],
             op_idx: u8,
             ctx: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>,
             usage: Use,
             fmt: &mut fmt::Formatter
         ) -> fmt::Result {
             let _op_highlight = ctx.highlight.operand(op_idx, "TODO");
+            panic!("oh no");
+            /*
             match op {
                 Operands::OneOperand(reg) => {
                     match usage {
@@ -534,6 +536,7 @@ impl <
                     write!(fmt, "unsupported operand {:?}", o)
                 }
             }?;
+            */
 
             Ok(())
         }
@@ -543,6 +546,8 @@ impl <
          * }
          */
 
+        panic!("oh no ooo");
+        /*
         match self.instr.opcode {
             Opcode::LDR(true, false, false) => {
                 match self.instr.operands {
@@ -588,6 +593,7 @@ impl <
             }
             _ => {}
         }
+        */
 
         ConditionedOpcode(self.instr.opcode, self.instr.condition).colorize(&self.colors, fmt)?;
 
@@ -618,6 +624,8 @@ impl <
                 };
                 */
 
+                panic!("aa");
+                /*
                 match &self.instr.operands {
                     Operands::BranchOffset(offs) => {
                         let dest = self.addr.wrapping_add(4).wrapping_add((*offs << 2) as u32);
@@ -628,6 +636,7 @@ impl <
                         return contextualize_operand(op, 0, self, Use::Read, fmt);
                     }
                 }
+                */
             },
             Opcode::AND |
             Opcode::EOR |
