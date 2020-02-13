@@ -163,6 +163,9 @@ impl Default for MergedContextTable {
 }
 
 impl MergedContextTable {
+    pub fn fn_count(&self) -> usize {
+        self.functions.borrow().len()
+    }
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {
             user_contexts: HashMap::new(),
@@ -243,30 +246,34 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
             }
             BaseUpdate::DefineSymbol(sym) => {
                 //println!("address of {:?} recorded at {}", sym, address.stringy());
-                match Symbol::to_function(&sym) {
-                    Some(f) => {
-                        if let Some(abi) = self.default_abi {
-                            self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
-                        } else {
-                            // TODO: indicate that the function should have been defined, but
-                            // was not because we don't know an ABI to map it to?
-                            self.functions.borrow_mut().insert(address, f.unimplemented());
+                if !self.symbols.contains_key(&address) {
+                    match Symbol::to_function(&sym) {
+                        Some(f) => {
+                            if let Some(abi) = self.default_abi {
+                                self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
+                            } else {
+                                // TODO: indicate that the function should have been defined, but
+                                // was not because we don't know an ABI to map it to?
+                                self.functions.borrow_mut().insert(address, f.unimplemented());
+                            }
                         }
+                        None => { }
                     }
-                    None => { }
+                    self.symbols.insert(address, sym.clone());
+                    self.reverse_symbols.insert(sym, address);
                 }
-                self.symbols.insert(address, sym.clone());
-                self.reverse_symbols.insert(sym, address);
             }
             BaseUpdate::DefineFunction(f) => {
-                self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
-                self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
-                if let Some(abi) = self.default_abi {
-                    self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
-                } else {
-                    // TODO: indicate that the function should have been defined, but was not
-                    // because we don't know an ABI to map it to?
-                    self.functions.borrow_mut().insert(address, f.unimplemented());
+                if !self.functions.borrow().contains_key(&address) {
+                    self.symbols.insert(address, Symbol(Library::This, f.name.clone()));
+                    self.reverse_symbols.insert(Symbol(Library::This, f.name.clone()), address);
+                    if let Some(abi) = self.default_abi {
+                        self.functions.borrow_mut().insert(address, f.implement_for(FunctionLayout::for_abi(abi)));
+                    } else {
+                        // TODO: indicate that the function should have been defined, but was not
+                        // because we don't know an ABI to map it to?
+                        self.functions.borrow_mut().insert(address, f.unimplemented());
+                    }
                 }
             }
             BaseUpdate::AddCodeComment(comment) => {
