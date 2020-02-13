@@ -283,9 +283,9 @@ impl AliasInfo for Location {
             }
             Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
                 vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num })
+                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3 }),
+                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num & 0x3 }),
+                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num & 0x3 })
                 ]
             }
             Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
@@ -360,11 +360,11 @@ impl AliasInfo for Location {
             },
             Location::Register(RegSpec { bank: RegisterBank::D, num }) |
             Location::Register(RegSpec { bank: RegisterBank::W, num }) |
-            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
-                Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3})
-            }
             Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })
+            }
+            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
+                Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3})
             }
             Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
                 Location::Register(RegSpec { bank: RegisterBank::ST, num: *num })
