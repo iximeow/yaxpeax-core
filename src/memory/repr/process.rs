@@ -113,7 +113,11 @@ pub struct ELFImport {
     pub value: u64
 }
 #[derive(Debug)]
-pub struct ELFExport {}
+pub struct ELFExport {
+    pub name: String,
+    pub section_index: usize,
+    pub addr: u64,
+}
 
 #[derive(Debug)]
 pub struct Segment {
@@ -181,9 +185,16 @@ pub enum ISAHint {
 }
 
 #[derive(Debug)]
+pub struct ELFSection {
+    pub name: String,
+    pub start: u64,
+    pub size: u64,
+}
+
+#[derive(Debug)]
 pub enum ModuleInfo {
     PE(ISAHint, goblin::pe::header::Header, Vec<goblin::pe::section_table::SectionTable>, u64, Vec<PEReloc>, Vec<PEImport>, Vec<PEExport>, Vec<PESymbol>),
-    ELF(ISAHint, goblin::elf::header::Header, Vec<goblin::elf::program_header::ProgramHeader>, u64, Vec<ELFReloc>, Vec<ELFImport>, Vec<ELFExport>, Vec<ELFSymbol>)
+    ELF(ISAHint, goblin::elf::header::Header, Vec<goblin::elf::program_header::ProgramHeader>, Vec<ELFSection>, u64, Vec<ELFReloc>, Vec<ELFImport>, Vec<ELFExport>, Vec<ELFSymbol>)
     /*
      * One day, also MachO, .a, .o, .class, .jar, ...
      */
@@ -193,7 +204,7 @@ impl ModuleInfo {
     pub fn isa_hint(&self) -> &ISAHint {
         match self {
             ModuleInfo::PE(hint, _, _, _, _, _, _, _) |
-            ModuleInfo::ELF(hint, _, _, _, _, _, _, _) => {
+            ModuleInfo::ELF(hint, _, _, _, _, _, _, _, _) => {
                 hint
             }
         }
@@ -533,7 +544,19 @@ impl ModuleInfo {
             }
             Object::Elf(elf) => {
                 let mut imports: Vec<ELFImport> = Vec::new();
+                let mut exports: Vec<ELFExport> = Vec::new();
                 let mut syms: Vec<ELFSymbol> = Vec::new();
+                let mut sections: Vec<ELFSection> = Vec::new();
+                for section in elf.section_headers.iter() {
+                    if section.sh_name == 0 {
+                        continue;
+                    }
+                    sections.push(ELFSection {
+                        name: elf.shdr_strtab.get(section.sh_name).unwrap().unwrap().to_string(),
+                        start: section.sh_addr,
+                        size: section.sh_size,
+                    });
+                }
                 for sym in elf.syms.iter() {
                     syms.push(ELFSymbol {
                         name: elf.strtab.get(sym.st_name).unwrap().unwrap().to_string(),
@@ -548,11 +571,17 @@ impl ModuleInfo {
                     //
                     // if sy_value == 0 it's probably (not necessarily?) a symbol to be referenced
                     // by a reloc for a .got entry
-                    if dynsym.st_value != 0 {
-                        imports.push(ELFImport {
+                    if dynsym.st_bind() == 1 /* global */ && dynsym.st_type() == 2 /* func */ && dynsym.st_value != 0 /* bad check for "is it a rexport or actually local" */ {
+                        // we have ourselves a bona fide export symbol, maybe? try it on for size.
+                        syms.push(ELFSymbol {
                             name: elf.dynstrtab.get(dynsym.st_name).unwrap().unwrap().to_string(),
                             section_index: dynsym.st_shndx,
-                            value: dynsym.st_value
+                            addr: dynsym.st_value
+                        });
+                        exports.push(ELFExport {
+                            name: elf.dynstrtab.get(dynsym.st_name).unwrap().unwrap().to_string(),
+                            section_index: dynsym.st_shndx,
+                            addr: dynsym.st_value
                         });
                     } else {
                         // got entry, figure this out.
@@ -566,10 +595,11 @@ impl ModuleInfo {
                     isa,
                     elf.header,
                     vec![],
+                    sections,
                     elf.entry,
                     vec![],
                     imports,
-                    vec![],
+                    exports,
                     //elf.exports.iter().map(|x| x.into()).collect()
                     syms
                 ))
