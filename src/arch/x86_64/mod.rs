@@ -345,7 +345,11 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
             Opcode::SUB |
             Opcode::ENTER |
             Opcode::LEAVE |
+            Opcode::CDQE |
             Opcode::MOV |
+            Opcode::MOVAPS |
+            Opcode::MOVUPS |
+            Opcode::MOVDQA |
             Opcode::PUSHF |
             Opcode::WAIT |
             Opcode::CBW |

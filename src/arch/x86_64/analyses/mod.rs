@@ -242,6 +242,8 @@ pub fn find_xrefs(
         Opcode::CMOVGE |
         Opcode::CMOVL |
         Opcode::MOV |
+        Opcode::MOVAPS |
+        Opcode::MOVDQA |
         Opcode::MOVSX_b |
         Opcode::MOVSX_w |
         Opcode::MOVZX_b |

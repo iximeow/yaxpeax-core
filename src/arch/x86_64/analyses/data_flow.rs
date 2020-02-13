@@ -913,6 +913,8 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::MOVZX_w |
         Opcode::MOVSX |
         Opcode::MOVSXD |
+        Opcode::MOVAPS |
+        Opcode::MOVDQA |
         Opcode::MOV => {
             3
         }
@@ -1238,6 +1240,7 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::MOVSLDUP |
         Opcode::MOVSD |
         Opcode::MOVSS |
+        Opcode::MOVSS |
         Opcode::CVTSI2SS |
         Opcode::CVTTSS2SI |
         Opcode::CVTSS2SI |
@@ -1254,6 +1257,9 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::MOVZX_w |
         Opcode::MOVSX |
         Opcode::MOVSXD |
+        Opcode::MOVAPS |
+        Opcode::MOVUPS |
+        Opcode::MOVDQA |
         Opcode::MOV => {
             [Use::Write, Use::Read][idx as usize]
         }
@@ -1558,6 +1564,8 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::MOVZX_w |
         Opcode::MOVSX |
         Opcode::MOVSXD |
+        Opcode::MOVAPS |
+        Opcode::MOVDQA |
         Opcode::MOV |
         Opcode::XADD |
         Opcode::XCHG => {
@@ -2028,6 +2036,8 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::MOVZX_w |
         Opcode::MOVSX |
         Opcode::MOVSXD |
+        Opcode::MOVAPS |
+        Opcode::MOVDQA |
         Opcode::MOV => {
             0
         }
@@ -2771,6 +2781,8 @@ impl ValueLocations for x86_64 {
             Opcode::MOVZX_w |
             Opcode::MOVSX |
             Opcode::MOVSXD |
+            Opcode::MOVAPS |
+            Opcode::MOVDQA |
             Opcode::MOV => {
                 let mut locs = decompose_read(&instr.operand(1));
                 locs.append(&mut decompose_write(&instr.operand(0)));
