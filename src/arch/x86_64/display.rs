@@ -1324,7 +1324,7 @@ impl <
                     },
                     Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
                         let addr = self.addr.wrapping_add(*disp as i64 as u64).wrapping_add(self.instr.len());
-                        return write!(fmt, " {}", dest_namer(addr));
+                        return write!(fmt, " [{}]", dest_namer(addr));
                     }
                     op @ _ => {
                         write!(fmt, " ")?;
