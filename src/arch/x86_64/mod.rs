@@ -17,11 +17,10 @@ use num_traits::Zero;
 use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
 use data::{Direction, ValueLocations};
 use data::modifier::InstructionModifiers;
+use timing::Timings;
 
 use ContextRead;
 use ContextWrite;
-
-use tracing::{Level, event};
 
 pub mod analyses;
 pub mod cpu;
@@ -31,6 +30,8 @@ pub mod display;
 #[derive(Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub struct x86_64Data {
+    #[serde(skip)]
+    pub timings: Timings<<x86_64 as Arch>::Address>,
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<x86_64 as Arch>::Address>,
@@ -124,6 +125,7 @@ impl<'a> SymbolQuery<<x86_64 as Arch>::Address> for DisplayCtx<'a> {
 impl Default for x86_64Data {
     fn default() -> Self {
         x86_64Data {
+            timings: Timings::new(),
             preferred_addr: <x86_64 as Arch>::Address::zero(),
             contexts: MergedContextTable::create_empty(),
             cfg: control_flow::ControlFlowGraph::new(),

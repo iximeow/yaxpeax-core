@@ -29,6 +29,7 @@ pub mod memory;
 pub mod parts;
 pub mod comment;
 pub mod serialize;
+pub mod timing;
 
 use yaxpeax_arch::{Arch, ColorSettings};
 
