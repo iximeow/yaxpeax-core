@@ -345,7 +345,9 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
                     Operand::ImmediateI64(i) => {
                         Some(control_flow::Target::Relative(i as i64 as u64))
                     },
-                    _ => {
+                    o => {
+                        event!(Level::WARN, operand=?o, "unpredicted jmp destination");
+//                        eprintln!("unpredicted jmp destination, operand {:?}", o);
                         // TODO one day when ctx can let this reach ... the current
                         // exeuction context ... this may be able to be smarter
                         // (f.ex, if this jumps to a jump table, 

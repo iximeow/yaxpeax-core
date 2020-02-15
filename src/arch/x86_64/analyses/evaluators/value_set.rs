@@ -8,6 +8,7 @@ use data::Direction;
 use data::modifier::ModifierExpression;
 use data::ValueLocations;
 use memory::MemoryRange;
+use tracing::{event, Level};
 
 pub struct ValueSetDomain;
 
@@ -106,6 +107,10 @@ fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRa
     for value in values {
         match value {
             ValueRange::Between(Data::Concrete(low, _), Data::Concrete(high, _)) => {
+                if high - low > 0x10000 {
+                    event!(Level::WARN, "suspiciously large valueset deref range");
+                    return None;
+                }
                 for v in low..=high {
                     let mut read_value = 0u64;
                     for i in 0..size {

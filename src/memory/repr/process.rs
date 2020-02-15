@@ -2,6 +2,8 @@ use arch;
 use goblin;
 use goblin::Object;
 
+use tracing::{event, Level};
+
 use std::ops::Range;
 
 use yaxpeax_arch::{Address, AddressDisplay};

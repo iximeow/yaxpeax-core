@@ -6,7 +6,7 @@ use arch::x86_64::{Update, x86Update};
 use arch::x86_64;
 use arch::BaseUpdate;
 use analyses::xrefs::{RefType, RefAction};
-use tracing::{event, Level};
+use tracing::{event, span, Level};
 
 pub mod data_flow;
 pub mod evaluators;
