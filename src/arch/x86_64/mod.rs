@@ -290,142 +290,6 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
     // context such that we can make that determination
     fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
         match self.opcode {
-            Opcode::XADD |
-            Opcode::MOVSS |
-            Opcode::SQRTSS |
-            Opcode::ADDSS |
-            Opcode::SUBSS |
-            Opcode::MULSS |
-            Opcode::DIVSS |
-            Opcode::MINSS |
-            Opcode::MAXSS |
-            Opcode::MOVSLDUP |
-            Opcode::CVTSI2SS |
-            Opcode::CVTTSS2SI |
-            Opcode::CVTSS2SI |
-            Opcode::CVTSS2SD |
-            Opcode::MOVSD |
-            Opcode::SQRTSD |
-            Opcode::ADDSD |
-            Opcode::SUBSD |
-            Opcode::MULSD |
-            Opcode::DIVSD |
-            Opcode::MINSD |
-            Opcode::MAXSD |
-            Opcode::MOVDDUP |
-            Opcode::HADDPS |
-            Opcode::HSUBPS |
-            Opcode::ADDSUBPS |
-            Opcode::CVTSI2SD |
-            Opcode::CVTTSD2SI |
-            Opcode::CVTSD2SI |
-            Opcode::CVTSD2SS |
-            Opcode::LDDQU |
-            Opcode::MOVSX_b |
-            Opcode::MOVSX_w |
-            Opcode::MOVZX_b |
-            Opcode::MOVZX_w |
-            Opcode::MOVSX |
-            Opcode::MOVSXD |
-            Opcode::SAR |
-            Opcode::SAL |
-            Opcode::SHR |
-            Opcode::SHL |
-            Opcode::RCR |
-            Opcode::RCL |
-            Opcode::ROR |
-            Opcode::ROL |
-            Opcode::INC |
-            Opcode::DEC |
-            Opcode::SBB |
-            Opcode::AND |
-            Opcode::XOR |
-            Opcode::OR |
-            Opcode::PUSH |
-            Opcode::POP |
-            Opcode::LEA |
-            Opcode::NOP |
-            Opcode::XCHG |
-            Opcode::POPF |
-            Opcode::ADD |
-            Opcode::ADC |
-            Opcode::SUB |
-            Opcode::ENTER |
-            Opcode::LEAVE |
-            Opcode::CDQE |
-            Opcode::MOV |
-            Opcode::MOVAPS |
-            Opcode::MOVUPS |
-            Opcode::MOVDQA |
-            Opcode::PUSHF |
-            Opcode::WAIT |
-            Opcode::CBW |
-            Opcode::CDQ |
-            Opcode::LAHF |
-            Opcode::SAHF |
-            Opcode::TEST |
-            Opcode::CMP |
-            Opcode::INS |
-            Opcode::OUTS |
-            Opcode::IMUL |
-            Opcode::DIV |
-            Opcode::IDIV |
-            Opcode::MUL |
-            Opcode::NEG |
-            Opcode::NOT |
-            Opcode::SGDT |
-            Opcode::SIDT |
-            Opcode::SMSW |
-            Opcode::LGDT |
-            Opcode::LIDT |
-            Opcode::LMSW |
-            Opcode::SWAPGS |
-            Opcode::RDTSCP |
-            Opcode::INVLPG |
-            Opcode::WBINVD |
-            Opcode::INVD |
-            Opcode::CPUID |
-            Opcode::LSL |
-            Opcode::LAR |
-            Opcode::CLTS |
-            Opcode::SYSCALL |
-            Opcode::FXSAVE |
-            Opcode::FXRSTOR |
-            Opcode::LDMXCSR |
-            Opcode::STMXCSR |
-            Opcode::XSAVE |
-            Opcode::XRSTOR |
-            Opcode::XSAVEOPT |
-            Opcode::LFENCE |
-            Opcode::MFENCE |
-            Opcode::SFENCE |
-            Opcode::CLFLUSH |
-            Opcode::SLDT |
-            Opcode::STR |
-            Opcode::LLDT |
-            Opcode::LTR |
-            Opcode::VERR |
-            Opcode::VERW |
-            Opcode::JMPE |
-            Opcode::RDMSR |
-            Opcode::WRMSR |
-            Opcode::RDTSC |
-            Opcode::RDPMC |
-            Opcode::CLI |
-            Opcode::STI |
-            Opcode::CLC |
-            Opcode::STC |
-            Opcode::CLD |
-            Opcode::STD |
-            Opcode::BT |
-            Opcode::BTS |
-            Opcode::BTR |
-            Opcode::BTC |
-            Opcode::BSR |
-            Opcode::BSF |
-            Opcode::CMPXCHG => {
-                control_flow::Effect::cont()
-            },
             Opcode::CALLF => {
                 // TODO: honestly not sure how to model callf
                 control_flow::Effect::stop()
@@ -448,10 +312,12 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
                     Operand::ImmediateI64(i) => {
                         Some(control_flow::Target::Relative(i as i64 as u64))
                     },
-                    _ => {
+                    o => {
+//                        event!(Level::WARN, operand=?o, "unpredicted call destination");
+//                        eprintln!("unpredicted call destination, operand {:?}", o);
                         // TODO one day when ctx can let this reach ... the current
                         // exeuction context ... this may be able to be smarter
-                        // (f.ex, if this jumps to a jump table, 
+                        // (f.ex, if this jumps to a jump table)
                         None
                     }
                 };

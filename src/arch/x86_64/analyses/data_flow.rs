@@ -905,6 +905,7 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::CVTTSD2SI |
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
+        Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
         Opcode::MOVSX_b |
@@ -914,7 +915,11 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::MOVSX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
+        Opcode::MOVUPS |
         Opcode::MOVDQA |
+        Opcode::MOVDQU |
+        Opcode::MOVAPD |
+        Opcode::MOVQ |
         Opcode::MOV => {
             3
         }
@@ -951,6 +956,35 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::SUB |
         Opcode::AND |
         Opcode::XOR |
+        Opcode::MULPS |
+        Opcode::ORPS |
+        Opcode::PADDQ |
+        Opcode::PCMPEQD |
+        Opcode::PCMPGTD |
+        Opcode::PCMPGTW |
+        Opcode::PMULLW |
+        Opcode::PSLLD |
+        Opcode::PSLLDQ |
+        Opcode::PSLLQ |
+        Opcode::PSLLW |
+        Opcode::PSRAD |
+        Opcode::PSRLD |
+        Opcode::PSRLDQ |
+        Opcode::PSRLQ |
+        Opcode::PSRLW |
+        Opcode::PUNPCKHBW |
+        Opcode::PUNPCKHDQ |
+        Opcode::PUNPCKHQDQ |
+        Opcode::PUNPCKHWD |
+        Opcode::PUNPCKLBW |
+        Opcode::PUNPCKLDQ |
+        Opcode::PUNPCKLQDQ |
+        Opcode::PUNPCKLWD |
+        Opcode::PXOR |
+        Opcode::SUBPS |
+        Opcode::UNPCKHPS |
+        Opcode::UNPCKLPS |
+        Opcode::XORPS |
         Opcode::OR => {
             3
         }
@@ -1168,6 +1202,11 @@ fn operands_in(instr: &Instruction) -> u8 {
             // TODO: incomplete
             2
         }
+        Opcode::CBW |
+        Opcode::CWDE |
+        Opcode::CDQE => {
+            2
+        },
         o @ Opcode::CPUID |
         o @ Opcode::WBINVD |
         o @ Opcode::INVD |
@@ -1249,6 +1288,7 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::CVTTSD2SI |
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
+        Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
         Opcode::MOVSX_b |
@@ -1260,6 +1300,9 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::MOVAPS |
         Opcode::MOVUPS |
         Opcode::MOVDQA |
+        Opcode::MOVDQU |
+        Opcode::MOVAPD |
+        Opcode::MOVQ |
         Opcode::MOV => {
             [Use::Write, Use::Read][idx as usize]
         }
@@ -1298,6 +1341,35 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::SUB |
         Opcode::AND |
         Opcode::XOR |
+        Opcode::MULPS |
+        Opcode::ORPS |
+        Opcode::PADDQ |
+        Opcode::PCMPEQD |
+        Opcode::PCMPGTD |
+        Opcode::PCMPGTW |
+        Opcode::PMULLW |
+        Opcode::PSLLD |
+        Opcode::PSLLDQ |
+        Opcode::PSLLQ |
+        Opcode::PSLLW |
+        Opcode::PSRAD |
+        Opcode::PSRLD |
+        Opcode::PSRLDQ |
+        Opcode::PSRLQ |
+        Opcode::PSRLW |
+        Opcode::PUNPCKHBW |
+        Opcode::PUNPCKHDQ |
+        Opcode::PUNPCKHQDQ |
+        Opcode::PUNPCKHWD |
+        Opcode::PUNPCKLBW |
+        Opcode::PUNPCKLDQ |
+        Opcode::PUNPCKLQDQ |
+        Opcode::PUNPCKLWD |
+        Opcode::PXOR |
+        Opcode::SUBPS |
+        Opcode::UNPCKHPS |
+        Opcode::UNPCKLPS |
+        Opcode::XORPS |
         Opcode::OR => {
             [Use::ReadWrite, Use::Read][idx as usize]
         }
@@ -1556,6 +1628,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::CVTTSD2SI |
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
+        Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
         Opcode::MOVSX_b |
@@ -1565,7 +1638,11 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::MOVSX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
+        Opcode::MOVUPS |
         Opcode::MOVDQA |
+        Opcode::MOVDQU |
+        Opcode::MOVAPD |
+        Opcode::MOVQ |
         Opcode::MOV |
         Opcode::XADD |
         Opcode::XCHG => {
@@ -1617,6 +1694,15 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             [
                 (Some(Location::CF), Direction::Write),
                 (Some(Location::OF), Direction::Write),
+            ][i as usize]
+        }
+        Opcode::CBW |
+        Opcode::CWDE |
+        Opcode::CDQE => {
+            // TODO: overapproximates CBW, CWDE
+            [
+                (Some(Location::Register(RegSpec::rax())), Direction::Read),
+                (Some(Location::Register(RegSpec::rax())), Direction::Write),
             ][i as usize]
         }
         Opcode::ADC |
@@ -2028,6 +2114,7 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::CVTTSD2SI |
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
+        Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
         Opcode::MOVSX_b |
@@ -2037,7 +2124,11 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::MOVSX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
+        Opcode::MOVUPS |
         Opcode::MOVDQA |
+        Opcode::MOVDQU |
+        Opcode::MOVAPD |
+        Opcode::MOVQ |
         Opcode::MOV => {
             0
         }
@@ -2278,6 +2369,11 @@ fn implicit_locs(op: Opcode) -> u8 {
         }
         Opcode::LSL |
         Opcode::LAR => {
+            1
+        }
+        Opcode::CBW |
+        Opcode::CWDE |
+        Opcode::CDQE => {
             1
         }
         Opcode::ADDSD |
@@ -2773,6 +2869,7 @@ impl ValueLocations for x86_64 {
             Opcode::CVTTSD2SI |
             Opcode::CVTSD2SI |
             Opcode::CVTSD2SS |
+            Opcode::CVTPS2PD |
             Opcode::LDDQU |
             Opcode::LEA |
             Opcode::MOVSX_b |
@@ -2782,7 +2879,11 @@ impl ValueLocations for x86_64 {
             Opcode::MOVSX |
             Opcode::MOVSXD |
             Opcode::MOVAPS |
+            Opcode::MOVUPS |
             Opcode::MOVDQA |
+            Opcode::MOVDQU |
+            Opcode::MOVAPD |
+            Opcode::MOVQ |
             Opcode::MOV => {
                 let mut locs = decompose_read(&instr.operand(1));
                 locs.append(&mut decompose_write(&instr.operand(0)));
@@ -2865,8 +2966,40 @@ impl ValueLocations for x86_64 {
                 locs.push((Some(Location::PF), Direction::Write));
                 locs.push((Some(Location::AF), Direction::Write));
                 locs
-
             },
+            Opcode::MULPS |
+            Opcode::ORPS |
+            Opcode::PADDQ |
+            Opcode::PCMPEQD |
+            Opcode::PCMPGTD |
+            Opcode::PCMPGTW |
+            Opcode::PMULLW |
+            Opcode::PSLLD |
+            Opcode::PSLLDQ |
+            Opcode::PSLLQ |
+            Opcode::PSLLW |
+            Opcode::PSRAD |
+            Opcode::PSRLD |
+            Opcode::PSRLDQ |
+            Opcode::PSRLQ |
+            Opcode::PSRLW |
+            Opcode::PUNPCKHBW |
+            Opcode::PUNPCKHDQ |
+            Opcode::PUNPCKHQDQ |
+            Opcode::PUNPCKHWD |
+            Opcode::PUNPCKLBW |
+            Opcode::PUNPCKLDQ |
+            Opcode::PUNPCKLQDQ |
+            Opcode::PUNPCKLWD |
+            Opcode::PXOR |
+            Opcode::SUBPS |
+            Opcode::UNPCKHPS |
+            Opcode::UNPCKLPS |
+            Opcode::XORPS => {
+                let mut locs = decompose_read(&instr.operand(1));
+                locs.append(&mut decompose_readwrite(&instr.operand(0)));
+                locs
+            }
             Opcode::ADD |
             Opcode::SUB |
             Opcode::AND |
