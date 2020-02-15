@@ -49,7 +49,7 @@ pub fn find_function_hints(
     if instr.opcode == Opcode::CALL {
         match instr.operand(0) {
             Operand::ImmediateI32(disp) => {
-                let dest = (disp as u64).wrapping_add(address).wrapping_add(instr.len());
+                let dest = (disp as i64 as u64).wrapping_add(address).wrapping_add(instr.len());
                 vec![
                     (dest, BaseUpdate::Specialized(x86Update::FunctionHint))
                 ]
