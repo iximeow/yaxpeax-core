@@ -7,6 +7,7 @@ use self::analyses::data_flow::DefaultCallingConvention;
 use petgraph::graphmap::GraphMap;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use yaxpeax_x86::x86_64;
 use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use std::rc::Rc;
@@ -149,6 +150,7 @@ pub struct MergedContextTable {
     pub functions: Rc<RefCell<HashMap<<x86_64 as Arch>::Address, FunctionImpl<<x86_64 as ValueLocations>::Location>>>>,
     pub function_data: HashMap<<x86_64 as Arch>::Address, RefCell<InstructionModifiers<x86_64>>>,
     pub function_hints: Vec<<x86_64 as Arch>::Address>,
+    functions_hinted: HashSet<<x86_64 as Arch>::Address>,
     pub default_abi: Option<DefaultCallingConvention>,
 }
 
@@ -177,6 +179,7 @@ impl MergedContextTable {
             xrefs: xrefs::XRefCollection::new(),
             functions: Rc::new(RefCell::new(HashMap::new())),
             function_hints: Vec::new(),
+            functions_hinted: HashSet::new(),
             symbols: HashMap::new(),
             reverse_symbols: HashMap::new(),
             function_data: HashMap::new(),
@@ -234,8 +237,9 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
         // println!("Applying update: {} -> {:?}", address.stringy(), update);
         match update {
             BaseUpdate::Specialized(x86Update::FunctionHint) => {
-                if !self.function_hints.contains(&address) && !self.functions.borrow().contains_key(&address) {
+                if !self.functions.borrow().contains_key(&address) && !self.functions_hinted.contains(&address) {
 //                    println!("Function hint: {}", address.stringy());
+                    self.functions_hinted.insert(address);
                     self.function_hints.push(address)
                 }
             },
