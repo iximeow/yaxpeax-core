@@ -352,7 +352,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
                         Some(control_flow::Target::Relative(i as i64 as u64))
                     },
                     o => {
-                        event!(Level::WARN, operand=?o, "unpredicted jmp destination");
+//                        event!(Level::WARN, operand=?o, "unpredicted jmp destination");
 //                        eprintln!("unpredicted jmp destination, operand {:?}", o);
                         // TODO one day when ctx can let this reach ... the current
                         // exeuction context ... this may be able to be smarter
@@ -476,7 +476,7 @@ impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction
             }
             o => {
 //                event!(target: "instruction descriptions", Level::ERROR); //, "missing control flow description", opcode = o);
-                event!(Level::ERROR, opcode = ?o, "missing control flow description"); //, "missing control flow description", opcode = o);
+//                event!(Level::ERROR, opcode = ?o, "missing control flow description"); //, "missing control flow description", opcode = o);
                 // assume the instructions with no control flow information just continue on
                 control_flow::Effect::cont()
             }
