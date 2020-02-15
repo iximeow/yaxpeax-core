@@ -254,7 +254,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
 
     let fn_graph = cfg.get_function(addr, function_table);
 
-    let mut blocks: Vec<<PIC17 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
+    let mut blocks: Vec<<PIC17 as Arch>::Address> = fn_graph.blocks.keys().cloned().collect();
     blocks.sort();
 
     for blockaddr in blocks.iter() {

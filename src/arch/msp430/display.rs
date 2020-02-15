@@ -332,7 +332,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
 
     let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());
 
-    let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
+    let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.keys().cloned().collect();
     blocks.sort();
 
     for blockaddr in blocks.iter() {
@@ -392,7 +392,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>, C: fmt::Display,
 
     let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());
 
-    let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
+    let mut blocks: Vec<<MSP430 as Arch>::Address> = fn_graph.blocks.keys().cloned().collect();
     blocks.sort();
 
     for blockaddr in blocks.iter() {

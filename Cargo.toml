@@ -16,6 +16,7 @@ yaxpeax-msp430 = { path = "../arch/msp430", features = ["use-serde"] }
 yaxpeax-pic17 = { path = "../arch/pic17", features = ["use-serde"] }
 yaxpeax-pic18 = { path = "../arch/pic18", features = ["use-serde"] }
 yaxpeax-pic24 = { path = "../arch/pic24", features = ["use-serde"] }
+"smallvec" = "1.2.0"
 "goblin" = "0.0.20"
 "num-traits" = "0.2"
 "termios" = "0.2.2"

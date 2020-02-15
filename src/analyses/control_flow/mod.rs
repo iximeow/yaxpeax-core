@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::cmp::Ordering;
 use std::hash::Hash;
+use std::ops::Bound::Included;
+
+use smallvec::SmallVec;
 
 use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
@@ -89,7 +92,7 @@ impl <Addr> BasicBlock<Addr> where Addr: Copy + Clone {
 #[derive(Default)]
 pub struct ControlFlowGraph<A> where A: Address {
     pub entrypoint: A,
-    pub blocks: Vec<BasicBlock<A>>,
+    pub blocks: BTreeMap<A, BasicBlock<A>>,
     pub graph: GraphMap<A, (), petgraph::Directed>
 }
 
@@ -196,9 +199,11 @@ fn control_flow_graph_construction_3() {
 
 impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
     pub fn new() -> ControlFlowGraph<A> {
+        let mut blocks = BTreeMap::new();
+        blocks.insert(A::min_value(), BasicBlock::new(A::min_value(), A::max_value()));
         let mut cfg = ControlFlowGraph {
             entrypoint: A::zero(),
-            blocks: vec![BasicBlock::new(A::min_value(), A::max_value())],
+            blocks,
             graph: GraphMap::new()
         };
         cfg.graph.add_node(A::min_value());
@@ -206,9 +211,11 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
     }
 
     pub fn from(addr: A) -> ControlFlowGraph<A> {
+        let mut blocks = BTreeMap::new();
+        blocks.insert(A::min_value(), BasicBlock::new(A::min_value(), A::max_value()));
         let mut cfg = ControlFlowGraph {
             entrypoint: addr,
-            blocks: vec![BasicBlock::new(A::min_value(), A::max_value())],
+            blocks,
             graph: GraphMap::new()
         };
         cfg.graph.add_node(A::min_value());
@@ -236,42 +243,36 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
      */
     pub fn get_function<U>(&self, start: A, function_table: &HashMap<A, U>) -> ControlFlowGraph<A> {
         let mut result: ControlFlowGraph<A> = ControlFlowGraph::from(start);
+        result.graph = GraphMap::new();
         result.graph.add_node(start);
-        let mut walk = petgraph::visit::Bfs::new(&self.graph, start);
-        for k in function_table.keys() {
-            walk.discovered.insert(*k);
-        }
-        while let Some(next) = walk.next(&self.graph) {
-            for i in self.graph.neighbors_directed(next, petgraph::Direction::Outgoing) {
-                if !function_table.contains_key(&i) {
-                    result.graph.add_edge(next, i, ());
+        result.blocks = BTreeMap::new();
+
+        let mut bfs_deque = VecDeque::new();
+        bfs_deque.push_back(start);
+        let mut bfs_visited = HashSet::new();
+        bfs_visited.insert(start);
+
+        while let Some(next) = bfs_deque.pop_front() {
+            for outedge in self.graph.neighbors_directed(next, petgraph::Direction::Outgoing) {
+                if bfs_visited.insert(outedge) {
+                    // don't walk into another function - don't have to check `next == start`
+                    // because start was visited already and bfs_visited.insert() would never be
+                    // true anyway.
+                    if !function_table.contains_key(&outedge) {
+                        bfs_deque.push_back(outedge);
+                        result.graph.add_edge(next, outedge, ());
+                    }
                 }
             }
-        }
-        result.blocks = vec![];
-        let mut starts: Vec<A> = result.graph.nodes().collect();
-        starts.sort();
-        for addr in starts.into_iter() {
-            result.blocks.push(BasicBlock { start: addr, end: self.get_block(addr).end });
+
+            result.blocks.insert(next, *self.get_block(next));
         }
         return result;
     }
 
-    fn get_block_idx<'a>(&'a self, addr: A) -> usize {
-        self.blocks.binary_search_by(|block| {
-            if addr < block.start {
-                Ordering::Greater
-            } else if addr > block.end {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        }).expect("<blocks> should cover the entire address space. Binary search should not fail. This is a critical algorithmic bug.")
-    }
     pub fn get_block<'a>(&'a self, addr: A) -> &'a BasicBlock<A> {
-        let idx = self.get_block_idx(addr);
-
-        &self.blocks[idx]
+        let (_block_idx, block) = self.blocks.range((Included(&A::min_value()), Included(&addr))).rev().next().expect("there should be a basic block covering all addresses, this is a control flow data structure error");
+        block
     }
     /*
      * Adjust control flow linkage as appropriate with effect `effect`
@@ -292,7 +293,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
      *
      * So at = 0x1234, next = 0x1238, effect = stop_and(Relative(4)).
      */
-    pub fn with_effect(&mut self, at: A, next: A, effect: &Effect<A>) -> Vec<A> {
+    pub fn with_effect(&mut self, at: A, next: A, effect: &Effect<A>) -> SmallVec<[A; 2]> {
         // splits the basic block enclosing split_loc into two basic blocks,
         // one ending directly before split_loc, and one starting at split_loc
         // continuing to the end of the original basic block.
@@ -302,33 +303,44 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
         //  [split_loc, split_loc - 1]
         // and thus would not be added, yielding no net change.
         fn add_split<A: Address + petgraph::graphmap::NodeTrait>(graph: &mut ControlFlowGraph<A>, split_loc: A, preserve_edges: bool) -> bool {
-            let idx = graph.get_block_idx(split_loc);
-            let (start, end) = {
-                let block = &graph.blocks[idx];
-                (block.start, block.end)
+            // find a block before `split_loc`. either there is one, or `split_loc` is the lowest
+            // value of `A`, and there is no possible start address before it.
+            let mut iter = graph.blocks.range_mut((Included(&A::min_value()), Included(&split_loc))).rev();
+
+            let last_block: &mut BasicBlock<A> = if let Some((_, prev)) = iter.next() {
+                prev
+            } else {
+                // no prior block, so split_loc should be the first address.
+                assert_eq!(split_loc.to_linear(), A::min_value().to_linear());
+                return false;
             };
 
-            if start != split_loc {
-                let new_block = BasicBlock::new(split_loc, end);
-                graph.blocks.insert(idx + 1, new_block);
-                graph.blocks[idx].end = split_loc - A::one();
-                let neighbors: Vec<A> = graph.graph.neighbors(graph.blocks[idx].start).into_iter().collect();
-                for next in neighbors.into_iter() {
-                    graph.graph.remove_edge(graph.blocks[idx].start, next);
-                    graph.graph.add_edge(new_block.start, next, ());
-                }
-                if preserve_edges {
-                    graph.graph.add_edge(graph.blocks[idx].start, new_block.start, ());
-                } else {
-//                    graph.graph.add_node(new_block.start);
-                }
-                true
-            } else {
-                false
+            if last_block.start == split_loc {
+                return false;
             }
+
+            // ok, we have a basic block that starts before split_loc, so resize it to end at
+            // `split_loc - 1`, with `[split_loc, block.end]` as the block we must insert after it
+            let split_loc_end = last_block.end;
+            let last_start = last_block.start;
+            last_block.end = split_loc - A::one();
+            let last_end = last_block.end;
+            graph.blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
+
+            let neighbors: Vec<A> = graph.graph.neighbors(last_start).into_iter().collect();
+            for next in neighbors.into_iter() {
+                graph.graph.remove_edge(last_start, next);
+                graph.graph.add_edge(split_loc, next, ());
+            }
+            if preserve_edges {
+                graph.graph.add_edge(last_start, split_loc, ());
+            } else {
+//                    graph.graph.add_node(new_block.start);
+            }
+            true
         }
 
-        let mut result: Vec<A> = vec![];
+        let mut result: SmallVec<[A; 2]> = SmallVec::new();
 
         let enclosing_block_start: A = self.get_block(at).start;
 
@@ -360,7 +372,6 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
                 }
                     result.push(dest_addr);
                 let enclosing_block_start: A = self.get_block(at).start;
-//                println!("Adding edge from {:?} to {:?} (at == {:?})", enclosing_block_start, dest_addr, at);
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             },
             Some(Target::Absolute(dest)) => {
@@ -452,7 +463,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
     cfg: &mut ControlFlowGraph<A::Address>,
     start: A::Address,
     on_instruction_discovered: &InstrCallback
-) -> Vec<A::Address> where
+) -> SmallVec<[A::Address; 2]> where
     A: Arch,
     M: MemoryRange<A::Address>,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
@@ -479,7 +490,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 for problem in problem_blocks.iter() {
                     cfg.graph.remove_edge(*problem, start);
                 }
-                return vec![];
+                return SmallVec::new();
             }
         };
         match A::Decoder::default().decode(range) {
@@ -504,7 +515,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 }
             },
             Err(_) => {
-                return vec![];
+                return SmallVec::new();
             }
         }
     }
@@ -528,27 +539,28 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
     // is made (the former block would be nonsense spanning
     //  [split_loc, split_loc - 1]
     // and thus would not be added, yielding no net change.
-    fn add_split<A>(blocks: &mut Vec<BasicBlock<A>>, split_loc: A) where A: Address {
-        let idx = blocks.binary_search_by(|block| {
-            if split_loc < block.start {
-                Ordering::Greater
-            } else if split_loc > block.end {
-                Ordering::Less
-            } else {
-                Ordering::Equal
-            }
-        }).expect("<blocks> should over the entire address space. Binary search should not fail. This is a critical algorithmic bug.");
+    fn add_split<A>(blocks: &mut BTreeMap<A, BasicBlock<A>>, split_loc: A) where A: Address {
+        // find a block before `split_loc`. either there is one, or `split_loc` is the lowest
+        // value of `A`, and there is no possible start address before it.
+        let mut iter = blocks.range_mut((Included(&A::min_value()), Included(&split_loc))).rev();
 
-        let (start, end) = {
-            let block = &blocks[idx];
-            (block.start, block.end)
+        let last_block: &mut BasicBlock<A> = if let Some((_, prev)) = iter.next() {
+            prev
+        } else {
+            // no prior block, so split_loc should be the first address.
+            assert_eq!(split_loc.to_linear(), A::min_value().to_linear());
+            return;
         };
 
-        if start != split_loc {
-            let new_block = BasicBlock::new(split_loc, end);
-            blocks.insert(idx + 1, new_block);
-            blocks[idx].end = split_loc - A::one();
-        };
+        if last_block.start == split_loc {
+            return;
+        }
+
+        // ok, we have a basic block that starts before split_loc, so resize it to end at
+        // `split_loc - 1`, with `[split_loc, block.end]` as the block we must insert after it
+        let split_loc_end = last_block.end;
+        last_block.end = split_loc - A::one();
+        blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
     }
 
     for (addr, t) in ts {
@@ -593,7 +605,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
     // all this and more, next time..
 
     {
-    let mut block_iter = cfg.blocks.iter();
+    let mut block_iter = cfg.blocks.values();
 
     let mut curr_block = block_iter.next().expect("basic blocks should span all instructions.");
     // addr should be increasing, so we *will* reach the end of this block eventually..

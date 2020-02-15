@@ -1,3 +1,4 @@
+extern crate smallvec;
 extern crate siphasher;
 extern crate goblin;
 #[macro_use] extern crate serde_derive;

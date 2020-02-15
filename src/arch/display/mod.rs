@@ -165,7 +165,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
 
     let fn_graph = cfg.get_function(addr, function_table);
 
-    let mut blocks: Vec<A::Address> = fn_graph.blocks.iter().map(|x| x.start).collect();
+    let mut blocks: Vec<A::Address> = fn_graph.blocks.keys().cloned().collect();
     blocks.sort();
 
     for blockaddr in blocks.iter() {

@@ -103,7 +103,7 @@ impl <
 
     fn view_between(&self, start: Option<A::Address>, end: Option<A::Address>) -> Vec<(A::Address, Vec<String>)> {
         let mut text: Vec<(A::Address, Vec<String>)> = Vec::new();
-        let mut blocks: Vec<A::Address> = self.fn_graph.blocks.iter().map(|x| x.start).collect();
+        let mut blocks: Vec<A::Address> = self.fn_graph.blocks.keys().cloned().collect();
         blocks.sort();
 
         for blockaddr in blocks.iter() {
