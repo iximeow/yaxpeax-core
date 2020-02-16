@@ -70,8 +70,17 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             }
             referent
         }
-        Operand::RegScaleDisp(_base, _scale, _disp) => {
-            None
+        Operand::RegScaleDisp(base, scale, disp) => {
+            let referent = match dfg.get_use(addr, Location::Register(*base)).get_data() {
+                (Some(Data::ValueSet(base_values))) => {
+                    Data::add(&Data::ValueSet(base_values.clone()), &Data::Concrete(i.wrapping_add(*disp as i64 as u64), None))
+                }
+                (Some(Data::Concrete(base_value, _))) => {
+                    Data::add(&Data::ValueSet(index_values.clone()), &Data::Concrete(base_value.wrapping_add(*disp as u64), None))
+                }
+                _ => None
+            };
+            referent
         }
         Operand::RegIndexBaseScale(_index, _base, _scale) => {
             None

@@ -148,7 +148,14 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
             },
             Opcode::MOV => {
                 if let (Operand::Register(l), Operand::Register(r)) = (instr.operand(0), instr.operand(1)) {
-                    dfg.get_def(addr, Location::Register(l)).update(
+                    let def_site = if l.bank == RegisterBank::D {
+                        // this assigns to Q instead of D
+                        dfg.get_def(addr, Location::Register(RegSpec { num: l.num, bank: RegisterBank::Q }))
+                    } else {
+                        dfg.get_def(addr, Location::Register(l))
+                    };
+
+                    def_site.update(
                         Data::Alias(dfg.get_use(addr, Location::Register(r)).as_rc())
                     );
                 }
