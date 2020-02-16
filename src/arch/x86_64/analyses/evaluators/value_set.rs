@@ -335,7 +335,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                 };
                                 if let Some(read_values) = valueset_deref(values.clone(), data, size) {
                                     use arch::x86_64::display::DataDisplay;
-                                    println!(
+                                    eprintln!(
                                         "Derefed value set {} to read {}",
                                         DataDisplay { data: &Data::ValueSet(values), colors: None },
                                         DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }

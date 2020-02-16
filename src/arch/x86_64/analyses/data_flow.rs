@@ -34,6 +34,8 @@ use serde::ser::{Serializer};
 
 use data::{Direction, Disambiguator, ValueLocations};
 use analyses::data_flow::Use;
+use arch::x86_64::display::DataDisplay;
+use yaxpeax_arch::ColorSettings;
 
 pub const FLAGS: [Location; 10] = [
     Location::CF,
@@ -531,6 +533,13 @@ pub enum Data {
 }
 
 impl Data {
+    pub fn display<'a, 'b>(&'a self, colors: Option<&'b ColorSettings>) -> DataDisplay<'a, 'b> {
+        DataDisplay {
+            data: self,
+            colors,
+        }
+    }
+
     pub fn add(left: &Data, right: &Data) -> Option<Data> {
         match (left, right) {
             (Data::ValueSet(values), Data::Concrete(right, _)) => {

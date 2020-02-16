@@ -142,7 +142,7 @@ impl <'a, 'b, 'c> fmt::Display for RegValueDisplay<'a, 'b, 'c> {
                     )
                 )?;
                 if let Some(data) = value.borrow().data.as_ref() {
-                    write!(fmt, " (= {})", DataDisplay { data: &data, colors: self.colors })?;
+                    write!(fmt, " (= {})", data.display(self.colors))?;
                 }
                 Ok(())
             },
