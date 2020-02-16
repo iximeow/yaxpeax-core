@@ -359,6 +359,25 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     _ => {}
                 }
             }
+            Opcode::JMP => {
+                let jmpop = instr.operand(0);
+                if jmpop.is_memory() {
+                    let r = referent(instr, &jmpop, addr, dfg, contexts);
+                    if let Some(Data::ValueSet(values)) = referent(instr, &jmpop, addr, dfg, contexts) {
+                        if let Some(read_values) = valueset_deref(values.clone(), data, 8) {
+                            eprintln!("    jump table with {} entries:", read_values.len());
+                            for ent in read_values {
+                                match ent {
+                                    ValueRange::Precisely(Data::Concrete(ent, _)) => {
+                                        eprintln!("      {:#x}", ent);
+                                    }
+                                    _ => { panic!("uhh"); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Opcode::ADD => {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), Operand::Register(r)) => {
