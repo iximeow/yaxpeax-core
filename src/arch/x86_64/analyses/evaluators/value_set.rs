@@ -113,7 +113,6 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
 }
 
 fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRange>, data: &U, size: u8) -> Option<Vec<ValueRange>> {
-    println!("Dereferencing the values: {:?}", values);
     let mut reads: Vec<ValueRange> = Vec::new();
     for value in values {
         match value {

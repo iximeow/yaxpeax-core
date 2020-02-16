@@ -12,7 +12,7 @@ pub struct ConditionalInference;
 
 impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for ConditionalInference {
     fn inferrable_conditional(conditional_instr: &<x86_64 as Arch>::Instruction) -> bool {
-        if !conditional_instr.opcode.condition().is_some() {
+        if conditional_instr.opcode.condition().is_none() {
             return false;
         }
 
@@ -295,6 +295,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                             };
 
                             aux_data.add_edge_modifier(curr_block, bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Above(imm_src));
+                            eprintln!("adding negated bound dest, between blocks {:#x} and {:#x}, {} is {:?}", curr_block, negated_bound_dest, dest_reg, ModifierExpression::Below(imm_src));
                             aux_data.add_edge_modifier(curr_block, negated_bound_dest, Some(Location::Register(dest_reg)), ModifierExpression::Below(imm_src));
                             true
                         }
