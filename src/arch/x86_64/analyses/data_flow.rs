@@ -540,6 +540,22 @@ impl Data {
         }
     }
 
+    pub fn underlying(&self) -> Option<Data> {
+        let mut curr = self.to_owned();
+        while let Data::Alias(alias) = curr {
+            match alias.borrow().data.clone() {
+                Some(aliased) => {
+                    curr = aliased;
+                }
+                None => {
+                    return None;
+                }
+            }
+        }
+
+        Some(curr)
+    }
+
     pub fn add(left: &Data, right: &Data) -> Option<Data> {
         match (left, right) {
             (Data::ValueSet(values), Data::Concrete(right, _)) => {
