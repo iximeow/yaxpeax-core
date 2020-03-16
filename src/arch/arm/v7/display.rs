@@ -595,7 +595,7 @@ impl <
         }
         */
 
-        ConditionedOpcode(self.instr.opcode, self.instr.condition).colorize(&self.colors, fmt)?;
+        ConditionedOpcode(self.instr.opcode, self.instr.s, self.instr.condition).colorize(&self.colors, fmt)?;
 
         match self.instr.opcode {
             Opcode::PUSH => {

@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-arm"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_derive",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-x86"
-version = "0.0.5"
+version = "0.0.8"
 dependencies = [
  "num-traits",
  "serde",
