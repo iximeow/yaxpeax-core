@@ -1,6 +1,6 @@
 use arch;
 use arch::MCU;
-use yaxpeax_arch::{Arch, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Arch, AddressBase, AddressDiff, Decoder, LengthedInstruction};
 use memory::{MemoryRepr, MemoryRange};
 use memory::repr::FlatMemoryRepr;
 use debug;
@@ -756,8 +756,8 @@ impl MCU for CPU {
                         match instr.operands[0] {
                             Operand::ImmediateU32(rel) => {
                                 self.ip = self.ip
-                                    .wrapping_add(instr.len())
-                                    .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                    .wrapping_offset(instr.len())
+                                    .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                 return Ok(());
                             },
                             _ => {
@@ -784,8 +784,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if self.psr_z {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -799,8 +799,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if ! self.psr_z {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -814,8 +814,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if self.psr_c {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -829,8 +829,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if ! self.psr_c {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -844,8 +844,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if self.psr_v {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -859,8 +859,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if ! self.psr_v {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -874,8 +874,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if self.psr_n {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },
@@ -889,8 +889,8 @@ impl MCU for CPU {
                             Operand::ImmediateU8(rel) => {
                                 if ! self.psr_n {
                                     self.ip = self.ip
-                                        .wrapping_add(instr.len())
-                                        .wrapping_add((rel << 1) as i8 as i32 as u32);
+                                        .wrapping_offset(instr.len())
+                                        .wrapping_offset(AddressDiff::from_const((rel << 1) as i8 as i32 as u32));
                                     return Ok(());
                                 }
                             },

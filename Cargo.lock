@@ -501,18 +501,21 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "yaxpeax-arch"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab52e5031be876437d8db20de2074486ce6a49e3a0809a8e8b291a307ea808a2"
+checksum = "2d4d184a208255bb62f2d55c3875ee3fe459f2b8d9190b8427986b91d11ced7f"
 dependencies = [
  "num-traits",
  "serde",
+ "serde_derive",
  "termion",
 ]
 
 [[package]]
 name = "yaxpeax-arm"
-version = "0.0.3"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bbd9ff5d85124b77a3c251585a72ab7db55af2ef2b178f43501c975005a21ad"
 dependencies = [
  "serde",
  "serde_derive",
@@ -541,13 +544,14 @@ dependencies = [
  "yaxpeax-msp430",
  "yaxpeax-pic17",
  "yaxpeax-pic18",
- "yaxpeax-pic24",
  "yaxpeax-x86",
 ]
 
 [[package]]
 name = "yaxpeax-msp430"
-version = "0.0.4"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d556fe4705aaadc1e14375550e6f344976958f930580adf32388c150cb8e1f24"
 dependencies = [
  "serde",
  "serde_derive",
@@ -558,6 +562,8 @@ dependencies = [
 [[package]]
 name = "yaxpeax-pic17"
 version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb949b4c5d7afb8210cbaa3d1f2153d12bcac9dd81167dc6275f9f0fb243fb98"
 dependencies = [
  "serde",
  "serde_derive",
@@ -568,15 +574,8 @@ dependencies = [
 [[package]]
 name = "yaxpeax-pic18"
 version = "0.0.3"
-dependencies = [
- "serde",
- "serde_derive",
- "yaxpeax-arch",
-]
-
-[[package]]
-name = "yaxpeax-pic24"
-version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f5a722e1de4671c1cfe46f54ebe21fe3233823e62d8cc33d698f50b5fcf2e19"
 dependencies = [
  "serde",
  "serde_derive",
@@ -585,7 +584,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-x86"
-version = "0.0.8"
+version = "0.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b95531fa2a2fa283d3c2fb3476f43e16e6c83e459d6a87d39dded8b656253207"
 dependencies = [
  "num-traits",
  "serde",

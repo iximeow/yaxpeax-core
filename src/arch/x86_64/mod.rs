@@ -1,4 +1,4 @@
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{Address, AddressBase, AddressDiff, Arch};
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
@@ -13,6 +13,7 @@ use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::cell::Ref;
+use std::fmt;
 use num_traits::Zero;
 
 use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
@@ -27,6 +28,7 @@ pub mod analyses;
 pub mod cpu;
 pub mod debug;
 pub mod display;
+pub mod semantic;
 
 #[derive(Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
@@ -290,196 +292,218 @@ impl ContextWrite<x86_64, Update> for MergedContextTable {
     }
 }
 
-impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction {
-    // TODO: this assumes that instructions won't fault
-    // we really don't know that, but also no T provided here gives
-    // context such that we can make that determination
-    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
-        match self.opcode {
-            Opcode::CALLF => {
-                // TODO: honestly not sure how to model callf
-                control_flow::Effect::stop()
-            },
-            Opcode::CALL => {
-                // TODO: this is where i ought to reference context
-                // to determine that the called address begins a well-formed
-                // region that may or may not let the caller consider "call"
-                // a single non-effectual instruction w.r.t control flow
-                let dest = match self.operand(0) {
-                    Operand::ImmediateI8(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI16(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI32(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI64(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    o => {
-//                        event!(Level::WARN, operand=?o, "unpredicted call destination");
-//                        eprintln!("unpredicted call destination, operand {:?}", o);
-                        // TODO one day when ctx can let this reach ... the current
-                        // exeuction context ... this may be able to be smarter
-                        // (f.ex, if this jumps to a jump table)
-                        None
-                    }
-                };
+use analyses::Value;
+use analyses::ValueRes;
+use analyses::DFG;
 
-                match dest {
-                    Some(_dest) => {
-                    //    control_flow::Effect::cont_and(dest)
-                        control_flow::Effect::cont()
-                    },
-                    None => control_flow::Effect::cont()
+struct ControlFlowAnalysis<A: Address + fmt::Debug> {
+    effect: control_flow::Effect<A>,
+}
+
+impl <A: Address + fmt::Debug> ControlFlowAnalysis<A> {
+    fn new() -> Self {
+        Self {
+            effect: control_flow::Effect::cont(),
+        }
+    }
+}
+
+impl From<AddressDiff<u64>> for control_flow::Effect<u64> {
+    fn from(item: AddressDiff<u64>) -> Self {
+        control_flow::Effect::cont_and(
+            control_flow::Target::Relative(item)
+        )
+    }
+}
+
+pub trait ToAddrDiff: yaxpeax_arch::AddressDiffAmount {
+    fn translate_offset(from: u64) -> AddressDiff<Self>;
+}
+
+impl ToAddrDiff for u64 {
+    fn translate_offset(from: u64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from)
+    }
+}
+
+impl ToAddrDiff for u32 {
+    fn translate_offset(from: u64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from as u32)
+    }
+}
+
+impl <A: Address + ToAddrDiff + fmt::Debug> Value for control_flow::Effect<A> {
+    fn unknown() -> Self {
+        control_flow::Effect::stop()
+    }
+
+    fn from_const(c: u64) -> Self {
+        control_flow::Effect::stop_and(
+            control_flow::Target::Relative(A::translate_offset(c))
+        )
+    }
+
+    fn from_set(effects: &[Self]) -> Self {
+        use self::control_flow::Effect;
+        use self::control_flow::Target;
+
+        debug_assert!(effects.len() != 0);
+        let mut stop_after = true;
+        let mut target: Option<Target<A>> = None;
+
+        for effect in effects {
+            stop_after &= effect.is_stop();
+
+            let merged_target = match (target, effect.dest.as_ref()) {
+                (None, None) => {
+                    None
                 }
-
-            }
-            Opcode::JMP => {
-                let dest = match self.operand(0) {
-                    Operand::ImmediateI8(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI16(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI32(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    Operand::ImmediateI64(i) => {
-                        Some(control_flow::Target::Relative(i as i64 as u64))
-                    },
-                    o => {
-//                        event!(Level::WARN, operand=?o, "unpredicted jmp destination");
-//                        eprintln!("unpredicted jmp destination, operand {:?}", o);
-                        // TODO one day when ctx can let this reach ... the current
-                        // exeuction context ... this may be able to be smarter
-                        // (f.ex, if this jumps to a jump table, 
-                        None
-                    }
-                };
-
-                match dest {
-                    Some(dest) => {
-                        control_flow::Effect::stop_and(dest)
-                    },
-                    None => control_flow::Effect::stop()
+                (None, Some(o)) => {
+                    Some(o.clone())
                 }
-            },
-            Opcode::JMPF => {
-                // TODO: ...
-                control_flow::Effect::stop()
-            },
-            Opcode::INT |
-            Opcode::INTO |
-            Opcode::IRET |
-            Opcode::RETF |
-            Opcode::SYSRET |
-            Opcode::RETURN => {
-                control_flow::Effect::stop()
-            }
-            Opcode::HLT => {
-                control_flow::Effect::stop()
-            },
-            Opcode::JO |
-            Opcode::JNO |
-            Opcode::JZ |
-            Opcode::JNZ |
-            Opcode::JA |
-            Opcode::JNA |
-            Opcode::JB |
-            Opcode::JNB |
-            Opcode::JS |
-            Opcode::JNS |
-            Opcode::JP |
-            Opcode::JNP |
-            Opcode::JG |
-            Opcode::JLE |
-            Opcode::JGE |
-            Opcode::JL => {
-                match self.operand(0) {
-                    Operand::ImmediateI8(i) => {
-                        control_flow::Effect::cont_and(
-                            control_flow::Target::Relative(i as i64 as u64)
-                        )
-                    },
-                    Operand::ImmediateI16(i) => {
-                        control_flow::Effect::cont_and(
-                            control_flow::Target::Relative(i as i64 as u64)
-                        )
-                    },
-                    Operand::ImmediateI32(i) => {
-                        control_flow::Effect::cont_and(
-                            control_flow::Target::Relative(i as i64 as u64)
-                        )
-                    },
-                    Operand::ImmediateI64(i) => {
-                        control_flow::Effect::cont_and(
-                            control_flow::Target::Relative(i as i64 as u64)
-                        )
-                    },
-                    _ => {
-                        unreachable!()
+                (Some(o), None) => {
+                    Some(o)
+                }
+                // welllll this ought to be deduplicated...
+                /*
+                (Some(Target::Multiple(ref l)), Some(Target::Multiple(r))) => {
+                    let mut vec = l.clone();
+                    vec.extend_from_slice(&r);
+                    Some(Target::Multiple(vec))
+                }
+                (Some(Target::Multiple(l)), Some(r)) => {
+                    let mut vec = l.clone();
+                    vec.push(r.clone());
+                    Some(Target::Multiple(vec))
+                }
+                (Some(ref l), Some(Target::Multiple(r))) => {
+                    let mut vec = r.clone();
+                    vec.push(l.clone());
+                    Some(Target::Multiple(vec))
+                }
+                (Some(l), Some(r)) => {
+                    if &l == r {
+                        Some(l)
+                    } else {
+                        Some(Target::Multiple(vec![l, r.clone()]))
                     }
                 }
+                */
+                _ => {
+                    unsafe {
+                        std::hint::unreachable_unchecked();
+                    }
+                }
+            };
+            target = merged_target;
+        }
+
+        Effect {
+            stop_after,
+            dest: target,
+        }
+    }
+
+    fn to_const(&self) -> Option<u64> {
+        None
+    }
+
+    #[inline(always)]
+    fn add(&self, other: &Self) -> ValueRes<Self> {
+        if (self.stop_after == true && self.dest.is_none()) ||
+            (other.stop_after == true && other.dest.is_none()) {
+
+            return ValueRes::literal(Self::unknown());
+        }
+
+        match (self.dest.as_ref(), other.dest.as_ref()) {
+            (None, Some(control_flow::Target::Relative(rel))) |
+            (Some(control_flow::Target::Relative(rel)), None) => {
+                ValueRes::literal(control_flow::Effect {
+                    stop_after: self.stop_after || other.stop_after,
+                    dest: Some(control_flow::Target::Relative(*rel))
+                })
             },
-
-            Opcode::UD2 |
-            Opcode::Invalid => {
-                control_flow::Effect::stop()
-            },
-
-            Opcode::SETO |
-            Opcode::SETNO |
-            Opcode::SETZ |
-            Opcode::SETNZ |
-            Opcode::SETA |
-            Opcode::SETBE |
-            Opcode::SETB |
-            Opcode::SETAE |
-            Opcode::SETS |
-            Opcode::SETNS |
-            Opcode::SETP |
-            Opcode::SETNP |
-            Opcode::SETG |
-            Opcode::SETLE |
-            Opcode::SETGE |
-            Opcode::SETL |
-            Opcode::CMOVO |
-            Opcode::CMOVNO |
-            Opcode::CMOVZ |
-            Opcode::CMOVNZ |
-            Opcode::CMOVA |
-            Opcode::CMOVNA |
-            Opcode::CMOVB |
-            Opcode::CMOVNB |
-            Opcode::CMOVS |
-            Opcode::CMOVNS |
-            Opcode::CMOVP |
-            Opcode::CMOVNP |
-            Opcode::CMOVG |
-            Opcode::CMOVLE |
-            Opcode::CMOVGE |
-            Opcode::CMOVL => {
-                control_flow::Effect::cont()
+            (Some(control_flow::Target::Relative(l)), Some(control_flow::Target::Relative(r))) => {
+                ValueRes::literal(control_flow::Effect {
+                    stop_after: self.stop_after || other.stop_after,
+                    dest: Some(control_flow::Target::Relative(
+                        A::zero().wrapping_offset(*l).wrapping_offset(*r).diff(&A::zero()).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }) //.expect("can compute diff")
+                    ))
+                })
             }
-
-            // these have control flow dependent on the rep prefix
-            Opcode::CMPS |
-            Opcode::SCAS |
-            Opcode::MOVS |
-            Opcode::LODS |
-            Opcode::STOS => {
-                control_flow::Effect::cont()
-            }
-            o => {
-//                event!(target: "instruction descriptions", Level::ERROR); //, "missing control flow description", opcode = o);
-//                event!(Level::ERROR, opcode = ?o, "missing control flow description"); //, "missing control flow description", opcode = o);
-                // assume the instructions with no control flow information just continue on
-                control_flow::Effect::cont()
+            _ => {
+                unsafe {
+                    std::hint::unreachable_unchecked();
+                    // panic!("bad add: {:?} + {:?}", self, other);
+                }
             }
         }
     }
+}
+
+use arch::x86_64::analyses::data_flow::Location;
+
+impl<Addr: Address + fmt::Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for ControlFlowAnalysis<Addr> {
+    type Location = Location;
+
+    fn read_loc(&self, loc: Self::Location) -> control_flow::Effect<Addr> {
+        if loc == Location::RIP {
+            self.effect.clone()
+        } else if let Location::Memory(_) = loc {
+            control_flow::Effect::unknown()
+        } else {
+            control_flow::Effect::unknown()
+        }
+    }
+
+    fn write_loc(&mut self, loc: Self::Location, value: control_flow::Effect<Addr>) {
+        if loc == Location::RIP {
+            self.effect = value;
+        } else {
+            // do nothing, it's a location we ignore for control flow analysis
+        }
+    }
+}
+
+impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction {
+    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
+        let mut instr_control_flow = ControlFlowAnalysis::new();
+        semantic::evaluate(self, &mut instr_control_flow);
+        let assume_calls_return = true;
+        match self.opcode {
+            Opcode::CALL |
+            Opcode::SYSCALL => {
+                if assume_calls_return {
+                    return control_flow::Effect::cont();
+                    // instr_control_flow.with_effect(control_flow::Effect::cont());
+                }
+            }
+            _ => {}
+        }
+        instr_control_flow.effect
+    }
+}
+
+#[test]
+fn test_x86_determinant() {
+    use yaxpeax_arch::Decoder;
+    use analyses::control_flow::Determinant;
+    let decoder = <x86_64 as Arch>::Decoder::default();
+    // call 0x1234567
+    let call = decoder.decode([0xe8, 0x78, 0x56, 0x34, 0x12].iter().cloned()).unwrap();
+    assert_eq!(call.control_flow(Option::<&()>::None), control_flow::Effect::cont());
+    // jmp 0x1234567
+    let jmp = decoder.decode([0xe9, 0x78, 0x56, 0x34, 0x12].iter().cloned()).unwrap();
+    assert_eq!(jmp.control_flow(Option::<&()>::None), control_flow::Effect::stop_and(
+        control_flow::Target::Relative(AddressDiff::from_const(0x12345678))
+    ));
+    // ret
+    let ret = decoder.decode([0xc3].iter().cloned()).unwrap();
+    assert_eq!(ret.control_flow(Option::<&()>::None), control_flow::Effect::stop());
+    // jl 0x14
+    let jl = decoder.decode([0x7c, 0x14].iter().cloned()).unwrap();
+    assert_eq!(jl.control_flow(Option::<&()>::None), control_flow::Effect::cont_and(
+        control_flow::Target::Relative(AddressDiff::from_const(0x14))
+    ));
 }

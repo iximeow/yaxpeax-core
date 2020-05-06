@@ -4,6 +4,8 @@ use std::ops::Range;
 
 pub mod cursor;
 pub use self::cursor::{ReadCursor, UnboundedCursor};
+pub mod slice;
+pub use self::slice::{ProgramSlice, SourceInfo};
 pub mod flat;
 pub use self::flat::FlatMemoryRepr;
 pub mod process;

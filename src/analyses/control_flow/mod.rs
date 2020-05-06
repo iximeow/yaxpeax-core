@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
-use yaxpeax_arch::{Address, AddressDisplay, Arch, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDiffAmount, AddressDisplay, Arch, Decoder, LengthedInstruction};
 
 use num_traits::{WrappingAdd, Zero, One};
 
@@ -24,13 +24,16 @@ use serialize::GraphSerializer;
 use serde::Serialize;
 
 use serde::ser::SerializeStruct;
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Effect<Addr> {
-    stop_after: bool,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Effect<Addr: AddressDiffAmount + Debug> {
+    pub(crate) stop_after: bool,
+    // the AddressDiffAmount trait fools `Deserialize`'s proc macro, so we have to explicitly write
+    // the bound serde should use.
+    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
     pub dest: Option<Target<Addr>>
 }
 
-impl <Addr> Effect<Addr> {
+impl <Addr: Address + Debug> Effect<Addr> {
     pub fn is_stop(&self) -> bool {
         self.stop_after
     }
@@ -61,15 +64,21 @@ impl <Addr> Effect<Addr> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Target<Addr> {
-    Relative(Addr),
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Target<Addr: AddressDiffAmount + Debug> {
+    // the AddressDiffAmount trait fools `Deserialize`'s proc macro, so we have to explicitly write
+    // the bound serde should use.
+    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    Relative(AddressDiff<Addr>),
+    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
     Absolute(Addr),
-    Multiple(Vec<Target<Addr>>), // TODO: ?? jump tables?
+    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    Multiple(usize), // TODO: ?? jump tables? tableid
+//    Multiple(Vec<Target<Addr>>), // TODO: ?? jump tables?
     Indeterminate       // Unknowns? rets? idk
 }
 
-pub trait Determinant<T, Addr> {
+pub trait Determinant<T, Addr: AddressDiffAmount + Debug> {
 //    fn control_flow<T, Addr>(&self, &T) -> Effect<Addr>;
     fn control_flow(&self, Option<&T>) -> Effect<Addr>;
 }
@@ -80,7 +89,7 @@ pub struct BasicBlock<Addr> where Addr: Copy + Clone {
     pub end: Addr // inclusive!!
 }
 
-impl <Addr> BasicBlock<Addr> where Addr: Copy + Clone {
+impl<Addr: Copy + Clone> BasicBlock<Addr> {
     pub fn new(start_addr: Addr, end_addr: Addr) -> BasicBlock<Addr> {
         BasicBlock {
             start: start_addr,
@@ -113,12 +122,12 @@ fn control_flow_graph_construction() {
     println!("nexts0: {:?}", nexts);
     assert!(nexts.len() == 0);
     let nexts = cfg.with_effect(4008, 4008, &Effect::stop_and(
-        Target::Relative(3)));
+        Target::Relative(AddressDiff::from_const(3))));
     println!("nexts1: {:?}", nexts);
     assert!(nexts.len() == 1);
     assert!(nexts[0] == 4012);
     let nexts = cfg.with_effect(4030, 4031, &Effect::cont_and(
-        Target::Relative(-13i32 as u32)));
+        Target::Relative(AddressDiff::from_const(-13i32 as u32))));
     println!("nexts2: {:?}", nexts);
     assert!(nexts.len() == 2);
     assert!(nexts.contains(&4018));
@@ -151,9 +160,9 @@ fn control_flow_graph_construction_2() {
     let mut cfg: ControlFlowGraph<u32> = ControlFlowGraph::new();
     cfg.with_effect(1000 - 1, 1000, &Effect::stop());
     cfg.with_effect(1009, 1010, &Effect::cont_and(
-        Target::Relative(-10i32 as u32)));
+        Target::Relative(AddressDiff::from_const(-10i32 as u32))));
     cfg.with_effect(1019,  1020, &Effect::cont_and(
-        Target::Relative(-11i32 as u32)));
+        Target::Relative(AddressDiff::from_const(-11i32 as u32))));
 
     // TODO
 //    println!("cfg:\n  graph: {:?}\n  blocks: {:?}", cfg.graph, cfg.blocks);
@@ -197,7 +206,7 @@ fn control_flow_graph_construction_3() {
     }
 }
 
-impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
+impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::NodeTrait {
     pub fn new() -> ControlFlowGraph<A> {
         let mut blocks = BTreeMap::new();
         blocks.insert(A::min_value(), BasicBlock::new(A::min_value(), A::max_value()));
@@ -323,7 +332,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             // `split_loc - 1`, with `[split_loc, block.end]` as the block we must insert after it
             let split_loc_end = last_block.end;
             let last_start = last_block.start;
-            last_block.end = split_loc - A::one();
+            last_block.end = split_loc - AddressDiff::one();
             let last_end = last_block.end;
             graph.blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
 
@@ -367,7 +376,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
             // Ok, have to clip the containing basic block
             // if this is not going to the start of an existing basic block
             Some(Target::Relative(rel)) => {
-                let dest_addr = next.wrapping_add(rel);
+                let dest_addr = next.wrapping_offset(*rel);
                 if add_split(self, dest_addr, true) {
                 }
                     result.push(dest_addr);
@@ -382,11 +391,12 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
 //                let enclosing_block_start: A = self.get_block(at).start;
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             }
-            Some(Target::Multiple(targets)) => {
+            Some(Target::Multiple(_targets)) => {
+                /*
                 for target in targets {
                     match target {
                         Target::Relative(rel) => {
-                            let dest_addr = next.wrapping_add(rel);
+                            let dest_addr = next.wrapping_offset(*rel);
                             if add_split(self, dest_addr, true) {
                             }
                                 result.push(dest_addr);
@@ -407,6 +417,7 @@ impl <A> ControlFlowGraph<A> where A: Address + petgraph::graphmap::NodeTrait {
                         }
                     }
                 }
+                */
             },
             _ => {
                 // TODO: unhandled!
@@ -497,6 +508,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
             Ok(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);
+                    println!("computing control flow at {}", addr.show());
                     instr.control_flow(Some(&ctx))
                 };
                 let results = on_instruction_discovered(&instr, addr, &effect, contexts);
@@ -506,11 +518,11 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 match effect {
                     Effect { stop_after: false, dest: None } => {
                         // we can continue!
-                        addr = addr + instr.len();
+                        addr += instr.len();
                     },
                     // and for any other cases...
                     effect @ _ => {
-                        return cfg.with_effect(addr, addr.wrapping_add(&instr.len()), &effect);
+                        return cfg.with_effect(addr, addr.wrapping_offset(instr.len()), &effect);
                     }
                 }
             },
@@ -525,7 +537,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
 //                                        Decodable?
 pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A::Instruction)>, contexts: &'a UTable, _start: u16) -> ControlFlowGraph<A::Address>
     where
-        A::Instruction: Determinant<U, A::Address> + LengthedInstruction<Unit=A::Address>,
+        A::Instruction: Determinant<U, A::Address> + LengthedInstruction<Unit=AddressDiff<A::Address>>,
         A::Address: petgraph::graphmap::NodeTrait,
         UTable: ContextRead<A, U> + ContextWrite<A, Update>
 {
@@ -559,29 +571,30 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
         // ok, we have a basic block that starts before split_loc, so resize it to end at
         // `split_loc - 1`, with `[split_loc, block.end]` as the block we must insert after it
         let split_loc_end = last_block.end;
-        last_block.end = split_loc - A::one();
+        last_block.end = split_loc - AddressDiff::one();
         blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
     }
 
     for (addr, t) in ts {
         let effect = t.control_flow(Some(&contexts.at(addr)));
         if effect.stop_after {
-            add_split(&mut cfg.blocks, *addr + t.len());
+            add_split(&mut cfg.blocks, addr.wrapping_offset(t.len()));
         }
         match effect.dest {
             // Ok, have to clip the containing basic block
             // if this is not going to the start of an existing basic block
             Some(Target::Relative(rel)) => {
-                add_split(&mut cfg.blocks, *addr + t.len() + rel);
+                add_split(&mut cfg.blocks, addr.wrapping_offset(t.len()).wrapping_offset(rel));
             },
             Some(Target::Absolute(dest)) => {
                 add_split(&mut cfg.blocks, dest);
             }
-            Some(Target::Multiple(targets)) => {
+            Some(Target::Multiple(_targets)) => {
+                /*
                 for target in targets {
                     match target {
                         Target::Relative(rel) => {
-                            add_split(&mut cfg.blocks, *addr + t.len() + rel);
+                            add_split(&mut cfg.blocks, addr.wrapping_offset(t.len()).wrapping_offset(rel));
                         },
                         Target::Absolute(dest) => {
                             add_split(&mut cfg.blocks, dest);
@@ -592,6 +605,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
                         }
                     }
                 }
+                */
             },
             _ => {
                 // TODO: unhandled!
@@ -613,20 +627,21 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
         if addr == &curr_block.end {
             let effect = t.control_flow(Some(&contexts.at(addr)));
             if !effect.stop_after {
-                cfg.graph.add_edge(curr_block.start, *addr + t.len(), ());
+                cfg.graph.add_edge(curr_block.start, addr.wrapping_offset(t.len()), ());
             }
             match effect.dest {
                 Some(Target::Relative(rel)) => {
-                    cfg.graph.add_edge(curr_block.start, *addr + t.len() + rel, ());
+                    cfg.graph.add_edge(curr_block.start, addr.wrapping_offset(t.len()).wrapping_offset(rel), ());
                 },
                 Some(Target::Absolute(dest)) => {
                     cfg.graph.add_edge(curr_block.start, dest, ());
                 },
-                Some(Target::Multiple(targets)) => {
+                Some(Target::Multiple(_targets)) => {
+                    /*
                     for target in targets {
                         match target {
                             Target::Relative(rel) => {
-                                cfg.graph.add_edge(curr_block.start, *addr + t.len() + rel, ());
+                                cfg.graph.add_edge(curr_block.start, addr.wrapping_offset(t.len()).wrapping_offset(rel), ());
                             },
                             Target::Absolute(dest) => {
                                 cfg.graph.add_edge(curr_block.start, dest, ());
@@ -637,6 +652,7 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
                             }
                         }
                     }
+                    */
                 },
                 _ => {
                     // TODO: handle these cases too...

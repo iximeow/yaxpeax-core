@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, LengthedInstruction};
+use yaxpeax_arch::{Arch, AddressBase, LengthedInstruction};
 use yaxpeax_x86::long_mode::{Opcode, Instruction, Operand, ConditionCode};
 use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::Location;
@@ -75,7 +75,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
         let next_addr = conditional_addr + conditional_instr.len();
         let conditional_dest = match conditional_instr.control_flow(Option::<&u8>::None).dest {
             Some(Target::Relative(addr)) => {
-                next_addr.wrapping_add(addr)
+                next_addr.wrapping_offset(addr)
             },
             Some(Target::Absolute(addr)) => {
                 addr

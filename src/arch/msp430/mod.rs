@@ -9,7 +9,7 @@ use serialize::Memoable;
 
 use num_traits::Zero;
 
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{AddressDiff, Arch};
 use yaxpeax_msp430::{Opcode, Operand, MSP430};
 use ContextRead;
 use ContextWrite;
@@ -80,7 +80,7 @@ impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430::Instruction {
                 control_flow::Effect::stop_and(
                     control_flow::Target::Relative(
                         match self.operands[0] {
-                            Operand::Offset(offs) => (offs as u16).wrapping_mul(2),
+                            Operand::Offset(offs) => AddressDiff::from_const((offs as u16).wrapping_mul(2)),
                             _ => { unreachable!() }
                         }
                     )
@@ -96,7 +96,7 @@ impl <T> control_flow::Determinant<T, u16> for yaxpeax_msp430::Instruction {
                 control_flow::Effect::cont_and(
                     control_flow::Target::Relative(
                         match self.operands[0] {
-                            Operand::Offset(offs) => (offs as u16).wrapping_mul(2),
+                            Operand::Offset(offs) => AddressDiff::from_const((offs as u16).wrapping_mul(2)),
                             _ => { unreachable!() }
                         }
                     )

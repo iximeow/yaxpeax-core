@@ -75,7 +75,11 @@ pub enum Location {
     Memory(MemoryRegion),
     MemoryLocation(MemoryRegion, u16, i32),
     // not modeling eflags' system bits ... yet?
-    CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL
+    CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL,
+    // necessary to have a location to write that is provably not an Operand variant.
+    // no x86 instruction explicitly writes to RIP in a way that could be ambiguous with other
+    // operands, so this allows x86 semantics to specialize nicely for control flow.
+    RIP,
 }
 
 #[derive(Default)]
@@ -192,6 +196,9 @@ impl Serialize for Location {
             Location::DF => { serialized_loc.push_str("d"); }
             Location::OF => { serialized_loc.push_str("o"); }
             Location::IOPL => { serialized_loc.push_str("p"); }
+            Location::RIP => {
+                serialized_loc.push_str("$");
+            }
         }
         serializer.serialize_str(&serialized_loc)
     }
@@ -226,6 +233,7 @@ impl fmt::Display for Location {
             Location::DF => write!(f, "df"),
             Location::OF => write!(f, "of"),
             Location::IOPL => write!(f, "iopl"),
+            Location::RIP => write!(f, "rip"),
         }
     }
 }
@@ -252,6 +260,7 @@ impl AliasInfo for Location {
             Location::IOPL => {
                 vec![Location::Register(RegSpec::rflags())]
             },
+            Location::RIP |
             Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
@@ -349,6 +358,7 @@ impl AliasInfo for Location {
             },
             Location::Memory(r) => Location::Memory(*r),
             Location::MemoryLocation(r, _, _) => Location::Memory(*r),
+            Location::RIP |
             Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
             Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
@@ -2445,8 +2455,8 @@ fn test_xor_locations() {
     use yaxpeax_arch::{Arch, Decoder};
     let inst = <x86_64 as Arch>::Decoder::default().decode([0x33u8, 0xc1].iter().map(|x| *x)).unwrap();
     use data::LocIterator;
-    let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
-    panic!("{:?}", locs);
+//    let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
+//    panic!("{:?}", locs);
 }
 
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> Iterator for LocationIter<'a, 'b, 'c, D, F> {

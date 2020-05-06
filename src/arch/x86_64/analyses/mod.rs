@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, LengthedInstruction};
+use yaxpeax_arch::{AddressBase, AddressDiff, Arch, LengthedInstruction};
 use yaxpeax_x86::long_mode::{Opcode, Operand, RegisterBank, RegSpec};
 use yaxpeax_x86::{x86_64 as x86_64Arch};
 use analyses::control_flow::Effect;
@@ -8,6 +8,7 @@ use arch::BaseUpdate;
 use analyses::xrefs::{RefType, RefAction};
 use tracing::{event, span, Level};
 
+pub mod control_flow;
 pub mod data_flow;
 pub mod evaluators;
 pub mod value_range;
@@ -49,7 +50,7 @@ pub fn find_function_hints(
     if instr.opcode == Opcode::CALL {
         match instr.operand(0) {
             Operand::ImmediateI32(disp) => {
-                let dest = (disp as i64 as u64).wrapping_add(address).wrapping_add(instr.len());
+                let dest = address.wrapping_offset(instr.len()).wrapping_offset(AddressDiff::from_const(disp as i64 as u64));
                 vec![
                     (dest, BaseUpdate::Specialized(x86Update::FunctionHint))
                 ]
@@ -264,9 +265,9 @@ pub fn find_xrefs(
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(
                         RefType::Data,
                         RefAction::Write,
-                        (disp as i64 as u64)
-                            .wrapping_add(address)
-                            .wrapping_add(instr.len())
+                        address
+                            .wrapping_offset(AddressDiff::from_const(disp as i64 as u64))
+                            .wrapping_offset(instr.len())
                     ))));
                 }
                 _ => {}
@@ -284,9 +285,9 @@ pub fn find_xrefs(
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(
                         RefType::Data,
                         RefAction::Read,
-                        (disp as i64 as u64)
-                            .wrapping_add(address)
-                            .wrapping_add(instr.len())
+                        address
+                            .wrapping_offset(AddressDiff::from_const(disp as i64 as u64))
+                            .wrapping_offset(instr.len())
                     ))));
                 }
                 _ => {}

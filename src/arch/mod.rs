@@ -1,7 +1,7 @@
 pub mod arm;
 pub mod pic17;
 pub mod pic18;
-pub mod pic24;
+// pub mod pic24;
 pub mod msp430;
 
 pub mod x86_64;
@@ -22,7 +22,7 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Arch, Address, AddressDisplay, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Arch, Address, AddressDiff, AddressDisplay, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 
@@ -533,7 +533,7 @@ pub trait OperandDefinitions<C> {
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum Device {
-    PIC24(pic24::CPU),
+//    PIC24(pic24::CPU),
     PIC18(pic18::cpu::CPU),
     PIC17(pic17::cpu::CPU),
     MSP430(msp430::cpu::CPU),
@@ -545,7 +545,7 @@ pub enum Device {
 impl From<Device> for ISA {
     fn from(d: Device) -> ISA {
         match d {
-            Device::PIC24(_) => { ISA::PIC24 }
+//            Device::PIC24(_) => { ISA::PIC24 }
             Device::PIC18(_) => { ISA::PIC18 }
             Device::PIC17(_) => { ISA::PIC17 }
             Device::MSP430(_) => { ISA::MSP430 }
@@ -692,7 +692,7 @@ pub trait SimpleStreamingIterator {
     fn next<'b>(&mut self) -> Option<&'b Self::Item>;
 }
 
-impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=Addr> + Default {
+impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=AddressDiff<Addr>> + Default {
     pub fn next<'b>(&mut self) -> Option<(Addr, &Instr)> {
         if self.elem.is_some() {
             let instr: &mut Instr = self.elem.as_mut().unwrap();

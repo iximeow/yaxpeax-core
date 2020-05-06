@@ -6,7 +6,7 @@ use termion::color;
 use arch::FunctionImpl;
 use memory::MemoryRepr;
 use yaxpeax_arch::{ColorSettings, Colorize};
-use yaxpeax_arch::{Arch, AddressDisplay, Decoder, LengthedInstruction, NoColors, YaxColors};
+use yaxpeax_arch::{Arch, AddressDiff, AddressBase, AddressDisplay, Decoder, LengthedInstruction, NoColors, YaxColors};
 use yaxpeax_arch::display::*;
 use arch::display::BaseDisplay;
 use arch::FunctionRepr;
@@ -72,7 +72,7 @@ impl <F: FunctionRepr, T: FunctionQuery<<x86_64Arch as Arch>::Address, Function=
         }
         write!(dest, "{}: ", addr.show())?;
         for i in 0..16 {
-            if i < instr.len() {
+            if i < 0.wrapping_offset(instr.len()) {
                 match bytes.next() {
                     Some(b) => {
                         write!(dest, "{:02x}", b)?;
@@ -1022,7 +1022,7 @@ impl <
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
-                    let addr = ctx.addr.wrapping_add(*disp as i64 as u64).wrapping_add(ctx.instr.len());
+                    let addr = ctx.addr.wrapping_offset(AddressDiff::from_const(*disp as i64 as u64)).wrapping_offset(ctx.instr.len());
                     let text = ctx.contexts
                         .and_then(|ctx| ctx.symbol_for(addr))
                         .map(|sym| { ctx.colors.symbol(format!("&{}", sym)) })
@@ -1305,7 +1305,7 @@ impl <
                     }).unwrap_or_else(|| { self.colors.address(addr.show().to_string()) })
                 };
                 let relative_namer = |i| {
-                    let addr = (i as u64).wrapping_add(self.instr.len()).wrapping_add(self.addr);
+                    let addr = self.addr.wrapping_offset(AddressDiff::from_const(i as u64)).wrapping_offset(self.instr.len());
                     dest_namer(addr)
                 };
 
@@ -1323,7 +1323,7 @@ impl <
                         return write!(fmt, " {}", relative_namer(*i as i64));
                     },
                     Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
-                        let addr = self.addr.wrapping_add(*disp as i64 as u64).wrapping_add(self.instr.len());
+                        let addr = self.addr.wrapping_offset(AddressDiff::from_const(*disp as i64 as u64)).wrapping_offset(self.instr.len());
                         return write!(fmt, " [{}]", dest_namer(addr));
                     }
                     op @ _ => {

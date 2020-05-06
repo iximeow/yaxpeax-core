@@ -643,6 +643,7 @@ impl ValueLocations for ARMv7 {
                 parts
             }
             Opcode::MOV => {
+                // TODO: MOV imm may set C!
                 let mut parts = decompose_write(&instr.operands);
                 parts
             }

@@ -1,4 +1,4 @@
-use yaxpeax_arch::Address;
+use yaxpeax_arch::{Address, AddressDiff};
 use memory::repr::flat::FlatMemoryRepr;
 use memory::repr::process::ModuleInfo;
 use memory::MemoryRepr;
@@ -72,7 +72,7 @@ impl <'a, A: Address, T: MemoryRepr<A>> Iterator for UnboundedCursor<'a, A, T> {
     fn next(&mut self) -> Option<u8> {
         let res = self.data.read(self.addr);
         if res.is_some() {
-            self.addr += A::one();
+            self.addr += AddressDiff::one();
         }
         res
     }
@@ -106,7 +106,7 @@ impl <'a, A: Address, T: MemoryRepr<A>> Iterator for ReadCursor<'a, A, T> {
         if self.start < self.end {
             let res = self.data.read(self.start);
             if res.is_some() {
-                self.start += A::one();
+                self.start += AddressDiff::one();
             }
             res
         } else {

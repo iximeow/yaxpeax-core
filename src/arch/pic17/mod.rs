@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressDiff;
 use yaxpeax_pic17::PIC17;
 use yaxpeax_pic17::{Opcode, Operand};
 use arch::pic17::deps::{updates_of, dependencies_of};
@@ -173,26 +174,16 @@ impl <T> control_flow::Determinant<T, <PIC17 as Arch>::Address> for yaxpeax_pic1
                     Opcode::TSTFSZ |
                     Opcode::BTFSS |
                     Opcode::BTFSC => {
-                        control_flow::Effect::stop_and(
-                            control_flow::Target::Multiple(
-                                vec![
-                                    control_flow::Target::Relative(0),
-                                    control_flow::Target::Relative(2)
-                                ]
-                            )
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(AddressDiff::<u16>::from_const(2u16))
                         )
                     }
                     Opcode::INFSNZ |
                     Opcode::DCFSNZ |
                     Opcode::DECFSZ |
                     Opcode::INCFSZ => {
-                        control_flow::Effect::stop_and(
-                            control_flow::Target::Multiple(
-                                vec![
-                                    control_flow::Target::Relative(0),
-                                    control_flow::Target::Relative(2)
-                                ]
-                            )
+                        control_flow::Effect::cont_and(
+                            control_flow::Target::Relative(AddressDiff::<u16>::from_const(2u16))
                         )
                     }
                     Opcode::ADDWF |

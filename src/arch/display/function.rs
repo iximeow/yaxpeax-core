@@ -1,4 +1,6 @@
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressBase;
+use yaxpeax_arch::AddressDiff;
 use yaxpeax_arch::AddressDisplay;
 use yaxpeax_arch::LengthedInstruction;
 use arch::InstructionSpan;
@@ -199,7 +201,7 @@ impl <
                     &mut instr_string,
                     address,
                     instr,
-                    &mut self.data.range(address..(address + instr.len())).unwrap(),
+                    &mut self.data.range(address..(address.wrapping_offset(instr.len()))).unwrap(),
                     Some(&self.ctx),
                 ).unwrap();
                 // ok come back to this
@@ -233,7 +235,7 @@ impl <
                 if self.highlight_instrs.contains(&address) {
                     write!(instr_string, "{}", termion::style::NoInvert).unwrap();
                 }
-                if address.wrapping_add(&instr.len()) > span_end {
+                if address.wrapping_offset(instr.len()) > span_end {
                     write!(instr_string ,"\n┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄").unwrap();
                 }
 

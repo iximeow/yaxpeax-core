@@ -44,7 +44,7 @@ pub fn show_block<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts>
             &mut instr_text,
             address,
             instr,
-            &mut data.range(address..(address + instr.len())).unwrap(),
+            &mut data.range(address..(address.wrapping_offset(instr.len()))).unwrap(),
             Some(ctx),
         ).unwrap();
         instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
@@ -69,7 +69,7 @@ pub fn show_instruction<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Con
                 &mut instr_text,
                 address,
                 &instr,
-                &mut data.range(address..(address + instr.len())).unwrap(),
+                &mut data.range(address..(address.wrapping_offset(instr.len()))).unwrap(),
                 Some(ctx),
             ).unwrap();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
@@ -139,7 +139,8 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
 //            println!("instr at {}, {}, len={}", address.show(), instr_text, instr.len());
             use yaxpeax_arch::Address;
-            if instr.len().to_linear() == 0 {
+            use yaxpeax_arch::AddressBase;
+            if A::Address::zero().wrapping_offset(instr.len()).to_linear() == 0 {
                 panic!("oh no");
             }
             result.push((
@@ -183,7 +184,7 @@ pub fn show_function<M: MemoryRepr<A::Address> + MemoryRange<A::Address>, A: Arc
                 &mut instr_text,
                 address,
                 instr,
-                &mut data.range(address..(address + instr.len())).unwrap(),
+                &mut data.range(address..(address.wrapping_offset(instr.len()))).unwrap(),
                 Some(ctx),
             ).unwrap();
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();

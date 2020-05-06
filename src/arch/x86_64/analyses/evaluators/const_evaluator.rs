@@ -1,4 +1,4 @@
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{AddressDiff, AddressBase, Arch};
 use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64;
 use data::modifier::ModifierExpression;
@@ -29,7 +29,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
         Operand::DisplacementU32(disp) => Some(*disp as i32 as i64 as u64),
         Operand::DisplacementU64(disp) => Some(*disp),
         Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, disp) => {
-            Some((addr.wrapping_add(instr.len())).wrapping_add(*disp as i64 as u64))
+            Some((addr.wrapping_offset(instr.len())).wrapping_offset(AddressDiff::from_const(*disp as i64 as u64)))
         }
         Operand::RegDeref(reg) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {

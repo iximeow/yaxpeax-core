@@ -16,6 +16,12 @@ pub enum LayoutError {
 }
 
 pub trait MemoryRange<A: Address> where Self: MemoryRepr<A> {
+    /// a cursor to read data contained in `range`. this willfully misinterprets `std::ops::Range`
+    /// to be inclusive on both ends, rather than `[inclusive, exclusive)` as the docs say. this
+    /// is, for the time being, necessary because yaxpeax consistently uses ranges that are
+    /// inclusive on both ends. yaxpeax must represent `[inclusive, exclusive)` ranges most clearly
+    /// because this significantly simplifies expressing a basic block that ends at the end of its
+    /// architecture's address space.
     fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>>;
     fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>>;
 }

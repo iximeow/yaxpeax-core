@@ -1,4 +1,6 @@
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressBase;
+use yaxpeax_arch::AddressDiff;
 use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
@@ -62,7 +64,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             }
         }
         Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, disp) => {
-            let addr = (addr.wrapping_add(instr.len())).wrapping_add(*disp as i64 as u64);
+            let addr = (addr.wrapping_offset(instr.len())).wrapping_offset(AddressDiff::from_const(*disp as i64 as u64));
             if addr == 0x1402a3148 {
                 // its that global struct referenced in ntoskrnl:0x1402a9370
                 // ... it's actually the linear address of the KPCR...
