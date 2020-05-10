@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::ops::Bound::Included;
+use std::fmt::Debug;
 
 use smallvec::SmallVec;
 
@@ -73,13 +74,11 @@ pub enum Target<Addr: AddressDiffAmount + Debug> {
     #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
     Absolute(Addr),
     #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
-    Multiple(usize), // TODO: ?? jump tables? tableid
-//    Multiple(Vec<Target<Addr>>), // TODO: ?? jump tables?
+    Multiple(Vec<Target<Addr>>), // TODO: ?? jump tables?
     Indeterminate       // Unknowns? rets? idk
 }
 
 pub trait Determinant<T, Addr: AddressDiffAmount + Debug> {
-//    fn control_flow<T, Addr>(&self, &T) -> Effect<Addr>;
     fn control_flow(&self, Option<&T>) -> Effect<Addr>;
 }
 
@@ -427,8 +426,6 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
     }
 }
 
-use std::fmt::Debug;
-
 pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
     data: &M,
     contexts: &'a mut Contexts,
@@ -664,4 +661,181 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
     }
 
     cfg
+}
+
+use analyses::Value;
+use analyses::ValueRes;
+use analyses::DFG;
+use analyses::control_flow;
+
+pub struct ControlFlowAnalysis<A: Address + Debug> {
+    effect: control_flow::Effect<A>,
+}
+
+impl <A: Address + Debug> ControlFlowAnalysis<A> {
+    pub fn new() -> Self {
+        Self {
+            effect: control_flow::Effect::cont(),
+        }
+    }
+
+    pub fn into_effect(self) -> control_flow::Effect<A> {
+        self.effect
+    }
+}
+
+impl <A: Address + Debug> From<AddressDiff<A>> for control_flow::Effect<A> {
+    fn from(item: AddressDiff<A>) -> Self {
+        control_flow::Effect::cont_and(
+            control_flow::Target::Relative(item)
+        )
+    }
+}
+
+pub trait ToAddrDiff: yaxpeax_arch::AddressDiffAmount {
+    fn translate_offset(from: u64) -> AddressDiff<Self>;
+}
+
+impl ToAddrDiff for u64 {
+    fn translate_offset(from: u64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from)
+    }
+}
+
+impl ToAddrDiff for u32 {
+    fn translate_offset(from: u64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from as u32)
+    }
+}
+
+impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
+    fn unknown() -> Self {
+        control_flow::Effect::stop()
+    }
+
+    fn from_const(c: u64) -> Self {
+        control_flow::Effect::stop_and(
+            control_flow::Target::Relative(A::translate_offset(c))
+        )
+    }
+
+    fn from_set(effects: &[Self]) -> Self {
+        use self::control_flow::Effect;
+        use self::control_flow::Target;
+
+        debug_assert!(effects.len() != 0);
+        let mut stop_after = true;
+        let mut target: Option<Target<A>> = None;
+
+        for effect in effects {
+            stop_after &= effect.is_stop();
+
+            let merged_target = match (target, effect.dest.as_ref()) {
+                (None, None) => {
+                    None
+                }
+                (None, Some(o)) => {
+                    Some(o.clone())
+                }
+                (Some(o), None) => {
+                    Some(o)
+                }
+                // welllll this ought to be deduplicated...
+                (Some(Target::Multiple(ref l)), Some(Target::Multiple(r))) => {
+                    let mut vec = l.clone();
+                    vec.extend_from_slice(&r);
+                    Some(Target::Multiple(vec))
+                }
+                (Some(Target::Multiple(l)), Some(r)) => {
+                    let mut vec = l.clone();
+                    vec.push(r.clone());
+                    Some(Target::Multiple(vec))
+                }
+                (Some(ref l), Some(Target::Multiple(r))) => {
+                    let mut vec = r.clone();
+                    vec.push(l.clone());
+                    Some(Target::Multiple(vec))
+                }
+                (Some(l), Some(r)) => {
+                    if &l == r {
+                        Some(l)
+                    } else {
+                        Some(Target::Multiple(vec![l, r.clone()]))
+                    }
+                }
+                _ => {
+                    unsafe {
+                        std::hint::unreachable_unchecked();
+                    }
+                }
+            };
+            target = merged_target;
+        }
+
+        Effect {
+            stop_after,
+            dest: target,
+        }
+    }
+
+    fn to_const(&self) -> Option<u64> {
+        None
+    }
+
+    #[inline(always)]
+    fn add(&self, other: &Self) -> ValueRes<Self> {
+        if (self.stop_after == true && self.dest.is_none()) ||
+            (other.stop_after == true && other.dest.is_none()) {
+
+            return ValueRes::literal(Self::unknown());
+        }
+
+        match (self.dest.as_ref(), other.dest.as_ref()) {
+            (None, Some(control_flow::Target::Relative(rel))) |
+            (Some(control_flow::Target::Relative(rel)), None) => {
+                ValueRes::literal(control_flow::Effect {
+                    stop_after: self.stop_after || other.stop_after,
+                    dest: Some(control_flow::Target::Relative(*rel))
+                })
+            },
+            (Some(control_flow::Target::Relative(l)), Some(control_flow::Target::Relative(r))) => {
+                ValueRes::literal(control_flow::Effect {
+                    stop_after: self.stop_after || other.stop_after,
+                    dest: Some(control_flow::Target::Relative(
+                        A::zero().wrapping_offset(*l).wrapping_offset(*r).diff(&A::zero()).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }) //.expect("can compute diff")
+                    ))
+                })
+            }
+            _ => {
+                unsafe {
+                    std::hint::unreachable_unchecked();
+                    // panic!("bad add: {:?} + {:?}", self, other);
+                }
+            }
+        }
+    }
+}
+
+use arch::x86_64::analyses::data_flow::Location;
+
+impl<Addr: Address + Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for ControlFlowAnalysis<Addr> {
+    type Location = Location;
+
+    fn read_loc(&self, loc: Self::Location) -> control_flow::Effect<Addr> {
+        if loc == Location::RIP {
+            self.effect.clone()
+        } else if let Location::Memory(_) = loc {
+            control_flow::Effect::unknown()
+        } else {
+            control_flow::Effect::unknown()
+        }
+    }
+
+    fn write_loc(&mut self, loc: Self::Location, value: control_flow::Effect<Addr>) {
+        if loc == Location::RIP {
+            self.effect = value;
+        } else {
+            // do nothing, it's a location we ignore for control flow analysis
+        }
+    }
 }

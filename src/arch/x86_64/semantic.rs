@@ -18,6 +18,8 @@ pub enum CompletionStatus {
     Complete,
 }
 
+pub mod specialized;
+
 pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, Location=Location>>(instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     // TODO: get a disambiguator somehow?
     #[inline(always)]
