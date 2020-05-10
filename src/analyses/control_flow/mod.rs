@@ -665,11 +665,10 @@ pub fn build_global_cfgs<'a, A: Arch, U, Update, UTable>(ts: &Vec<(A::Address, A
 
 use analyses::Value;
 use analyses::ValueRes;
-use analyses::DFG;
 use analyses::control_flow;
 
 pub struct ControlFlowAnalysis<A: Address + Debug> {
-    effect: control_flow::Effect<A>,
+    pub(crate) effect: control_flow::Effect<A>,
 }
 
 impl <A: Address + Debug> ControlFlowAnalysis<A> {
@@ -816,26 +815,21 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
     }
 }
 
-use arch::x86_64::analyses::data_flow::Location;
-
-impl<Addr: Address + Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for ControlFlowAnalysis<Addr> {
-    type Location = Location;
-
-    fn read_loc(&self, loc: Self::Location) -> control_flow::Effect<Addr> {
-        if loc == Location::RIP {
-            self.effect.clone()
-        } else if let Location::Memory(_) = loc {
-            control_flow::Effect::unknown()
-        } else {
-            control_flow::Effect::unknown()
+macro_rules! impl_control_flow {
+    ($semantic:expr, $arch:ty, $inst_ty:ty) => {
+        impl_control_flow!($semantic, $arch, |inst| { None })
+    };
+    ($semantic:expr, $arch:ty, $inst_ty:ty, $fixup:expr) => {
+        impl <T> $crate::analyses::control_flow::Determinant<T, <$arch as yaxpeax_arch::Arch>::Address> for $inst_ty {
+            fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<$arch as yaxpeax_arch::Arch>::Address> {
+                let fixup: fn(&$inst_ty) -> Option<control_flow::Effect<<$arch as yaxpeax_arch::Arch>::Address>> = $fixup;
+                if let Some(effect) = fixup(self) {
+                    return effect;
+                }
+                let mut instr_control_flow = $crate::analyses::control_flow::ControlFlowAnalysis::new();
+                $semantic(self, &mut instr_control_flow);
+                instr_control_flow.into_effect()
+            }
         }
-    }
-
-    fn write_loc(&mut self, loc: Self::Location, value: control_flow::Effect<Addr>) {
-        if loc == Location::RIP {
-            self.effect = value;
-        } else {
-            // do nothing, it's a location we ignore for control flow analysis
-        }
-    }
+    };
 }

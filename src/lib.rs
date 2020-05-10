@@ -20,8 +20,9 @@ extern crate yaxpeax_pic17;
 extern crate yaxpeax_pic18;
 // extern crate yaxpeax_pic24;
 
-pub mod arch;
+#[macro_use]
 pub mod analyses;
+pub mod arch;
 pub mod data;
 pub mod debug;
 pub mod display;

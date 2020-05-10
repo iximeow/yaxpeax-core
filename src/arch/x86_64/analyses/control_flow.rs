@@ -1,28 +1,57 @@
 use yaxpeax_x86::long_mode::{Instruction, Opcode};
 use yaxpeax_x86::long_mode::{Arch as x86_64};
-use yaxpeax_arch::Arch;
+use yaxpeax_arch::{Address, Arch};
+use std::fmt::Debug;
 use analyses::control_flow;
+use analyses::Value;
 use analyses::control_flow::Determinant;
 use analyses::control_flow::ControlFlowAnalysis;
+use analyses::control_flow::ToAddrDiff;
 
-impl <T> control_flow::Determinant<T, <x86_64 as Arch>::Address> for Instruction {
-    fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<x86_64 as Arch>::Address> {
-        let mut instr_control_flow = ControlFlowAnalysis::new();
-        crate::arch::x86_64::semantic::evaluate(self, &mut instr_control_flow);
+use arch::x86_64::analyses::data_flow::Location;
+use analyses::DFG;
+
+impl<Addr: Address + Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for ControlFlowAnalysis<Addr> {
+    type Location = Location;
+
+    fn read_loc(&self, loc: Self::Location) -> control_flow::Effect<Addr> {
+        if loc == Location::RIP {
+            self.effect.clone()
+        } else if let Location::Memory(_) = loc {
+            control_flow::Effect::unknown()
+        } else {
+            control_flow::Effect::unknown()
+        }
+    }
+
+    fn write_loc(&mut self, loc: Self::Location, value: control_flow::Effect<Addr>) {
+        if loc == Location::RIP {
+            self.effect = value;
+        } else {
+            // do nothing, it's a location we ignore for control flow analysis
+        }
+    }
+}
+
+impl_control_flow!(
+    crate::arch::x86_64::semantic::evaluate,
+    yaxpeax_x86::long_mode::Arch,
+    yaxpeax_x86::long_mode::Instruction,
+    |inst| {
         let assume_calls_return = true;
-        match self.opcode {
+        match inst.opcode {
             Opcode::CALL |
             Opcode::SYSCALL => {
                 if assume_calls_return {
-                    return control_flow::Effect::cont();
+                    return Some(control_flow::Effect::cont());
                     // instr_control_flow.with_effect(control_flow::Effect::cont());
                 }
             }
             _ => {}
         }
-        instr_control_flow.into_effect()
+        None
     }
-}
+);
 
 #[test]
 fn test_x86_determinant() {
