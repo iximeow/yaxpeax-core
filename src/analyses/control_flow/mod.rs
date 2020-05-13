@@ -816,10 +816,12 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
 }
 
 macro_rules! impl_control_flow {
-    ($semantic:expr, $arch:ty, $inst_ty:ty) => {
-        impl_control_flow!($semantic, $arch, |inst| { None })
+    /*
+    ($semantic:expr, $arch:ty, $inst_ty:ty, ) => {
+        impl_control_flow!($semantic, $arch, |inst| { None }, );
     };
-    ($semantic:expr, $arch:ty, $inst_ty:ty, $fixup:expr) => {
+    */
+    ($semantic:expr, $arch:ty, $inst_ty:ty, $fixup:expr, ) => {
         impl <T> $crate::analyses::control_flow::Determinant<T, <$arch as yaxpeax_arch::Arch>::Address> for $inst_ty {
             fn control_flow(&self, _ctx: Option<&T>) -> control_flow::Effect<<$arch as yaxpeax_arch::Arch>::Address> {
                 let fixup: fn(&$inst_ty) -> Option<control_flow::Effect<<$arch as yaxpeax_arch::Arch>::Address>> = $fixup;

@@ -4,6 +4,7 @@ use yaxpeax_arch::{Address, Arch};
 use std::fmt::Debug;
 use analyses::control_flow;
 use analyses::Value;
+use data::ValueLocations;
 use analyses::control_flow::Determinant;
 use analyses::control_flow::ControlFlowAnalysis;
 use analyses::control_flow::ToAddrDiff;
@@ -11,10 +12,8 @@ use analyses::control_flow::ToAddrDiff;
 use arch::x86_64::analyses::data_flow::Location;
 use analyses::DFG;
 
-impl<Addr: Address + Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for ControlFlowAnalysis<Addr> {
-    type Location = Location;
-
-    fn read_loc(&self, loc: Self::Location) -> control_flow::Effect<Addr> {
+impl DFG<control_flow::Effect<<x86_64 as Arch>::Address>, x86_64> for ControlFlowAnalysis<<x86_64 as Arch>::Address> {
+    fn read_loc(&self, loc: <x86_64 as ValueLocations>::Location) -> control_flow::Effect<<x86_64 as Arch>::Address> {
         if loc == Location::RIP {
             self.effect.clone()
         } else if let Location::Memory(_) = loc {
@@ -24,7 +23,7 @@ impl<Addr: Address + Debug + ToAddrDiff> DFG<control_flow::Effect<Addr>> for Con
         }
     }
 
-    fn write_loc(&mut self, loc: Self::Location, value: control_flow::Effect<Addr>) {
+    fn write_loc(&mut self, loc: <x86_64 as ValueLocations>::Location, value: control_flow::Effect<<x86_64 as Arch>::Address>) {
         if loc == Location::RIP {
             self.effect = value;
         } else {
@@ -50,7 +49,7 @@ impl_control_flow!(
             _ => {}
         }
         None
-    }
+    },
 );
 
 #[test]

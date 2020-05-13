@@ -9,6 +9,7 @@ use yaxpeax_arch::Arch;
 
 use tracing::{Level, event};
 
+pub mod control_flow;
 pub mod data_flow;
 
 pub fn all_instruction_analyses(

@@ -1,3 +1,6 @@
+use yaxpeax_arch::Arch;
+use data::ValueLocations;
+
 #[macro_use]
 pub mod control_flow;
 pub mod data_flow;
@@ -6,6 +9,11 @@ pub mod static_single_assignment;
 pub mod xrefs;
 pub mod evaluators;
 pub mod value_range;
+
+pub enum CompletionStatus {
+    Incomplete,
+    Complete,
+}
 
 pub struct ValueRes<V> {
     value: V,
@@ -45,17 +53,15 @@ impl<V: Value> ValueRes<V> {
     }
 }
 
-pub trait DFG<V> {
-    type Location;
-
+pub trait DFG<V, A: Arch + ValueLocations> {
     #[inline]
-    fn read_loc(&self, loc: Self::Location) -> V;
-    fn read<T: ToDFGLoc<Self::Location>>(&self, loc: &T) -> V {
+    fn read_loc(&self, loc: A::Location) -> V;
+    fn read<T: ToDFGLoc<A::Location>>(&self, loc: &T) -> V {
         self.read_loc(loc.convert())
     }
     #[inline]
-    fn write_loc(&mut self, loc: Self::Location, value: V);
-    fn write<T: ToDFGLoc<Self::Location>>(&mut self, loc: &T, value: V) {
+    fn write_loc(&mut self, loc: A::Location, value: V);
+    fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
     }
 }

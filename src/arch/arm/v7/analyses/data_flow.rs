@@ -26,6 +26,24 @@ pub enum Location {
     NF, ZF, CF, VF,
 }
 
+impl Location {
+    pub fn pc() -> Self {
+        Location::Register(15)
+    }
+
+    pub fn lr() -> Self {
+        Location::Register(14)
+    }
+
+    pub fn sp() -> Self {
+        Location::Register(13)
+    }
+
+    pub fn ip() -> Self {
+        Location::Register(12)
+    }
+}
+
 #[derive(Default)]
 struct LocationVisitor {}
 

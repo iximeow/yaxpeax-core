@@ -12,18 +12,14 @@ use yaxpeax_arch::LengthedInstruction;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
 use analyses::{DFG, Value, ValueRes};
-
-pub enum CompletionStatus {
-    Incomplete,
-    Complete,
-}
+use analyses::CompletionStatus;
 
 pub mod specialized;
 
-pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, Location=Location>>(instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
+pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, amd64>>(instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     // TODO: get a disambiguator somehow?
     #[inline(always)]
-    fn effective_address<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D, operand: &Operand) -> V {
+    fn effective_address<V: Value, D: DFG<V, amd64>>(dfg: &mut D, operand: &Operand) -> V {
         match *operand {
             Operand::DisplacementU32(disp) => {
                 V::from_const(disp as u64)
@@ -77,7 +73,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
 
     // TODO: get a disambiguator somehow
     #[inline(always)]
-    fn write_operand<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D, operand: &Operand, value: V) {
+    fn write_operand<V: Value, D: DFG<V, amd64>>(dfg: &mut D, operand: &Operand, value: V) {
         match operand {
             Operand::Register(reg) => {
                 dfg.write(&Location::Register(*reg), value)
@@ -104,7 +100,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
     }
 
     #[inline(always)]
-    fn read_jump_rel_operand<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D, operand: &Operand) -> V {
+    fn read_jump_rel_operand<V: Value, D: DFG<V, amd64>>(dfg: &mut D, operand: &Operand) -> V {
         match operand {
             Operand::ImmediateI8(imm) => {
                 V::from_const(*imm as i64 as u64)
@@ -122,7 +118,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
 
     // TODO: get a disambiguator somehow
     #[inline(always)]
-    fn read_operand<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D, operand: &Operand) -> V {
+    fn read_operand<V: Value, D: DFG<V, amd64>>(dfg: &mut D, operand: &Operand) -> V {
         match operand {
             Operand::Register(reg) => {
                 dfg.read(&Location::Register(*reg))
@@ -159,7 +155,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
         }
     }
 
-    fn pop<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D) -> V {
+    fn pop<V: Value, D: DFG<V, amd64>>(dfg: &mut D) -> V {
         let value = read_operand(dfg, &Operand::RegDeref(RegSpec::rsp()));
         let rsp = Operand::Register(RegSpec::rsp());
         let adjusted_rsp = read_operand(dfg, &rsp).add(&V::from_const(rsp.width() as u64)).value();
@@ -167,7 +163,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
         value
     }
 
-    fn push<V: Value, D: DFG<V, Location=Location>>(dfg: &mut D, value: V) {
+    fn push<V: Value, D: DFG<V, amd64>>(dfg: &mut D, value: V) {
         let rsp = Operand::Register(RegSpec::rsp());
         let adjusted_rsp = read_operand(dfg, &rsp).sub(&V::from_const(rsp.width() as u64)).value();
         write_operand(dfg, &rsp, adjusted_rsp);
@@ -176,7 +172,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
 
     fn conditional_loc_write<
         V: Value,
-        D: DFG<V, Location=Location>,
+        D: DFG<V, amd64>,
         DestFn: FnOnce() -> Location,
         R: FnOnce(&mut D) -> V,
         AR: FnOnce(&mut D) -> V
@@ -197,7 +193,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
 
     fn conditional_write<
         V: Value,
-        D: DFG<V, Location=Location>,
+        D: DFG<V, amd64>,
         DestFn: FnOnce() -> Operand,
         R: FnOnce(&mut D) -> V,
         AR: FnOnce(&mut D) -> V
