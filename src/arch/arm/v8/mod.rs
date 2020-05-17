@@ -1,45 +1,62 @@
 use yaxpeax_arch::Arch;
 use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, Opcode};
 
+use arch::BaseUpdate;
 use arch::{Symbol, SymbolQuery};
 use arch::{Function, FunctionQuery};
+use arch::CommentQuery;
+use arch::FunctionImpl;
+use arch::arm::v8::aarch64::analyses::data_flow::DefaultCallingConvention;
+use analyses::static_single_assignment::SSA;
+use analyses::xrefs;
 
 use analyses::control_flow;
 
+use data::{Direction, ValueLocations};
+use data::modifier::InstructionModifiers;
+
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::cell::{Ref, RefCell};
 
 use num_traits::Zero;
 use ContextRead;
 use ContextWrite;
 
-mod display;
+pub mod display;
+pub mod aarch64;
 
 #[derive(Serialize, Deserialize)]
 pub struct ARMv8Data {
     pub preferred_addr: <ARMv8 as Arch>::Address,
     pub contexts: MergedContextTable,
     pub cfg: control_flow::ControlFlowGraph<<ARMv8 as Arch>::Address>,
-    pub functions: HashMap<<ARMv8 as Arch>::Address, Function>
+    pub ssa: HashMap<<ARMv8 as Arch>::Address, (
+        control_flow::ControlFlowGraph<<ARMv8 as Arch>::Address>,
+        SSA<ARMv8>
+    )>,
 }
 
-impl FunctionQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
-    type Function = Function;
-    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
-        self.functions.get(&addr)
-    }
-    fn all_functions(&self) -> Vec<&Self::Function> {
-        self.functions.values().collect()
-    }
+pub struct DisplayCtx<'a> {
+    functions: Ref<'a, HashMap<<ARMv8 as Arch>::Address, FunctionImpl<<ARMv8 as ValueLocations>::Location>>>,
+    comments: &'a HashMap<<ARMv8 as Arch>::Address, String>,
+    symbols: &'a HashMap<<ARMv8 as Arch>::Address, Symbol>,
 }
 
 impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
     type Function = Function;
-    fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
-        None
+    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
+        panic!("TODO")
+//        self.functions.borrow().get(&addr)
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
-        unimplemented!()
+        panic!("TODO")
+//        self.functions.borrow().values().collect()
+    }
+}
+impl CommentQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
+    fn comment_for(&self, addr: <ARMv8 as Arch>::Address) -> Option<&str> {
+        self.comments.get(&addr).map(String::as_ref)
     }
 }
 
@@ -52,17 +69,58 @@ impl SymbolQuery<<ARMv8 as Arch>::Address> for ARMv8Data {
     }
 }
 
+impl<'a> FunctionQuery<<ARMv8 as Arch>::Address> for DisplayCtx<'a> {
+    type Function = FunctionImpl<<ARMv8 as ValueLocations>::Location>;
+    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
+        self.functions.function_at(addr)
+    }
+    fn all_functions(&self) -> Vec<&Self::Function> {
+        self.functions.all_functions()
+    }
+}
+
+impl<'a> CommentQuery<<ARMv8 as Arch>::Address> for DisplayCtx<'a> {
+    fn comment_for(&self, addr: <ARMv8 as Arch>::Address) -> Option<&str> {
+        self.comments.get(&addr).map(String::as_ref)
+    }
+}
+
+impl<'a> SymbolQuery<<ARMv8 as Arch>::Address> for DisplayCtx<'a> {
+    fn symbol_for(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Symbol> {
+        self.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv8 as Arch>::Address> {
+        for (k, v) in self.symbols.iter() {
+            if v == sym {
+                return Some(*k);
+            }
+        }
+
+        None
+    }
+}
+
+impl SymbolQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
+    fn symbol_for(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Symbol> {
+        self.symbols.get(&addr)
+    }
+    fn symbol_addr(&self, sym: &Symbol) -> Option<<ARMv8 as Arch>::Address> {
+        self.reverse_symbols.get(sym).map(|x| *x)
+    }
+}
+
 impl Default for ARMv8Data {
     fn default() -> Self {
         ARMv8Data {
             preferred_addr: <ARMv8 as Arch>::Address::zero(),
             contexts: MergedContextTable::create_empty(),
             cfg: control_flow::ControlFlowGraph::new(),
-            functions: HashMap::new()
+            ssa: HashMap::new()
         }
     }
 }
 
+/*
 #[allow(non_snake_case)]
 impl <T> control_flow::Determinant<T, <ARMv8 as Arch>::Address> for Instruction
     where T: PartialInstructionContext {
@@ -88,20 +146,54 @@ impl <T> control_flow::Determinant<T, <ARMv8 as Arch>::Address> for Instruction
         }
     }
 }
+*/
 
 #[derive(Serialize, Deserialize)]
 pub struct MergedContextTable {
     pub user_contexts: HashMap<<ARMv8 as Arch>::Address, Rc<PartialContext>>,
-    pub computed_contexts: HashMap<<ARMv8 as Arch>::Address, Rc<ComputedContext>>
+    pub computed_contexts: HashMap<<ARMv8 as Arch>::Address, Rc<ComputedContext>>,
+    pub comments: HashMap<<ARMv8 as Arch>::Address, String>,
+    pub symbols: HashMap<<ARMv8 as Arch>::Address, Symbol>,
+    #[serde(skip)]
+    pub reverse_symbols: HashMap<Symbol, <ARMv8 as Arch>::Address>,
+    pub functions: Rc<RefCell<HashMap<<ARMv8 as Arch>::Address, FunctionImpl<<ARMv8 as ValueLocations>::Location>>>>,
+    pub function_data: HashMap<<ARMv8 as Arch>::Address, RefCell<InstructionModifiers<ARMv8>>>,
+    pub function_hints: Vec<<ARMv8 as Arch>::Address>,
+    pub default_abi: Option<DefaultCallingConvention>,
 }
 
 impl MergedContextTable {
     pub fn create_empty() -> MergedContextTable {
         MergedContextTable {
             user_contexts: HashMap::new(),
-            computed_contexts: HashMap::new()
+            computed_contexts: HashMap::new(),
+            comments: HashMap::new(),
+            symbols: HashMap::new(),
+            reverse_symbols: HashMap::new(),
+            functions: Rc::new(RefCell::new(HashMap::new())),
+            function_data: HashMap::new(),
+            function_hints: Vec::new(),
+            default_abi: Some(DefaultCallingConvention::None), // TODO: a real calling convention defulat
         }
     }
+
+    pub fn display_ctx(&self) -> DisplayCtx {
+        DisplayCtx {
+            functions: self.functions.borrow(),
+            symbols: &self.symbols,
+            comments: &self.comments,
+        }
+    }
+}
+
+pub type Update = BaseUpdate<ArmUpdate>;
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum ArmUpdate {
+    AddXRef(xrefs::RefType, xrefs::RefAction, <ARMv8 as Arch>::Address),
+    RemoveXRef(xrefs::RefType, xrefs::RefAction, <ARMv8 as Arch>::Address),
+    FunctionHint
 }
 
 impl ContextRead<ARMv8, MergedContext> for MergedContextTable {
@@ -113,9 +205,18 @@ impl ContextRead<ARMv8, MergedContext> for MergedContextTable {
     }
 }
 
-impl ContextWrite<ARMv8, /* Update */ ()> for MergedContextTable {
-    fn put(&mut self, _address: <ARMv8 as Arch>::Address, _update: ()) {
-        // do nothing
+impl ContextWrite<ARMv8, Update> for MergedContextTable {
+    fn put(&mut self, address: <ARMv8 as Arch>::Address, update: Update) {
+        match update {
+            BaseUpdate::DefineSymbol(sym) => {
+                self.symbols.insert(address, sym.clone());
+                self.reverse_symbols.insert(sym, address);
+            }
+            BaseUpdate::AddCodeComment(comment) => {
+                self.comments.insert(address, comment);
+            }
+            _ => { }
+        }
     }
 }
 
