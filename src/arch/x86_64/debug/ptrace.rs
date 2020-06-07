@@ -199,17 +199,18 @@ impl Peek for Rc<RefCell<DebugeeX86_64>> {
 impl DebugeeX86_64 {
     pub fn regs(&mut self) -> Result<Regs, String> {
         unsafe {
-            let mut regs: Regs = std::mem::uninitialized();
+            use std::mem::MaybeUninit;
+            let mut regs: MaybeUninit<Regs> = MaybeUninit::uninit();
             // should just submit a PR to wrap PTRACE_GETREGS, really
             #[allow(deprecated)]
             match ptrace(
                 Request::PTRACE_GETREGS,
                 self.pid,
                 std::ptr::null_mut(),
-                &mut regs as *mut _ as *mut c_void
+                regs.as_mut_ptr() as *mut c_void
             ) {
                 Ok(_) => {
-                    Ok(regs)
+                    Ok(regs.assume_init())
                 },
                 Err(e) => { panic!("{:?}", e); }
             }
