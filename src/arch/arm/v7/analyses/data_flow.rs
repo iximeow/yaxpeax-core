@@ -1,4 +1,3 @@
-use arch::Symbol;
 use arch::{FunctionImpl, FunctionQuery};
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
@@ -6,7 +5,6 @@ use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use std::rc::Rc;
 use std::fmt;
 use std::cell::RefCell;
-use tracing::{event, Level};
 
 use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
@@ -15,7 +13,7 @@ use data::{Direction, Disambiguator, ValueLocations};
 use data::types::{TypeAtlas, TypeSpec, Typed};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{self, Visitor, Unexpected};
-use yaxpeax_arm::armv7::{ARMv7, Opcode, Operand, Instruction};
+use yaxpeax_arm::armv7::{ARMv7, Operand};
 use analyses::data_flow::Use;
 use std::hash::{Hasher, Hash};
 
@@ -191,7 +189,7 @@ pub struct ValueMemo {
 }
 
 impl Typed for Data {
-    fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec {
+    fn type_of(&self, _type_atlas: &TypeAtlas) -> TypeSpec {
         TypeSpec::Bottom
     }
 }
@@ -217,7 +215,7 @@ impl Memoable for HashedValue<Rc<RefCell<Value<ARMv7>>>> {
         }
     }
 
-    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self {
+    fn dememoize(_idx: u32, _memos: &[Self::Out], _dememoized: &mut HashMap<u32, Self>) -> Self {
         unimplemented!("data_flow::Memoable::dememoize");
     }
 }
@@ -235,7 +233,8 @@ impl Disambiguator<Location, (u8, u8)> for NoDisambiguation {
 }
 
 pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address> + ?Sized> {
-    addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address,
+    // TODO:
+    _addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address,
     inst: &'a yaxpeax_arm::armv7::Instruction,
     op_count: u8,
     op_idx: u8,
@@ -244,13 +243,14 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     curr_op: Option<yaxpeax_arm::armv7::Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
-    fn_query: &'c F,
+    // TODO:
+    _fn_query: &'c F,
 }
 
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv7::Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
+    pub fn new(_addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv7::Instruction, disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
         LocationIter {
-            addr,
+            _addr,
             inst,
             op_count: operands_in(inst),
             op_idx: 0,
@@ -259,15 +259,17 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
             curr_op: None,
             curr_use: None,
             disambiguator,
-            fn_query,
+            _fn_query,
         }
     }
+    // TODO:
+    #[allow(dead_code)]
     fn curr_loc(&self) -> (u8, u8) {
         (self.op_idx, self.loc_idx - 1)
     }
 }
 
-fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Direction)> {
+fn loc_by_id(_idx: u8, _usage: Use, _op: &Operand) -> Option<(Option<Location>, Direction)> {
     panic!("bad");
     /*
     match op {
@@ -337,14 +339,14 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
     }
     */
 }
-fn implicit_loc(op: yaxpeax_arm::armv7::Opcode, i: u8) -> (Option<Location>, Direction) {
+fn implicit_loc(_op: yaxpeax_arm::armv7::Opcode, _: u8) -> (Option<Location>, Direction) {
     (None, Direction::Read)
 }
-fn implicit_locs(op: yaxpeax_arm::armv7::Opcode) -> u8 {
+fn implicit_locs(_op: yaxpeax_arm::armv7::Opcode) -> u8 {
     0
 }
 
-fn locations_in(op: &yaxpeax_arm::armv7::Operand, usage: Use) -> u8 {
+fn locations_in(_op: &yaxpeax_arm::armv7::Operand, _usage: Use) -> u8 {
     panic!("bad bad");
     /*
     match op {
@@ -389,7 +391,7 @@ fn locations_in(op: &yaxpeax_arm::armv7::Operand, usage: Use) -> u8 {
 
 }
 
-fn operands_in(inst: &yaxpeax_arm::armv7::Instruction) -> u8 {
+fn operands_in(_inst: &yaxpeax_arm::armv7::Instruction) -> u8 {
     panic!("bad bad bad");
     /*
     match inst.operands {
@@ -531,7 +533,7 @@ impl AbiDefaults for Location {
 impl ValueLocations for ARMv7 {
     type Location = Location;
 
-    fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
+    fn decompose(_instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
         panic!("value locations");
         /*
         fn decompose_write(op: &Operands) -> Vec<(Option<Location>, Direction)> {

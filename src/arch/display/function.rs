@@ -1,6 +1,5 @@
 use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressBase;
-use yaxpeax_arch::AddressDiff;
 use yaxpeax_arch::AddressDisplay;
 use yaxpeax_arch::LengthedInstruction;
 use arch::InstructionSpan;
@@ -21,7 +20,6 @@ use std::fmt;
 use std::fmt::Write;
 use std::marker::PhantomData;
 
-use num_traits::WrappingAdd;
 use num_traits::Zero;
 
 /// This view in particular takes optionally-present data flow information, which ends up

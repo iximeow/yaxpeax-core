@@ -1,4 +1,4 @@
-use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand, RegSpec};
 use arch::x86_64::analyses::data_flow::{ANY, Location, cond_to_flags};
 use analyses::data_flow::Use;
 use data::{Direction, Disambiguator};
@@ -6,7 +6,7 @@ use arch::{FunctionQuery, FunctionImpl};
 use tracing::{event, Level};
 
 pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address> + ?Sized> {
-    addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address,
+    _addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address,
     inst: &'a Instruction,
     op_count: u8,
     op_idx: u8,
@@ -15,7 +15,7 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     curr_op: Option<Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
-    fn_query: &'c F,
+    _fn_query: &'c F,
 }
 
 fn operands_in(instr: &Instruction) -> u8 {
@@ -153,7 +153,6 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::LEAVE |
         Opcode::POPF |
         Opcode::PUSHF |
-        Opcode::CBW |
         Opcode::CDQ |
         Opcode::LAHF |
         Opcode::SAHF => {
@@ -380,10 +379,11 @@ fn locations_in(op: &Operand, usage: Use) -> u8 {
     }
 }
 
+#[allow(dead_code)]
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
+    pub fn new(_addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a Instruction, disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
         LocationIter {
-            addr,
+            _addr,
             inst,
             op_count: operands_in(inst),
             op_idx: 0,
@@ -392,7 +392,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
             curr_op: None,
             curr_use: None,
             disambiguator,
-            fn_query,
+            _fn_query,
         }
     }
     fn curr_loc(&self) -> (u8, u8) {
@@ -407,7 +407,6 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::MOVDDUP |
         Opcode::MOVSLDUP |
         Opcode::MOVSD |
-        Opcode::MOVSS |
         Opcode::MOVSS |
         Opcode::CVTSI2SS |
         Opcode::CVTTSS2SI |
@@ -826,6 +825,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             ][i as usize]
         }
         Opcode::CBW |
+        Opcode::CDQ |
         Opcode::CWDE |
         Opcode::CDQE => {
             // TODO: overapproximates CBW, CWDE
@@ -965,13 +965,6 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Write),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Read)
-            ][i as usize]
-        }
-        Opcode::CBW |
-        Opcode::CDQ => {
-            [
-                (Some(Location::Register(RegSpec::rax())), Direction::Read),
-                (Some(Location::Register(RegSpec::rax())), Direction::Write)
             ][i as usize]
         }
         Opcode::LAHF => {
@@ -1500,7 +1493,6 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::LAR => {
             1
         }
-        Opcode::CBW |
         Opcode::CWDE |
         Opcode::CDQE => {
             1

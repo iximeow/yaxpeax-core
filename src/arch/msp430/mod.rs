@@ -352,7 +352,7 @@ impl Memoable for HashedValue<DFGRef<MSP430>> {
     fn memoize(&self, memos: &HashMap<Self, u32>) -> Self::Out {
         memos[self]
     }
-    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self {
+    fn dememoize(_idx: u32, _memos: &[Self::Out], _dememoized: &mut HashMap<u32, Self>) -> Self {
         use std::cell::RefCell;
         HashedValue { value: Rc::new(RefCell::new(Value {
             name: None,

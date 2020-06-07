@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::cmp::Ordering;
 use std::hash::Hash;
 use std::ops::Bound::Included;
 use std::fmt::Debug;
@@ -11,7 +10,7 @@ use petgraph::graphmap::{GraphMap, Nodes};
 
 use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDiffAmount, AddressDisplay, Arch, Decoder, LengthedInstruction};
 
-use num_traits::{WrappingAdd, Zero, One};
+use num_traits::{Zero, One};
 
 use ContextRead;
 use ContextWrite;
@@ -332,7 +331,6 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
             let split_loc_end = last_block.end;
             let last_start = last_block.start;
             last_block.end = split_loc - AddressDiff::one();
-            let last_end = last_block.end;
             graph.blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
 
             let neighbors: Vec<A> = graph.graph.neighbors(last_start).into_iter().collect();
@@ -719,9 +717,6 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
     }
 
     fn from_set(effects: &[Self]) -> Self {
-        use self::control_flow::Effect;
-        use self::control_flow::Target;
-
         debug_assert!(effects.len() != 0);
         let mut stop_after = true;
         let mut target: Option<Target<A>> = None;
@@ -760,11 +755,6 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
                         Some(l)
                     } else {
                         Some(Target::Multiple(vec![l, r.clone()]))
-                    }
-                }
-                _ => {
-                    unsafe {
-                        std::hint::unreachable_unchecked();
                     }
                 }
             };

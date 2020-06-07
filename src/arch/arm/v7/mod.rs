@@ -1,5 +1,5 @@
-use yaxpeax_arch::{Arch, LengthedInstruction};
-use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode, Operand, ConditionCode};
+use yaxpeax_arch::Arch;
+use yaxpeax_arm::armv7::ARMv7;
 
 use arch::{Symbol, SymbolQuery};
 use arch::Function;
@@ -9,7 +9,7 @@ use arch::CommentQuery;
 use arch::FunctionImpl;
 use arch::arm::v7::analyses::data_flow::DefaultCallingConvention;
 
-use data::{Direction, ValueLocations};
+use data::ValueLocations;
 use data::modifier::InstructionModifiers;
 
 use std::cell::{Ref, RefCell};
@@ -26,8 +26,6 @@ use petgraph::graphmap::GraphMap;
 use num_traits::Zero;
 use ContextRead;
 use ContextWrite;
-
-use tracing::{event, Level};
 
 pub mod display;
 pub mod analyses;

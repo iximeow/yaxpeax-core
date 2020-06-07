@@ -43,7 +43,8 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
         // first, rebuild memos into their original data
         let mut values: HashMap<u32, HashedValue<Rc<RefCell<Value<A>>>>> = HashMap::new();
 
-        for (i, v) in memos.iter().enumerate() {
+        // TODO: why is it correct to ignore v?
+        for (i, _v) in memos.iter().enumerate() {
             if values.contains_key(&(i as u32)) {
                 continue;
             }
@@ -58,7 +59,8 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
             values.insert(i as u32, to_insert);
         }
 
-        type ValueEntry<A> = HashedValue<Rc<RefCell<Value<A>>>>;
+        // TODO:
+        // type ValueEntry<A> = HashedValue<Rc<RefCell<Value<A>>>>;
 
         // we have all the values! on to the easy part of rebuilding maps.
         let mut dememoized_phis: HashMap<A::Address, HashMap<A::Location, PhiOp<A>>> = HashMap::new();
@@ -69,7 +71,7 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
             for (loc, (phi_ins, phi_out)) in vmap.iter() {
                 let dememoized_phi_ins: Vec<Rc<RefCell<Value<A>>>> = phi_ins.iter().map(|idx| values[idx].clone().value).collect();
                 let dememoized_phi_out: Rc<RefCell<Value<A>>> = values[phi_out].clone().value;
-                dememoized_valuemap.insert(loc.to_owned(), (PhiOp { out: dememoized_phi_out, ins: dememoized_phi_ins }));
+                dememoized_valuemap.insert(loc.to_owned(), PhiOp { out: dememoized_phi_out, ins: dememoized_phi_ins });
             }
             dememoized_phis.insert(*addr, dememoized_valuemap);
         }

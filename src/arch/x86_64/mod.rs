@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Address, AddressBase, AddressDiff, Arch};
+use yaxpeax_arch::Arch;
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
@@ -9,15 +9,13 @@ use petgraph::graphmap::GraphMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use yaxpeax_x86::x86_64;
-use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::cell::Ref;
-use std::fmt;
 use num_traits::Zero;
 
 use arch::{BaseUpdate, CommentQuery, FunctionLayout, FunctionImpl, FunctionQuery, Symbol, SymbolQuery, Library};
-use data::{Direction, ValueLocations};
+use data::ValueLocations;
 use data::modifier::InstructionModifiers;
 use timing::Timings;
 
@@ -52,7 +50,8 @@ pub struct DisplayCtx<'a> {
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+    // TODO: !!!
+    fn function_at(&self, _addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
         panic!("self.contexts.functions.get(&addr)");
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
@@ -69,7 +68,8 @@ impl CommentQuery<<x86_64 as Arch>::Address> for MergedContextTable {
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    fn function_at(&self, addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
+    // TODO: !!!
+    fn function_at(&self, _addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
         panic!("TODO");
 //        self.get(&addr)
     }

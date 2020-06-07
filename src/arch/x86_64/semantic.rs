@@ -8,10 +8,9 @@ use yaxpeax_x86::long_mode::{Arch as amd64};
 use yaxpeax_x86::long_mode::{Opcode, Operand, RegSpec};
 use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressDiff;
-use yaxpeax_arch::LengthedInstruction;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
-use analyses::{DFG, Value, ValueRes};
+use analyses::{DFG, Value};
 use analyses::CompletionStatus;
 
 pub mod specialized;
@@ -100,7 +99,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
     }
 
     #[inline(always)]
-    fn read_jump_rel_operand<V: Value, D: DFG<V, amd64>>(dfg: &mut D, operand: &Operand) -> V {
+    fn read_jump_rel_operand<V: Value, D: DFG<V, amd64>>(_dfg: &mut D, operand: &Operand) -> V {
         match operand {
             Operand::ImmediateI8(imm) => {
                 V::from_const(*imm as i64 as u64)
@@ -191,6 +190,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
         dfg.write(&dest(), res);
     }
 
+    #[allow(dead_code)]
     fn conditional_write<
         V: Value,
         D: DFG<V, amd64>,

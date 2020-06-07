@@ -3,7 +3,7 @@ use memory::{MemoryRange, MemoryRepr};
 use debug;
 use debug::DebugTarget;
 use arch::msp430;
-use yaxpeax_msp430::{MSP430, Operand, Opcode, Width};
+use yaxpeax_msp430::{MSP430, Operand};
 use yaxpeax_arch::Arch;
 
 pub struct MSP430DebugTarget<'a> {
@@ -271,7 +271,7 @@ impl MCU for CPU {
 
     fn decode(&self) -> Result<Self::Instruction, String> {
         <MSP430 as Arch>::Decoder::default().decode(self.memory.range_from(self.ip()).unwrap())
-            .map_err(|e| {
+            .map_err(|_| {
                 format!(
                     "Unable to decode bytes at 0x{:x}: {:x?}",
                     self.ip(),

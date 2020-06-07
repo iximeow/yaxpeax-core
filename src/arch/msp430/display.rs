@@ -208,7 +208,7 @@ impl <T> SyntaxedSSARender<MSP430, T, Function> for yaxpeax_msp430::Instruction 
 
 impl <T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u16, msp430::MergedContextTable, C, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, address: <MSP430 as Arch>::Address, ctx: Option<&msp430::MergedContextTable>, out: &mut T) -> std::fmt::Result {
-        let ctxs: [Option<String>; 3] = [None, None, None];
+        let _ctxs: [Option<String>; 3] = [None, None, None];
         self.contextualize(colors, address, ctx, out)
     }
 }
@@ -327,7 +327,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
     ssa: &SSA<MSP430>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
     addr: <MSP430 as Arch>::Address,
-    colors: Option<&ColorSettings>
+    _colors: Option<&ColorSettings>
     ) {
 
     let fn_graph = cfg.get_function::<Function>(addr, &HashMap::new());

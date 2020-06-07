@@ -97,17 +97,17 @@ pub(crate) fn evaluate<
     V: Value + Clone + From<AddressDiff<<ARMv7 as Arch>::Address>>,
     D: DFG<V, ARMv7>
 >(instr: &<ARMv7 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
-    fn read_operand<V: Value, D: DFG<V, ARMv7>>(dfg: &mut D, operand: &Operand) -> V {
+    fn read_operand<V: Value, D: DFG<V, ARMv7>>(_dfg: &mut D, _operand: &Operand) -> V {
         V::unknown()
     }
 
-    fn push<V: Value, D: DFG<V, ARMv7>>(dfg: &mut D, value: V) {
+    fn push<V: Value, D: DFG<V, ARMv7>>(dfg: &mut D, _value: V) {
         dfg.write(&Location::sp(), V::unknown())
     }
 
     let next_instr = dfg.read(&Location::pc());
 
-    let complete = match instr.opcode {
+    let _complete = match instr.opcode {
         Opcode::B => {
             let dest = read_operand(dfg, &instr.operands[0]);
             dfg.write(&Location::pc(), dest);

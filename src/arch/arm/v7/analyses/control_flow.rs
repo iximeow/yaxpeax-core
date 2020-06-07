@@ -1,12 +1,9 @@
-use yaxpeax_arm::armv7::{ARMv7, Instruction, Opcode};
-use yaxpeax_arch::{Address, Arch};
-use std::fmt::Debug;
+use yaxpeax_arm::armv7::ARMv7;
+use yaxpeax_arch::Arch;
 use analyses::control_flow;
 use analyses::Value;
 use data::ValueLocations;
-use analyses::control_flow::Determinant;
 use analyses::control_flow::ControlFlowAnalysis;
-use analyses::control_flow::ToAddrDiff;
 
 use arch::arm::v7::analyses::data_flow::Location;
 use analyses::DFG;
@@ -33,5 +30,5 @@ impl_control_flow!(
     crate::arch::arm::v7::semantic::evaluate,
     yaxpeax_arm::armv7::ARMv7,
     yaxpeax_arm::armv7::Instruction,
-    |inst| { None },
+    |_inst| { None },
 );

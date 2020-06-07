@@ -2,7 +2,6 @@ use yaxpeax_arm::armv7::{ARMv7, Instruction, ConditionedOpcode, Operand, Opcode}
 use yaxpeax_arch::{Arch, AddressDisplay, ColorSettings, Colorize, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use arch::display::BaseDisplay;
-use arch::arm;
 use arch::arm::v7::DisplayCtx;
 use arch::arm::v7::analyses::data_flow::{Data, Location};
 use arch::FunctionImpl;
@@ -197,6 +196,10 @@ impl <'a, 'b, C: fmt::Display, Y: YaxColors<C>> fmt::Display for DataDisplay<'a,
     }
 }
 
+// TODO:
+#[allow(dead_code)]
+#[allow(unreachable_code)]
+#[allow(unused_variables)]
 impl <
     'a, 'b, 'c, 'd, 'e,
     Context: SymbolQuery<<ARMv7 as Arch>::Address> + FunctionQuery<<ARMv7 as Arch>::Address, Function=FunctionImpl<<ARMv7 as ValueLocations>::Location>>,
@@ -281,11 +284,11 @@ impl <
             C: FunctionQuery<<ARMv7 as Arch>::Address, Function=F> + SymbolQuery<<ARMv7 as Arch>::Address>,
             Highlighter: LocationHighlighter<<ARMv7 as ValueLocations>::Location>
         >(
-            op: &[Operand; 4],
+            _op: &[Operand; 4],
             op_idx: u8,
             ctx: &InstructionContext<'a, 'b, 'c, 'd, 'e, C, Highlighter>,
-            usage: Use,
-            fmt: &mut fmt::Formatter
+            _usage: Use,
+            _fmt: &mut fmt::Formatter
         ) -> fmt::Result {
             let _op_highlight = ctx.highlight.operand(op_idx, "TODO");
             panic!("oh no");
@@ -607,7 +610,7 @@ impl <
             Opcode::BLX |
             Opcode::BL |
             Opcode::B => {
-                let dest_namer = |addr| {
+                let _dest_namer = |addr| {
                     self.contexts.and_then(|context| {
                         context.function_at(addr).map(|f| {
                             self.colors.function(f.with_value_names(self.ssa.map(|fn_ssa| fn_ssa.query_at(self.addr))).decl_string(false))
@@ -661,7 +664,6 @@ impl <
                 write!(fmt, ", ")?;
                 contextualize_operand(&self.instr.operands, 2, self, Use::Read, fmt)
             }
-            Opcode::TST |
             Opcode::TST |
             Opcode::CMP |
             Opcode::CMN => {

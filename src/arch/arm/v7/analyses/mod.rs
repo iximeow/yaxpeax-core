@@ -1,10 +1,9 @@
 use analyses::control_flow::Effect;
-use analyses::xrefs;
 
 use arch::arm::v7::Update;
 use arch::arm;
 
-use yaxpeax_arm::armv7::{ARMv7, Opcode, Operand};
+use yaxpeax_arm::armv7::{ARMv7, Opcode};
 use yaxpeax_arch::Arch;
 
 use tracing::{Level, event};
@@ -42,7 +41,7 @@ pub fn compute_next_state(
 
 pub fn find_function_hints(
     instr: &<ARMv7 as Arch>::Instruction,
-    address: <ARMv7 as Arch>::Address,
+    _address: <ARMv7 as Arch>::Address,
     _effect: &Effect<<ARMv7 as Arch>::Address>,
     _ctxs: &arm::v7::MergedContextTable
 ) -> Vec<(<ARMv7 as Arch>::Address, Update)> {
@@ -65,7 +64,7 @@ pub fn find_function_hints(
 // worse, linear address of teb + 0x8 is not the same as gs:[0x8] in user code, f.ex!
 pub fn find_xrefs(
     instr: &<ARMv7 as Arch>::Instruction,
-    address: <ARMv7 as Arch>::Address,
+    _address: <ARMv7 as Arch>::Address,
     _effect: &Effect<<ARMv7 as Arch>::Address>,
     _ctxs: &arm::v7::MergedContextTable
 ) -> Vec<(<ARMv7 as Arch>::Address, Update)> {

@@ -76,7 +76,8 @@ fn try_unhexlify(bytes: &[u8]) -> Option<Vec<u8>> {
     }
     Some(res)
 }
-
+// TODO:
+#[allow(dead_code)]
 struct SupportedFeatures {
     // vCont?
     // xmlRegisters?
@@ -314,10 +315,13 @@ impl Command {
     }
 }
 
+// TODO:
+#[allow(dead_code)]
 struct ProtocolFeatures {
     features: u8,
 }
 
+#[allow(dead_code)]
 impl ProtocolFeatures {
     fn new() -> Self { Self { features: 0 } }
     fn set_vcont(&mut self, supported: bool) {
@@ -329,6 +333,8 @@ impl ProtocolFeatures {
     }
 }
 
+// TODO:
+#[allow(dead_code)]
 pub struct GDBRemote {
     features: ProtocolFeatures,
     stream: TcpStream,
@@ -344,7 +350,7 @@ impl GDBRemote {
             in_flight: None
         };
         let features = connection.issue_request_with_response(Command::DetectSupport)?;
-        eprintln!("got feature report: {:?}", unsafe { std::str::from_utf8(features.as_slice()) });
+        eprintln!("got feature report: {:?}", std::str::from_utf8(features.as_slice()));
 
         Ok(connection)
     }

@@ -15,7 +15,7 @@ use std::fmt::Debug;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use memory::MemoryRange;
 
-use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, RWMap, PhiLocations};
+use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, PhiLocations};
 use analyses::static_single_assignment::data::PhiOp;
 use data::{AliasInfo, Direction, Disambiguator, LocIterator};
 use data::modifier::ModifierCollection;
@@ -162,6 +162,7 @@ impl <A: crate::data::ValueLocations> UseDefTracker<A> {
     }
 }
 
+#[allow(non_snake_case)]
 struct ValueAllocator<A: Arch + SSAValues> {
     C: HashMap<A::Location, u32>,
     S: HashMap<A::Location, Vec<DFGRef<A>>>,

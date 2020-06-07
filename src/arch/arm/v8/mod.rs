@@ -1,5 +1,5 @@
 use yaxpeax_arch::Arch;
-use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, Opcode};
+use yaxpeax_arm::armv8::a64::ARMv8;
 
 use arch::BaseUpdate;
 use arch::{Symbol, SymbolQuery};
@@ -12,7 +12,7 @@ use analyses::xrefs;
 
 use analyses::control_flow;
 
-use data::{Direction, ValueLocations};
+use data::ValueLocations;
 use data::modifier::InstructionModifiers;
 
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ pub struct DisplayCtx<'a> {
 
 impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
     type Function = Function;
-    fn function_at(&self, addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
+    fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
         panic!("TODO")
 //        self.functions.borrow().get(&addr)
     }

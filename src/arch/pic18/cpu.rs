@@ -253,7 +253,7 @@ impl CPU {
             (f as u16) | ((self.bank() as u16) << 8)
         } else {
             if f < 0x80 {
-                (f as u16)
+                f as u16
             } else {
                 (f as u16) | 0xf00u16
             }

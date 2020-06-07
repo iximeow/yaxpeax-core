@@ -1,10 +1,9 @@
-use yaxpeax_arm::armv8::a64::{ARMv8, Instruction, NoContext};
+use yaxpeax_arm::armv8::a64::{ARMv8, Instruction};
 use yaxpeax_arch::{Arch, ColorSettings, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 
 use arch::display::BaseDisplay;
 use arch::display::function::FunctionInstructionDisplay;
 use arch::display::function::FunctionView;
-use arch::arm;
 use arch::arm::v8::DisplayCtx;
 use arch::CommentQuery;
 use arch::FunctionQuery;
@@ -63,16 +62,16 @@ impl <F: FunctionRepr, T: FunctionQuery<<ARMv8 as Arch>::Address, Function=F> + 
 
 pub struct InstructionContext<'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<ARMv8 as Arch>::Address>, Highlighter: LocationHighlighter<<ARMv8 as ValueLocations>::Location>> {
     instr: &'a Instruction,
-    addr: <ARMv8 as Arch>::Address,
-    contexts: Option<&'b Context>,
-    ssa: Option<&'c SSA<ARMv8>>,
-    colors: Option<&'d ColorSettings>,
-    highlight: &'e Highlighter,
+    _addr: <ARMv8 as Arch>::Address,
+    _contexts: Option<&'b Context>,
+    _ssa: Option<&'c SSA<ARMv8>>,
+    _colors: Option<&'d ColorSettings>,
+    _highlight: &'e Highlighter,
 }
 
-impl <T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, MergedContextTable, C, T, Y> for Instruction {
-    fn contextualize(&self, colors: &Y, address: u64, ctx: Option<&MergedContextTable>, out: &mut T) -> std::fmt::Result {
-        self.contextualize(colors, address, ctx, out)
+impl <'a, T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, DisplayCtx<'a>, C, T, Y> for Instruction {
+    fn contextualize(&self, colors: &Y, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
+        self.contextualize(colors, _address, Some(&yaxpeax_arm::armv8::a64::NoContext), out)
     }
 }
 
@@ -105,11 +104,11 @@ pub fn show_instruction<M: MemoryRange<<ARMv8 as Arch>::Address>>(
             print!("{}", instr_text);
             println!(" {}", InstructionContext {
                 instr: &instr,
-                addr: address,
-                contexts: Some(&ctx.display_ctx()),
-                ssa: None,
-                colors: colors,
-                highlight: &NoHighlights,
+                _addr: address,
+                _contexts: Some(&ctx.display_ctx()),
+                _ssa: None,
+                _colors: colors,
+                _highlight: &NoHighlights,
             });
         },
         Err(e) => {
@@ -132,11 +131,11 @@ impl <
     ) -> fmt::Result {
         write!(dest, "{}", InstructionContext {
             instr: &instr,
-            addr: address,
-            contexts: Some(context),
-            ssa: ssa,
-            colors: colors,
-            highlight: highlight,
+            _addr: address,
+            _contexts: Some(context),
+            _ssa: ssa,
+            _colors: colors,
+            _highlight: highlight,
         }).unwrap();
         /*
         if let Some(ssa) = ssa {

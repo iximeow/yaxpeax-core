@@ -12,18 +12,16 @@
 /// this should be optimistic or pessimistic, I'm .. ignoring it :)
 
 use arch::Symbol;
-use arch::{FunctionImpl, FunctionQuery};
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::long_mode::{ConditionCode, RegSpec, RegisterBank, Instruction, Opcode, Operand};
+use yaxpeax_x86::long_mode::{ConditionCode, RegSpec, RegisterBank};
 use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;
 use std::fmt;
 use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
-use tracing::{event, Level};
 
 use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
@@ -33,7 +31,6 @@ use serde::de::{self, Deserializer, Visitor, Unexpected};
 use serde::ser::{Serializer};
 
 use data::{Direction, Disambiguator, ValueLocations};
-use analyses::data_flow::Use;
 use arch::x86_64::display::DataDisplay;
 use yaxpeax_arch::ColorSettings;
 
@@ -137,7 +134,8 @@ impl<'de> Visitor<'de> for LocationVisitor {
                 )?;
                 // !!!
                 let memory_size: u16 = serde_json::from_str(szstr).unwrap();
-                let addrstr = parts.next().ok_or(
+                // TODO: !!!
+                let _addrstr = parts.next().ok_or(
                     E::invalid_length(3, &"expected memory address in serialized location")
                 )?;
                 // !!!
@@ -154,7 +152,7 @@ impl<'de> Visitor<'de> for LocationVisitor {
             "i" => { check_end(1, parts)?; Ok(Location::IF) }
             "d" => { check_end(1, parts)?; Ok(Location::DF) }
             "o" => { check_end(1, parts)?; Ok(Location::OF) }
-            "p" => { check_end(1, parts)?; Ok(Location::IOPL) }
+            "l" => { check_end(1, parts)?; Ok(Location::IOPL) }
             u => { Err(E::invalid_value(Unexpected::Str(u), &"invalid location enum discriminant")) }
         }
     }
@@ -195,7 +193,7 @@ impl Serialize for Location {
             Location::IF => { serialized_loc.push_str("i"); }
             Location::DF => { serialized_loc.push_str("d"); }
             Location::OF => { serialized_loc.push_str("o"); }
-            Location::IOPL => { serialized_loc.push_str("p"); }
+            Location::IOPL => { serialized_loc.push_str("l"); }
             Location::RIP => {
                 serialized_loc.push_str("$");
             }
@@ -592,7 +590,6 @@ impl Data {
                 Some(Data::ValueSet(new_values))
             },
             _ => {
-                use arch::x86_64::display::DataDisplay;
                 println!("Adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
                 return None;
                 // panic!("add!");

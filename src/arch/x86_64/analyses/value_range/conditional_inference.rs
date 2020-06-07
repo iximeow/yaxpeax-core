@@ -1,5 +1,5 @@
 use yaxpeax_arch::{Arch, AddressBase, LengthedInstruction};
-use yaxpeax_x86::long_mode::{Opcode, Instruction, Operand, ConditionCode};
+use yaxpeax_x86::long_mode::{Opcode, Operand, ConditionCode};
 use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::Location;
 use data::modifier::{ModifierExpression, InstructionModifiers};
@@ -128,7 +128,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
                             let imm_src = match test_instr.operand(1) {
-                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::Register(_r) => { return false; } // TODO: support non-immediate sources
                                 Operand::ImmediateU8(imm) => imm as u64,
                                 Operand::ImmediateU16(imm) => imm as u64,
                                 Operand::ImmediateU32(imm) => imm as u64,
@@ -197,7 +197,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
                             let imm_src = match test_instr.operand(1) {
-                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::Register(_r) => { return false; } // TODO: support non-immediate sources
                                 Operand::ImmediateU8(imm) => imm as u64,
                                 Operand::ImmediateU16(imm) => imm as u64,
                                 Operand::ImmediateU32(imm) => imm as u64,
@@ -214,7 +214,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                         Opcode::TEST => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
-                            let dest_reg = match test_instr.operand(0) {
+                            let _dest_reg = match test_instr.operand(0) {
                                 Operand::Register(r) => r,
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
@@ -240,7 +240,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
                             let imm_src = match test_instr.operand(1) {
-                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::Register(_r) => { return false; } // TODO: support non-immediate sources
                                 Operand::ImmediateU8(imm) => imm as u64,
                                 Operand::ImmediateU16(imm) => imm as u64,
                                 Operand::ImmediateU32(imm) => imm as u64,
@@ -257,7 +257,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                         Opcode::TEST => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
-                            let dest_reg = match test_instr.operand(0) {
+                            let _dest_reg = match test_instr.operand(0) {
                                 Operand::Register(r) => r,
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
@@ -284,7 +284,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
                             let imm_src = match test_instr.operand(1) {
-                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::Register(_r) => { return false; } // TODO: support non-immediate sources
                                 Operand::ImmediateU8(imm) => imm as u64,
                                 Operand::ImmediateU16(imm) => imm as u64,
                                 Operand::ImmediateU32(imm) => imm as u64,
@@ -302,7 +302,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                         Opcode::TEST => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
-                            let dest_reg = match test_instr.operand(0) {
+                            let _dest_reg = match test_instr.operand(0) {
                                 Operand::Register(r) => r,
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
@@ -329,7 +329,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };
                             let imm_src = match test_instr.operand(1) {
-                                Operand::Register(r) => { return false; } // TODO: support non-immediate sources
+                                Operand::Register(_r) => { return false; } // TODO: support non-immediate sources
                                 Operand::ImmediateU8(imm) => imm as u64,
                                 Operand::ImmediateU16(imm) => imm as u64,
                                 Operand::ImmediateU32(imm) => imm as u64,
@@ -346,7 +346,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                         Opcode::TEST => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
-                            let dest_reg = match test_instr.operand(0) {
+                            let _dest_reg = match test_instr.operand(0) {
                                 Operand::Register(r) => r,
                                 _ => { return false; } // comparison with non-reg is not yet supported
                             };

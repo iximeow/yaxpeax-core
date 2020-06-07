@@ -71,7 +71,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             referent
         }
         Operand::RegScaleDisp(base, scale, disp) => {
-            let data = dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x));
+            let _data = dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x));
             let referent = match dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x)) {
                 Some(Data::ValueSet(base_values)) => {
                     if let Some(scaled) = Data::mul(&Data::ValueSet(base_values.clone()), &Data::Concrete(*scale as u64, None)) {
@@ -361,7 +361,8 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
             Opcode::JMP => {
                 let jmpop = instr.operand(0);
                 if jmpop.is_memory() {
-                    let r = referent(instr, &jmpop, addr, dfg, contexts);
+                    // TODO !!!
+                    // let r = referent(instr, &jmpop, addr, dfg, contexts);
                     if let Some(Data::ValueSet(values)) = referent(instr, &jmpop, addr, dfg, contexts) {
                         if let Some(read_values) = valueset_deref(values.clone(), data, 8) {
                             eprintln!("    jump table with {} entries:", read_values.len());

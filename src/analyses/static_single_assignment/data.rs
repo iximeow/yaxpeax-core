@@ -13,7 +13,6 @@ use data::modifier;
 use data::ValueLocations;
 use data::Direction;
 
-use arch::x86_64::display::DataDisplay;
 
 use num_traits::Zero;
 
@@ -76,8 +75,8 @@ pub struct SSAQuery<'a, A: Arch + SSAValues> where A::Location: Hash + Eq, A::Ad
 pub struct NoValueDescriptions;
 
 impl<Location> ValueDescriptionQuery<Location> for NoValueDescriptions {
-    fn modifier_name(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> { None }
-    fn modifier_value(&self, loc: Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> { None }
+    fn modifier_name(&self, _loc: Location, _dir: Direction, _precedence: modifier::Precedence) -> Option<String> { None }
+    fn modifier_value(&self, _loc: Location, _dir: Direction, _precedence: modifier::Precedence) -> Option<String> { None }
 }
 
 pub trait ValueDescriptionQuery<Location> {
@@ -195,7 +194,7 @@ impl <A: SSAValues> DFGLValue<A> {
     }
     pub fn replace(&self, new_data: Option<A::Data>) {
         // TODO: check to see if the new value conflicts with what we're setting?
-        std::mem::replace(&mut self.value.borrow_mut().data, new_data);
+        std::mem::drop(std::mem::replace(&mut self.value.borrow_mut().data, new_data));
     }
     pub fn clear(&self) {
         self.value.borrow_mut().data.take();

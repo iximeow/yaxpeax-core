@@ -1,6 +1,5 @@
 use termion::color;
 use yaxpeax_arch::Arch;
-use yaxpeax_arch::ColorSettings;
 use yaxpeax_arch::ShowContextual;
 use yaxpeax_arch::YaxColors;
 use yaxpeax_pic17::PIC17;

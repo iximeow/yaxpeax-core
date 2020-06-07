@@ -22,7 +22,7 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Arch, Address, AddressDiff, AddressDisplay, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, AddressDiff, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 

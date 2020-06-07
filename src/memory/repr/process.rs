@@ -1,15 +1,13 @@
-use arch;
 use goblin;
 use goblin::Object;
 
-use tracing::{event, Level};
-
-use std::ops::Range;
+use arch::ISA;
 
 use yaxpeax_arch::{Address, AddressDisplay};
-use memory::repr::{FlatMemoryRepr, ReadCursor, UnboundedCursor};
+use memory::repr::FlatMemoryRepr;
+use memory::repr::{ReadCursor, UnboundedCursor};
 use memory::{LayoutError, MemoryRange, MemoryRepr, Named, PatchyMemoryRepr};
-use arch::ISA;
+use std::ops::Range;
 
 #[derive(Debug)]
 pub struct PESymbol {
@@ -182,7 +180,7 @@ impl <A: Address> MemoryRepr<A> for Segment {
 
 #[derive(Debug)]
 pub enum ISAHint {
-    Hint(arch::ISA),
+    Hint(crate::arch::ISA),
     Unknown(String)
 }
 
@@ -545,7 +543,7 @@ impl ModuleInfo {
                 ))
             }
             Object::Elf(elf) => {
-                let mut imports: Vec<ELFImport> = Vec::new();
+                let imports: Vec<ELFImport> = Vec::new();
                 let mut exports: Vec<ELFExport> = Vec::new();
                 let mut syms: Vec<ELFSymbol> = Vec::new();
                 let mut sections: Vec<ELFSection> = Vec::new();
@@ -790,7 +788,7 @@ impl <A: Address> MemoryRepr<A> for ModuleData {
         }
     }
     fn size(&self) -> Option<u64> {
-        match ((self as &MemoryRepr<A>).end(), (self as &MemoryRepr<A>).start()) {
+        match ((self as &dyn MemoryRepr<A>).end(), (self as &dyn MemoryRepr<A>).start()) {
             (Some(end), Some(start)) => {
                 Some(end - start)
             }

@@ -1,13 +1,10 @@
-use yaxpeax_x86::long_mode::{Instruction, Opcode};
+use yaxpeax_x86::long_mode::Opcode;
 use yaxpeax_x86::long_mode::{Arch as x86_64};
-use yaxpeax_arch::{Address, Arch};
-use std::fmt::Debug;
+use yaxpeax_arch::Arch;
 use analyses::control_flow;
 use analyses::Value;
 use data::ValueLocations;
-use analyses::control_flow::Determinant;
 use analyses::control_flow::ControlFlowAnalysis;
-use analyses::control_flow::ToAddrDiff;
 
 use arch::x86_64::analyses::data_flow::Location;
 use analyses::DFG;

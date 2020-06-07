@@ -1,4 +1,4 @@
-use yaxpeax_arch::{Arch, AddressBase, AddressDisplay, ColorSettings, Decoder, LengthedInstruction, ShowContextual, YaxColors};
+use yaxpeax_arch::{Arch, AddressBase, AddressDisplay, Decoder, LengthedInstruction, ShowContextual, YaxColors};
 use analyses::control_flow::{BasicBlock, ControlFlowGraph, Determinant};
 use std::collections::HashMap;
 use arch::InstructionSpan;
@@ -138,8 +138,6 @@ pub fn show_linear<M: MemoryRange<A::Address>, A: Arch + BaseDisplay<F, Contexts
             instr_text.push(' ');
             instr.contextualize(colors, address, Some(ctx), &mut instr_text).unwrap();
 //            println!("instr at {}, {}, len={}", address.show(), instr_text, instr.len());
-            use yaxpeax_arch::Address;
-            use yaxpeax_arch::AddressBase;
             if A::Address::zero().wrapping_offset(instr.len()).to_linear() == 0 {
                 panic!("oh no");
             }

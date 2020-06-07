@@ -20,6 +20,7 @@ pub struct ValueRes<V> {
     carry: V,
 }
 
+#[allow(dead_code)]
 impl<V: Value> ValueRes<V> {
     pub(crate) fn from_zero() -> Self {
         ValueRes::literal(V::from_const(0))
@@ -54,12 +55,10 @@ impl<V: Value> ValueRes<V> {
 }
 
 pub trait DFG<V, A: Arch + ValueLocations> {
-    #[inline]
     fn read_loc(&self, loc: A::Location) -> V;
     fn read<T: ToDFGLoc<A::Location>>(&self, loc: &T) -> V {
         self.read_loc(loc.convert())
     }
-    #[inline]
     fn write_loc(&mut self, loc: A::Location, value: V);
     fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
@@ -85,7 +84,7 @@ impl<'a, T: Clone> ToDFGLoc<T> for &'a T {
 pub trait Value: Sized {
     fn unknown() -> Self;
 
-    fn from_const(c: u64) -> Self {
+    fn from_const(_c: u64) -> Self {
         Self::unknown()
     }
 
@@ -97,39 +96,39 @@ pub trait Value: Sized {
         self.ne(&Value::from_const(0)).to_const().map(|x| x != 0)
     }
 
-    fn add(&self, other: &Self) -> ValueRes<Self> {
+    fn add(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn sub(&self, other: &Self) -> ValueRes<Self> {
+    fn sub(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn mul(&self, other: &Self) -> ValueRes<Self> {
+    fn mul(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn or(&self, other: &Self) -> ValueRes<Self> {
+    fn or(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn and(&self, other: &Self) -> ValueRes<Self> {
+    fn and(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn xor(&self, other: &Self) -> ValueRes<Self> {
+    fn xor(&self, _other: &Self) -> ValueRes<Self> {
         ValueRes::unknown()
     }
 
-    fn modulo(&self, other: &Self) -> Self {
+    fn modulo(&self, _other: &Self) -> Self {
         Self::unknown()
     }
 
-    fn ne(&self, other: &Self) -> Self {
+    fn ne(&self, _other: &Self) -> Self {
         Self::unknown()
     }
 
-    fn le(&self, other: &Self) -> Self {
+    fn le(&self, _other: &Self) -> Self {
         Self::unknown()
     }
 
@@ -141,7 +140,7 @@ pub trait Value: Sized {
         self.lt(other).not()
     }
 
-    fn eq(&self, other: &Self) -> Self {
+    fn eq(&self, _other: &Self) -> Self {
         Self::unknown()
     }
 
@@ -149,43 +148,43 @@ pub trait Value: Sized {
         Self::unknown()
     }
 
-    fn sxt(&self, width: &Self) -> Self {
+    fn sxt(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn zxt(&self, width: &Self) -> Self {
+    fn zxt(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn shr(&self, amt: &Self) -> Self {
+    fn shr(&self, _amt: &Self) -> Self {
         Self::unknown()
     }
 
-    fn sar(&self, width: &Self) -> Self {
+    fn sar(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn shl(&self, width: &Self) -> Self {
+    fn shl(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn sal(&self, width: &Self) -> Self {
+    fn sal(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn rcl(&self, width: &Self) -> Self {
+    fn rcl(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn rcr(&self, width: &Self) -> Self {
+    fn rcr(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn rol(&self, width: &Self) -> Self {
+    fn rol(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 
-    fn ror(&self, width: &Self) -> Self {
+    fn ror(&self, _width: &Self) -> Self {
         Self::unknown()
     }
 }

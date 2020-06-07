@@ -146,7 +146,6 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
 
     }
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
-        use yaxpeax_x86::long_mode::Operand::{ImmediateI8, ImmediateI32, ImmediateI64};
         //TODO: handle prefixes like at all
         match instr.opcode {
             Opcode::MOV => {

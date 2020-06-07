@@ -1,15 +1,9 @@
-use arch;
-
-use tracing::{event, Level};
-
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::ops::Bound::Included;
 
-use yaxpeax_arch::{Address, AddressDisplay};
-use memory::repr::{FlatMemoryRepr, ReadCursor, UnboundedCursor};
-use memory::{LayoutError, ModuleInfo, MemoryRange, MemoryRepr, Named, PatchyMemoryRepr};
-use arch::ISA;
+use yaxpeax_arch::Address;
+use memory::repr::FlatMemoryRepr;
+use memory::{ModuleInfo, MemoryRepr, Named, PatchyMemoryRepr};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SourceInfo {

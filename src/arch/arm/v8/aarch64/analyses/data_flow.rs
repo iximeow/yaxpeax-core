@@ -20,7 +20,7 @@ use arch::FunctionQuery;
 use arch::FunctionImpl;
 
 pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<ARMv8 as yaxpeax_arch::Arch>::Address> + ?Sized> {
-    addr: <ARMv8 as yaxpeax_arch::Arch>::Address,
+    _addr: <ARMv8 as yaxpeax_arch::Arch>::Address,
     inst: &'a yaxpeax_arm::armv8::a64::Instruction,
     op_count: u8,
     op_idx: u8,
@@ -29,13 +29,14 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     curr_op: Option<yaxpeax_arm::armv8::a64::Operand>,
     curr_use: Option<Use>,
     disambiguator: &'b mut D,
-    fn_query: &'c F,
+    _fn_query: &'c F,
 }
 
+#[allow(dead_code)]
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<ARMv8 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(addr: <ARMv8 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv8::a64::Instruction, disambiguator: &'b mut D, fn_query: &'c F) -> Self {
+    pub fn new(_addr: <ARMv8 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv8::a64::Instruction, disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
         LocationIter {
-            addr,
+            _addr,
             inst,
             op_count: operands_in(inst),
             op_idx: 0,
@@ -44,7 +45,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
             curr_op: None,
             curr_use: None,
             disambiguator,
-            fn_query,
+            _fn_query,
         }
     }
     fn curr_loc(&self) -> (u8, u8) {
@@ -52,7 +53,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
     }
 }
 
-fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Direction)> {
+fn loc_by_id(_idx: u8, _usage: Use, _op: &Operand) -> Option<(Option<Location>, Direction)> {
     panic!("bad");
     /*
     match op {
@@ -122,14 +123,14 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
     }
     */
 }
-fn implicit_loc(op: yaxpeax_arm::armv8::a64::Opcode, i: u8) -> (Option<Location>, Direction) {
+fn implicit_loc(_op: yaxpeax_arm::armv8::a64::Opcode, _i: u8) -> (Option<Location>, Direction) {
     (None, Direction::Read)
 }
-fn implicit_locs(op: yaxpeax_arm::armv8::a64::Opcode) -> u8 {
+fn implicit_locs(_op: yaxpeax_arm::armv8::a64::Opcode) -> u8 {
     0
 }
 
-fn locations_in(op: &yaxpeax_arm::armv8::a64::Operand, usage: Use) -> u8 {
+fn locations_in(_op: &yaxpeax_arm::armv8::a64::Operand, _usage: Use) -> u8 {
     panic!("bad bad");
     /*
     match op {
@@ -171,10 +172,9 @@ fn locations_in(op: &yaxpeax_arm::armv8::a64::Operand, usage: Use) -> u8 {
         }
     }
     */
-
 }
 
-fn operands_in(inst: &yaxpeax_arm::armv8::a64::Instruction) -> u8 {
+fn operands_in(_inst: &yaxpeax_arm::armv8::a64::Instruction) -> u8 {
     panic!("bad bad bad");
     /*
     match inst.operands {
@@ -274,12 +274,12 @@ pub enum DefaultCallingConvention {
 }
 
 impl FunctionAbiReference<Location> for DefaultCallingConvention {
-    fn argument_at(&mut self, i: usize) -> Option<Location> {
+    fn argument_at(&mut self, _: usize) -> Option<Location> {
         match self {
             DefaultCallingConvention::None => None,
         }
     }
-    fn return_at(&mut self, i: usize) -> Option<Location> {
+    fn return_at(&mut self, _: usize) -> Option<Location> {
         None
     }
     fn clobber_at(&mut self, _: usize) -> Option<Location> {
@@ -356,7 +356,7 @@ impl Hash for Data {
 impl ValueLocations for ARMv8 {
     type Location = Location;
 
-    fn decompose(instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
+    fn decompose(_instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
         vec![]
     }
 }
@@ -375,7 +375,7 @@ pub struct ValueMemo {
 }
 
 impl Typed for Data {
-    fn type_of(&self, type_atlas: &TypeAtlas) -> TypeSpec {
+    fn type_of(&self, _type_atlas: &TypeAtlas) -> TypeSpec {
         TypeSpec::Bottom
     }
 }
@@ -401,7 +401,7 @@ impl Memoable for HashedValue<Rc<RefCell<Value<ARMv8>>>> {
         }
     }
 
-    fn dememoize(idx: u32, memos: &[Self::Out], dememoized: &mut HashMap<u32, Self>) -> Self {
+    fn dememoize(_idx: u32, _memos: &[Self::Out], _dememoized: &mut HashMap<u32, Self>) -> Self {
         unimplemented!("data_flow::Memoable::dememoize");
     }
 }

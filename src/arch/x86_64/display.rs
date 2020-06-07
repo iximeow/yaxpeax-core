@@ -1602,7 +1602,7 @@ impl <
                 }
                 // TODO: 3-operand mul/div?
             }
-            o => {
+            _o => {
                 // unimplemented!("yet-unsupported opcode {:?}", o);
                 write!(fmt, "missing operand info")
             }

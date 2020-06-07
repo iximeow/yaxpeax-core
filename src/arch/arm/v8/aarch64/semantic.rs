@@ -8,11 +8,11 @@ use analyses::CompletionStatus;
 fn apply_condition_code<
     V: Value + Clone + From<AddressDiff<<ARMv8 as Arch>::Address>>,
     D: DFG<V, ARMv8>
->(code: u8, next_addr: V, dfg: &mut D) {
+>(_code: u8, next_addr: V, dfg: &mut D) {
     let current_dest = dfg.read(&Location::PC);
     let joined = V::from_set(&[current_dest, next_addr.clone()]);
 
-    let apply = |dfg: &mut D, condition: V| {
+    let _apply = |_dfg: &mut D, condition: V| {
         match condition.as_bool() {
             Some(true) => {
                 dfg.write(&Location::PC, next_addr);
@@ -101,17 +101,17 @@ pub(crate) fn evaluate<
     V: Value + Clone + From<AddressDiff<<ARMv8 as Arch>::Address>>,
     D: DFG<V, ARMv8>
 >(instr: &<ARMv8 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
-    fn read_operand<V: Value, D: DFG<V, ARMv8>>(dfg: &mut D, operand: &Operand) -> V {
+    fn read_operand<V: Value, D: DFG<V, ARMv8>>(_dfg: &mut D, _operand: &Operand) -> V {
         V::unknown()
     }
 
-    fn push<V: Value, D: DFG<V, ARMv8>>(dfg: &mut D, value: V) {
+    fn push<V: Value, D: DFG<V, ARMv8>>(dfg: &mut D, _value: V) {
         dfg.write(&Location::SP, V::unknown())
     }
 
     let next_instr = dfg.read(&Location::PC);
 
-    let complete = match instr.opcode {
+    let _complete = match instr.opcode {
         Opcode::B => {
             let dest = read_operand(dfg, &instr.operands[0]);
             dfg.write(&Location::PC, dest);
