@@ -212,7 +212,7 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
         write_operand(dfg, &dest(), res);
     }
 
-    match instr.opcode {
+    match instr.opcode() {
         Opcode::Invalid => {
             // TODO: something??
         }

@@ -10,7 +10,7 @@ description = "program analysis for machine code"
 [dependencies]
 yaxpeax-arch = { version = "0.0.4", features = ["use-serde"] }
 yaxpeax-arm = { version = "0.0.4", features = ["use-serde"] }
-yaxpeax-x86 = { version = "0.0.13", features = ["use-serde"] }
+yaxpeax-x86 = { version = "0.1.2", features = ["use-serde"] }
 yaxpeax-msp430 = { version = "0.0.5", features = ["use-serde"] }
 yaxpeax-pic17 = { version = "0.0.3", features = ["use-serde"] }
 yaxpeax-pic18 = { version = "0.0.3", features = ["use-serde"] }

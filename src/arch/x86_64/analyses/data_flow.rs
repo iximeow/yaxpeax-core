@@ -15,7 +15,7 @@ use arch::Symbol;
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::long_mode::{ConditionCode, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec};
 use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;
@@ -258,71 +258,81 @@ impl AliasInfo for Location {
             Location::IOPL => {
                 vec![Location::Register(RegSpec::rflags())]
             },
-            Location::RIP |
-            Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::RIP, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::RFlags, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::ST, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::K, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::Z, num: _ }) => {
-                vec![]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::Q, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
-                ]
-            },
-            Location::Register(RegSpec { bank: RegisterBank::D, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::W, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::rB, num: *num })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3 }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num & 0x3 }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num & 0x3 })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Q, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::D, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::W, num: *num })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
-                vec![Location::Register(RegSpec { bank: RegisterBank::ST, num: *num })]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::Y, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Z, num: *num })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::X, num }) => {
-                vec![
-                    Location::Register(RegSpec { bank: RegisterBank::Z, num: *num }),
-                    Location::Register(RegSpec { bank: RegisterBank::Y, num: *num })
-                ]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::EIP, num: _ }) => {
-                vec![Location::Register(RegSpec::rip())]
-            }
-            Location::Register(RegSpec { bank: RegisterBank::EFlags, num: _ }) => {
-                vec![Location::Register(RegSpec::rflags())]
+            Location::RIP => { vec![] },
+            Location::Register(reg) => {
+                match reg.class() {
+                    register_class::CR |
+                    register_class::DR |
+                    register_class::S |
+                    register_class::RIP |
+                    register_class::RFLAGS |
+                    register_class::ST |
+                    register_class::K |
+                    register_class::Z => {
+                        vec![]
+                    }
+                    register_class::Q => {
+                        vec![
+                            Location::Register(RegSpec::d(reg.num())),
+                            Location::Register(RegSpec::w(reg.num())),
+                            Location::Register(RegSpec::rb(reg.num())),
+                        ]
+                    }
+                    register_class::D => {
+                        vec![
+                            Location::Register(RegSpec::q(reg.num())),
+                            Location::Register(RegSpec::w(reg.num())),
+                            Location::Register(RegSpec::rb(reg.num())),
+                        ]
+                    }
+                    register_class::W => {
+                        vec![
+                            Location::Register(RegSpec::q(reg.num())),
+                            Location::Register(RegSpec::d(reg.num())),
+                            Location::Register(RegSpec::rb(reg.num())),
+                        ]
+                    }
+                    register_class::B => {
+                        vec![
+                            Location::Register(RegSpec::q(reg.num() & 3)),
+                            Location::Register(RegSpec::d(reg.num() & 3)),
+                            Location::Register(RegSpec::w(reg.num() & 3)),
+                        ]
+                    }
+                    register_class::RB => {
+                        vec![
+                            Location::Register(RegSpec::q(reg.num())),
+                            Location::Register(RegSpec::d(reg.num())),
+                            Location::Register(RegSpec::w(reg.num())),
+                        ]
+                    }
+                    register_class::MM => {
+                        vec![
+                            Location::Register(RegSpec::st(reg.num())),
+                        ]
+                    }
+                    register_class::Y => {
+                        vec![
+                            Location::Register(RegSpec::zmm(reg.num())),
+                        ]
+                    }
+                    register_class::X => {
+                        vec![
+                            Location::Register(RegSpec::zmm(reg.num())),
+                            Location::Register(RegSpec::ymm(reg.num())),
+                        ]
+                    }
+                    register_class::EIP => {
+                        vec![
+                            Location::Register(RegSpec::rip())
+                        ]
+                    },
+                    register_class::EFLAGS => {
+                        vec![
+                            Location::Register(RegSpec::rflags())
+                        ]
+                    },
+                }
             }
             Location::Memory(_) => {
                 vec![]
@@ -356,41 +366,46 @@ impl AliasInfo for Location {
             },
             Location::Memory(r) => Location::Memory(*r),
             Location::MemoryLocation(r, _, _) => Location::Memory(*r),
-            Location::RIP |
-            Location::Register(RegSpec { bank: RegisterBank::CR, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::DR, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::S, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::RIP, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::RFlags, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::ST, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::K, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::Z, num: _ }) |
-            Location::Register(RegSpec { bank: RegisterBank::Q, num: _ }) => {
+            Location::RIP => {
                 self.clone()
-            },
-            Location::Register(RegSpec { bank: RegisterBank::D, num }) |
-            Location::Register(RegSpec { bank: RegisterBank::W, num }) |
-            Location::Register(RegSpec { bank: RegisterBank::rB, num }) => {
-                Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })
             }
-            Location::Register(RegSpec { bank: RegisterBank::B, num }) => {
-                Location::Register(RegSpec { bank: RegisterBank::Q, num: *num & 0x3})
-            }
-            Location::Register(RegSpec { bank: RegisterBank::MM, num }) => {
-                Location::Register(RegSpec { bank: RegisterBank::ST, num: *num })
-            }
-            Location::Register(RegSpec { bank: RegisterBank::Y, num }) |
-            Location::Register(RegSpec { bank: RegisterBank::X, num }) => {
-                Location::Register(RegSpec { bank: RegisterBank::Z, num: *num })
-            }
-            Location::Register(RegSpec { bank: RegisterBank::EIP, num: _ }) => {
-                Location::Register(RegSpec::rip())
-            }
-            Location::Register(RegSpec { bank: RegisterBank::EFlags, num: _ }) => {
-                Location::Register(RegSpec::rflags())
+            Location::Register(reg) => {
+                match reg.class() {
+                    register_class::CR |
+                    register_class::DR |
+                    register_class::S |
+                    register_class::RIP |
+                    register_class::RFLAGS |
+                    register_class::ST |
+                    register_class::K |
+                    register_class::Z |
+                    register_class::Q => {
+                        self.clone()
+                    }
+                    register_class::D |
+                    register_class::W |
+                    register_class::RB => {
+                        Location::Register(RegSpec::q(reg.num()))
+                    }
+                    register_class::B => {
+                        Location::Register(RegSpec::q(reg.num() & 3))
+                    }
+                    register_class::MM => {
+                        Location::Register(RegSpec::st(reg.num()))
+                    }
+                    register_class::X |
+                    register_class::Y => {
+                        Location::Register(RegSpec::zmm(reg.num()))
+                    }
+                    register_class::EIP => {
+                        Location::Register(RegSpec::rip())
+                    }
+                    register_class::EFLAGS => {
+                        Location::Register(RegSpec::rflags())
+                    }
+                }
             }
         }
-
     }
 }
 

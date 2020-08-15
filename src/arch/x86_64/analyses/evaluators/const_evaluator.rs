@@ -1,5 +1,5 @@
 use yaxpeax_arch::{AddressDiff, AddressBase, Arch};
-use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{register_class, Instruction, Operand, Opcode, RegSpec};
 use yaxpeax_x86::x86_64;
 use data::modifier::ModifierExpression;
 use arch::x86_64::analyses::data_flow::{Data, Location};
@@ -28,7 +28,7 @@ fn effective_address(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arc
     match mem_op {
         Operand::DisplacementU32(disp) => Some(*disp as i32 as i64 as u64),
         Operand::DisplacementU64(disp) => Some(*disp),
-        Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, disp) => {
+        Operand::RegDisp(RegSpec::RIP, disp) => {
             Some((addr.wrapping_offset(instr.len())).wrapping_offset(AddressDiff::from_const(*disp as i64 as u64)))
         }
         Operand::RegDeref(reg) => {
@@ -131,7 +131,7 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
 
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &(), _data: &U) {
         //TODO: handle prefixes like at all
-        match instr.opcode {
+        match instr.opcode() {
             Opcode::XOR => {
                 if let (Operand::Register(l), Operand::Register(r)) = (instr.operand(0), instr.operand(1)) {
                     if l == r {
@@ -148,9 +148,9 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
             },
             Opcode::MOV => {
                 if let (Operand::Register(l), Operand::Register(r)) = (instr.operand(0), instr.operand(1)) {
-                    let def_site = if l.bank == RegisterBank::D {
+                    let def_site = if l.class() == register_class::D {
                         // this assigns to Q instead of D
-                        dfg.get_def(addr, Location::Register(RegSpec { num: l.num, bank: RegisterBank::Q }))
+                        dfg.get_def(addr, Location::Register(RegSpec::q(l.num())))
                     } else {
                         dfg.get_def(addr, Location::Register(l))
                     };

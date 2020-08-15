@@ -1,5 +1,5 @@
 use yaxpeax_arch::{AddressBase, AddressDiff, Arch, LengthedInstruction};
-use yaxpeax_x86::long_mode::{Opcode, Operand, RegisterBank, RegSpec};
+use yaxpeax_x86::long_mode::{Opcode, Operand, RegSpec};
 use yaxpeax_x86::{x86_64 as x86_64Arch};
 use analyses::control_flow::Effect;
 use arch::x86_64::{Update, x86Update};
@@ -47,7 +47,7 @@ pub fn find_function_hints(
     _effect: &Effect<<x86_64Arch as Arch>::Address>,
     _ctxs: &x86_64::MergedContextTable
 ) -> Vec<(<x86_64Arch as Arch>::Address, Update)> {
-    if instr.opcode == Opcode::CALL {
+    if instr.opcode() == Opcode::CALL {
         match instr.operand(0) {
             Operand::ImmediateI32(disp) => {
                 let dest = address.wrapping_offset(instr.len()).wrapping_offset(AddressDiff::from_const(disp as i64 as u64));
@@ -83,7 +83,7 @@ pub fn find_xrefs(
     // memory accesses this does NOT necessarily match the number
     // of operands! for example, push and pop are one operand, but
     // may access two memory locations
-    match instr.opcode {
+    match instr.opcode() {
         // zero memory accesses
         // LEA is not included here because it often refers to memory
         // even if it doesn't access it then and there
@@ -261,7 +261,7 @@ pub fn find_xrefs(
                 Operand::DisplacementU64(ref_addr) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(RefType::Data, RefAction::Write, ref_addr as u64))));
                 }
-                Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
+                Operand::RegDisp(RegSpec::RIP, disp) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(
                         RefType::Data,
                         RefAction::Write,
@@ -281,7 +281,7 @@ pub fn find_xrefs(
                 Operand::DisplacementU64(ref_addr) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(RefType::Data, RefAction::Read, ref_addr as u64))));
                 }
-                Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
+                Operand::RegDisp(RegSpec::RIP, disp) => {
                     refs.push((address, BaseUpdate::Specialized(x86Update::AddXRef(
                         RefType::Data,
                         RefAction::Read,

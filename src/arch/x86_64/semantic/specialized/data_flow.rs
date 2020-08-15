@@ -1,4 +1,4 @@
-use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{register_class, Instruction, Opcode, Operand, RegSpec};
 use arch::x86_64::analyses::data_flow::{ANY, Location, cond_to_flags};
 use data::Direction;
 use tracing::{event, Level};
@@ -251,7 +251,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             }
         }
     }
-    match instr.opcode {
+    match instr.opcode() {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
         Opcode::MOVDDUP |
@@ -574,36 +574,41 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         }
         Opcode::CMPXCHG => {
             let mut locs = match &instr.operand(1) {
-                Operand::Register(RegSpec { bank: RegisterBank::Q, num }) => {
-                    vec![
-                        (Some(Location::Register(RegSpec { bank: RegisterBank::Q, num: *num })), Direction::Read),
-                        (Some(Location::Register(RegSpec::rax())), Direction::Read)
-                    ]
-                },
-                Operand::Register(RegSpec { bank: RegisterBank::D, num }) => {
-                    vec![
-                        (Some(Location::Register(RegSpec { bank: RegisterBank::D, num: *num })), Direction::Read),
-                        (Some(Location::Register(RegSpec::eax())), Direction::Read)
-                    ]
-                },
-                Operand::Register(RegSpec { bank: RegisterBank::W, num }) => {
-                    vec![
-                        (Some(Location::Register(RegSpec { bank: RegisterBank::W, num: *num })), Direction::Read),
-                        (Some(Location::Register(RegSpec::ax())), Direction::Read)
-                    ]
-                },
-                Operand::Register(RegSpec { bank: RegisterBank::B, num }) => {
-                    vec![
-                        (Some(Location::Register(RegSpec { bank: RegisterBank::B, num: *num })), Direction::Read),
-                        (Some(Location::Register(RegSpec::al())), Direction::Read)
-                    ]
-                },
-                Operand::Register(RegSpec { bank: RegisterBank::rB, num }) => {
-                    vec![
-                        (Some(Location::Register(RegSpec { bank: RegisterBank::B, num: *num })), Direction::Read),
-                        (Some(Location::Register(RegSpec::al())), Direction::Read)
-                    ]
-                },
+                Operand::Register(reg) => {
+                    match reg.class() {
+                        register_class::Q => {
+                            vec![
+                                (Some(Location::Register(RegSpec::q(reg.num()))), Direction::Read),
+                                (Some(Location::Register(RegSpec::rax())), Direction::Read)
+                            ]
+                        }
+                        register_class::D => {
+                            vec![
+                                (Some(Location::Register(RegSpec::d(reg.num()))), Direction::Read),
+                                (Some(Location::Register(RegSpec::eax())), Direction::Read)
+                            ]
+                        }
+                        register_class::W => {
+                            vec![
+                                (Some(Location::Register(RegSpec::w(reg.num()))), Direction::Read),
+                                (Some(Location::Register(RegSpec::ax())), Direction::Read)
+                            ]
+                        }
+                        register_class::B => {
+                            vec![
+                                (Some(Location::Register(RegSpec::b(reg.num()))), Direction::Read),
+                                (Some(Location::Register(RegSpec::al())), Direction::Read)
+                            ]
+                        }
+                        register_class::RB => {
+                            vec![
+                                (Some(Location::Register(RegSpec::rb(reg.num()))), Direction::Read),
+                                (Some(Location::Register(RegSpec::al())), Direction::Read)
+                            ]
+                        }
+                        _ => { unreachable!() }
+                    }
+                }
                 _ => { unreachable!() }
             };
             locs.push((Some(Location::ZF), Direction::Write));
@@ -741,7 +746,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::JLE |
         Opcode::JGE |
         Opcode::JL => {
-            cond_to_flags(instr.opcode.condition().unwrap()).to_vec()
+            cond_to_flags(instr.opcode().condition().unwrap()).to_vec()
         }
 
         Opcode::CMOVO |
@@ -762,7 +767,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::CMOVL => {
             let mut locs = decompose_write(&instr.operand(0));
             locs.append(&mut decompose_read(&instr.operand(1)));
-            locs.extend_from_slice(cond_to_flags(instr.opcode.condition().unwrap()));
+            locs.extend_from_slice(cond_to_flags(instr.opcode().condition().unwrap()));
             locs
         }
         Opcode::SETO |
@@ -782,7 +787,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::SETGE |
         Opcode::SETL => {
             let mut locs = decompose_write(&instr.operand(0));
-            locs.extend_from_slice(cond_to_flags(instr.opcode.condition().unwrap()));
+            locs.extend_from_slice(cond_to_flags(instr.opcode().condition().unwrap()));
             locs
         }
         Opcode::LSL => {

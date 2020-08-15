@@ -19,7 +19,7 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
 }
 
 fn operands_in(instr: &Instruction) -> u8 {
-    match instr.opcode {
+    match instr.opcode() {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
         Opcode::MOVDDUP |
@@ -387,7 +387,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
             inst,
             op_count: operands_in(inst),
             op_idx: 0,
-            loc_count: implicit_locs(inst.opcode),
+            loc_count: implicit_locs(inst.opcode()),
             loc_idx: 0,
             curr_op: None,
             curr_use: None,
@@ -401,7 +401,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
 }
 
 fn use_of(instr: &Instruction, idx: u8) -> Use {
-    match instr.opcode {
+    match instr.opcode() {
         Opcode::SQRTSD |
         Opcode::SQRTSS |
         Opcode::MOVDDUP |
@@ -1557,7 +1557,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
                     // but we're at the last op, so we're actually done...
                     return None;
                 }
-    //            println!("opc: {}", iter.inst.opcode);
+    //            println!("opc: {}", iter.inst.opcode());
 
                 let op = iter.inst.operand(iter.op_idx - 1);
                 let op_use = use_of(iter.inst, iter.op_idx - 1);
@@ -1569,7 +1569,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
 
             if iter.op_idx == 0 {
                 iter.loc_idx += 1;
-                return Some(implicit_loc(iter.inst.opcode, iter.loc_idx - 1));
+                return Some(implicit_loc(iter.inst.opcode(), iter.loc_idx - 1));
             }
 
             if let Some(op) = &iter.curr_op {

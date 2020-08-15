@@ -35,7 +35,7 @@ impl_control_flow!(
     yaxpeax_x86::long_mode::Instruction,
     |inst| {
         let assume_calls_return = true;
-        match inst.opcode {
+        match inst.opcode() {
             Opcode::CALL |
             Opcode::SYSCALL => {
                 if assume_calls_return {

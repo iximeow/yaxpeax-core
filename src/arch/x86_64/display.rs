@@ -19,7 +19,7 @@ use arch::x86_64::{ContextRead, DisplayCtx, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
 use analyses::control_flow::Determinant;
 use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
-use yaxpeax_x86::long_mode::{RegSpec, RegisterBank, Segment};
+use yaxpeax_x86::long_mode::{RegSpec, Segment};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
@@ -270,7 +270,7 @@ pub enum Use {
 }
 
 fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
-    match inst.opcode {
+    match inst.opcode() {
         Opcode::CALL |
         Opcode::JMP |
         Opcode::JO |
@@ -1018,7 +1018,7 @@ impl <
                         }
                     }
                 }
-                Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
+                Operand::RegDisp(RegSpec::RIP, disp) => {
                     if let Some(prefix) = ctx.instr.segment_override_for_op(op_idx) {
                         write!(fmt, "{}", ctx.colors.address(format!("{}:", prefix)))?;
                     }
@@ -1273,9 +1273,9 @@ impl <
          *     ... ...
          * }
          */
-        self.instr.opcode.colorize(&self.colors, fmt)?;
+        self.instr.opcode().colorize(&self.colors, fmt)?;
 
-        match self.instr.opcode {
+        match self.instr.opcode() {
             Opcode::CALL |
             Opcode::JMP |
             Opcode::JO |
@@ -1322,7 +1322,7 @@ impl <
                     Operand::ImmediateI64(i) => {
                         return write!(fmt, " {}", relative_namer(*i as i64));
                     },
-                    Operand::RegDisp(RegSpec { bank: RegisterBank::RIP, num: _ }, disp) => {
+                    Operand::RegDisp(RegSpec::RIP, disp) => {
                         let addr = self.addr.wrapping_offset(AddressDiff::from_const(*disp as i64 as u64)).wrapping_offset(self.instr.len());
                         return write!(fmt, " [{}]", dest_namer(addr));
                     }
@@ -1753,7 +1753,7 @@ impl <
             highlight: highlight,
         }).unwrap();
         if let Some(ssa) = ssa {
-            if is_conditional_op(instr.opcode) {
+            if is_conditional_op(instr.opcode()) {
                 for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
                     if let (Some(flag), Direction::Read) = (loc, dir) {
                         if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {

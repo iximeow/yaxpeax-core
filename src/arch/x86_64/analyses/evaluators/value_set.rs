@@ -1,5 +1,5 @@
 use yaxpeax_arch::{Arch, AddressDisplay};
-use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, register_class};
 use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, ValueRange};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
@@ -25,7 +25,6 @@ impl Domain for ValueSetDomain {
 
 fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Data> {
     match mem_op {
-        Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, _) |
         Operand::DisplacementU32(_) |
         Operand::DisplacementU64(_) => {
             None
@@ -37,6 +36,9 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
                 }
                 _ => None
             }
+        },
+        Operand::RegDisp(RegSpec::RIP, _) => {
+            None
         },
         Operand::RegDisp(reg, disp) => {
             match dfg.get_use(addr, Location::Register(*reg)).get_data() {
@@ -245,7 +247,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
 
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
         //TODO: handle prefixes like at all
-        match instr.opcode {
+        match instr.opcode() {
             Opcode::MOVSXD => {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), Operand::Register(r)) => {
@@ -323,12 +325,12 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
                             if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                let size = match l.bank {
-                                    RegisterBank::Q => 8,
-                                    RegisterBank::D => 4,
-                                    RegisterBank::W => 2,
-                                    RegisterBank::B |
-                                    RegisterBank::rB => 1,
+                                let size = match l.class() {
+                                    register_class::Q => 8,
+                                    register_class::D => 4,
+                                    register_class::W => 2,
+                                    register_class::B |
+                                    register_class::RB => 1,
                                     _ => {
                                         // TODO: handle movs to other registers
                                         return;

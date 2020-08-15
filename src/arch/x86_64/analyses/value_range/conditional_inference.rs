@@ -12,7 +12,7 @@ pub struct ConditionalInference;
 
 impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for ConditionalInference {
     fn inferrable_conditional(conditional_instr: &<x86_64 as Arch>::Instruction) -> bool {
-        if conditional_instr.opcode.condition().is_none() {
+        if conditional_instr.opcode().condition().is_none() {
             return false;
         }
 
@@ -93,7 +93,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
 
         // TODO: revisit how this handles sub-64-bit registers
         // TODO: only support z/nz, g/le/l/ge, a/be/b/ae
-        if let Some(cond) = conditional_instr.opcode.condition() {
+        if let Some(cond) = conditional_instr.opcode().condition() {
             // Pair up conditions and their negations, swap destinations to phrase bounds in terms
             // of `bound applied` and `negated bound applied`
             let (bound_dest, negated_bound_dest) = match cond {
@@ -119,7 +119,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
             match cond {
                 ConditionCode::Z |
                 ConditionCode::NZ => {
-                    match test_instr.opcode {
+                    match test_instr.opcode() {
                         Opcode::CMP => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
@@ -188,7 +188,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                 },
                 ConditionCode::G |
                 ConditionCode::LE => {
-                    match test_instr.opcode {
+                    match test_instr.opcode() {
                         Opcode::CMP => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
@@ -231,7 +231,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                 }
                 ConditionCode::L |
                 ConditionCode::GE => {
-                    match test_instr.opcode {
+                    match test_instr.opcode() {
                         Opcode::CMP => {
                             // TODO: shouldn't care about dest operand, should be able to just query
                             // dfg for a value.
@@ -274,7 +274,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                 }
                 ConditionCode::A |
                 ConditionCode::BE => { // A or NA
-                    match test_instr.opcode {
+                    match test_instr.opcode() {
                         // TODO: add bounds as if this is an unsigned compare!
                         Opcode::CMP => {
                             // TODO: shouldn't care about dest operand, should be able to just query
@@ -319,7 +319,7 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
                 }
                 ConditionCode::B |
                 ConditionCode::AE => { // B or NB
-                    match test_instr.opcode {
+                    match test_instr.opcode() {
                         // TODO: add bounds as if this is an unsigned compare!
                         Opcode::CMP => {
                             // TODO: shouldn't care about dest operand, should be able to just query

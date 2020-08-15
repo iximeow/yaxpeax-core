@@ -1,7 +1,7 @@
 use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressBase;
 use yaxpeax_arch::AddressDiff;
-use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec, RegisterBank};
+use yaxpeax_x86::long_mode::{Instruction, Operand, Opcode, RegSpec};
 use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
@@ -63,7 +63,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                 None
             }
         }
-        Operand::RegDisp(RegSpec { num: 0, bank: RegisterBank::RIP }, disp) => {
+        Operand::RegDisp(RegSpec::RIP, disp) => {
             let addr = (addr.wrapping_offset(instr.len())).wrapping_offset(AddressDiff::from_const(*disp as i64 as u64));
             if addr == 0x1402a3148 {
                 // its that global struct referenced in ntoskrnl:0x1402a9370
@@ -147,7 +147,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
     }
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
         //TODO: handle prefixes like at all
-        match instr.opcode {
+        match instr.opcode() {
             Opcode::MOV => {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), op) => {
