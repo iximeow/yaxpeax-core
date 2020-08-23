@@ -1,5 +1,6 @@
 use yaxpeax_core::debug::gdb_remote::GDBRemote;
 
+#[ignore]
 #[test]
 fn test_gdb_read_mem() {
     let mut remote = GDBRemote::connect(&"127.0.0.1:1234".parse().unwrap()).unwrap();

@@ -113,6 +113,7 @@ impl <A: Address + Hash> Serialize for ControlFlowGraph<A> {
     }
 }
 
+#[ignore]
 #[test]
 fn control_flow_graph_construction() {
     let mut cfg: ControlFlowGraph<u32> = ControlFlowGraph::new();

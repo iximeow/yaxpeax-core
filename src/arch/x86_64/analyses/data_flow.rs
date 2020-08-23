@@ -429,6 +429,7 @@ pub enum SymbolicExpression {
     CopOut(String)
 }
 
+#[ignore]
 #[test]
 fn test_expr_fields() {
     use data::types::KPCR;
