@@ -464,6 +464,73 @@ pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
     }
 }
 
+pub struct AnalysisBuilder<
+    'memory,
+    'ctx,
+    A: Arch,
+    M: MemoryRange<A::Address>,
+    U,
+    Update,
+    Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
+> {
+    memory: &'memory M,
+    starts: Option<Vec<A::Address>>,
+    contexts: &'ctx mut Contexts,
+    on_instruction_discovered: fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)>,
+    _u: std::marker::PhantomData<U>,
+}
+
+impl<'memory, 'ctx, A, M: MemoryRange<A::Address>, U, Update, Contexts> AnalysisBuilder<'memory, 'ctx, A, M, U, Update, Contexts> where
+    A: Arch,
+    Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
+    A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
+    A::Instruction: Debug + Determinant<U, A::Address>,
+{
+    pub fn new(memory: &'memory M, contexts: &'ctx mut Contexts) -> Self {
+        fn do_nothing<
+            A: Arch,
+            U,
+            Update,
+            Contexts: ContextWrite<A, Update> + ContextRead<A, U>
+        >(_inst: &A::Instruction, _addr: A::Address, _effect: &Effect<A::Address>, _ctx: &Contexts) -> Vec<(A::Address, Update)> {
+            Vec::new()
+        }
+        Self {
+            memory,
+            starts: None,
+            contexts,
+            on_instruction_discovered: do_nothing,
+            _u: std::marker::PhantomData,
+        }
+    }
+
+    pub fn with_entrypoints(mut self, starts: Vec<A::Address>) -> Self {
+        self.starts = Some(starts);
+        self
+    }
+
+    pub fn evaluate(self) -> ControlFlowGraph<A::Address> {
+        let mut cfg = ControlFlowGraph::new();
+        self.evaluate_into(&mut cfg);
+        cfg
+    }
+
+    pub fn evaluate_into(self, cfg: &mut ControlFlowGraph<A::Address>) {
+        let Self {
+            memory,
+            contexts,
+            starts,
+            on_instruction_discovered,
+            ..
+        } = self;
+        if let Some(starts) = starts {
+            explore_all(memory, contexts, cfg, starts, &on_instruction_discovered);
+        } else {
+            explore_all(memory, contexts, cfg, vec![A::Address::zero()], &on_instruction_discovered);
+        }
+    }
+}
+
 pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
     data: &M,
     contexts: &'a mut Contexts,
