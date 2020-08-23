@@ -170,6 +170,11 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
     }
 
     fn write_alu_result(&mut self, dest_op: Operand, value: ValueRes<V>) {
+        let value = self.write_alu_flags(value);
+        self.write_operand(&dest_op, value);
+    }
+
+    fn write_alu_flags(&mut self, value: ValueRes<V>) -> V {
         self.write(&Location::OF, V::unknown());
         self.write(&Location::PF, V::unknown());
         self.write(&Location::AF, V::unknown());
@@ -177,10 +182,15 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
         self.write(&Location::ZF, value.zero());
         let (value, carry) = value.parts();
         self.write(&Location::CF, carry);
-        self.write_operand(&dest_op, value);
+        value
     }
 
     fn write_bitwise_result(&mut self, dest_op: Operand, value: ValueRes<V>) {
+        let value = self.write_bitwise_flags(value);
+        self.write_operand(&dest_op, value);
+    }
+
+    fn write_bitwise_flags(&mut self, value: ValueRes<V>) -> V {
         self.write(&Location::OF, V::from_const(0));
         self.write(&Location::CF, V::from_const(0));
         self.write(&Location::PF, V::unknown());
@@ -188,7 +198,7 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
         self.write(&Location::SF, value.sign());
         self.write(&Location::ZF, value.zero());
         let value = value.value();
-        self.write_operand(&dest_op, value);
+        value
     }
 
     fn conditional_loc_write<
@@ -238,6 +248,106 @@ pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D
         Opcode::Invalid => {
             // TODO: something??
         }
+        Opcode::NOP => {},
+        Opcode::LEA => {
+            let ea = dfg.effective_address(&instr.operand(1));
+            dfg.write_operand(&instr.operand(0), ea);
+        }
+        Opcode::SAR => {
+            let amt = dfg.read_operand(&instr.operand(1));
+            let value = dfg.read_operand(&instr.operand(0));
+            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            dfg.write_operand(&instr.operand(0), res);
+        }
+        Opcode::SHR => {
+            let amt = dfg.read_operand(&instr.operand(1));
+            let value = dfg.read_operand(&instr.operand(0));
+            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            dfg.write_operand(&instr.operand(0), res);
+        }
+        Opcode::SHL => {
+            let amt = dfg.read_operand(&instr.operand(1));
+            let value = dfg.read_operand(&instr.operand(0));
+            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            dfg.write_operand(&instr.operand(0), res);
+        }
+        Opcode::CMP => {
+            if instr.operand(0) == instr.operand(1) {
+                dfg.write_alu_flags(ValueRes::from_zero());
+            } else {
+                let dest = dfg.read_operand(&instr.operand(0));
+                let src = dfg.read_operand(&instr.operand(1));
+                dfg.write_alu_flags(dest.sub(&src));
+            }
+        }
+        Opcode::TEST => {
+            if instr.operand(0) == instr.operand(1) {
+                dfg.write_bitwise_flags(ValueRes::from_zero());
+            } else {
+                let dest = dfg.read_operand(&instr.operand(0));
+                let src = dfg.read_operand(&instr.operand(1));
+                dfg.write_bitwise_flags(dest.and(&src));
+            }
+        }
+        Opcode::MOV => {
+            let value = dfg.read_operand(&instr.operand(1));
+            dfg.write_operand(&instr.operand(0), value);
+        }
+        Opcode::INC => {
+            let src = dfg.read_operand(&instr.operand(0));
+            let one = V::from_const(1);
+            let value = src.add(&one);
+            dfg.write(&Location::OF, V::unknown());
+            dfg.write(&Location::PF, V::unknown());
+            dfg.write(&Location::AF, V::unknown());
+            dfg.write(&Location::SF, value.sign());
+            dfg.write(&Location::ZF, value.zero());
+            let value = value.value();
+            dfg.write_operand(&instr.operand(0), value);
+        }
+        Opcode::DEC => {
+            let src = dfg.read_operand(&instr.operand(0));
+            let one = V::from_const(1);
+            let value = src.sub(&one);
+            dfg.write(&Location::OF, V::unknown());
+            dfg.write(&Location::PF, V::unknown());
+            dfg.write(&Location::AF, V::unknown());
+            dfg.write(&Location::SF, value.sign());
+            dfg.write(&Location::ZF, value.zero());
+            let value = value.value();
+            dfg.write_operand(&instr.operand(0), value);
+        }
+        Opcode::NEG => {
+            let src = dfg.read_operand(&instr.operand(0));
+            let zero = V::from_const(0);
+            let value = zero.sub(&src);
+            // from docs:
+            // if (src == 0) CF = 0; else CF = 1;
+            // but i think the current implementation upholds those semantics?
+            dfg.write_alu_result(instr.operand(0), value);
+        }
+        Opcode::UD2 => {
+            dfg.write(&Location::RIP, V::unknown());
+            return CompletionStatus::Incomplete;
+        }
+        Opcode::SETO => {}
+        Opcode::SETNO => {}
+        Opcode::SETB => {}
+        Opcode::SETAE => {}
+        Opcode::SETZ => {}
+        Opcode::SETNZ => {}
+        Opcode::SETBE => {}
+        Opcode::SETA => {}
+        Opcode::SETS => {}
+        Opcode::SETNS => {}
+        Opcode::SETP => {}
+        Opcode::SETNP => {}
+        Opcode::SETL => {}
+        Opcode::SETGE => {}
+        Opcode::SETLE => {}
+        Opcode::SETG => {}
+        Opcode::CMOVO => {}
+        Opcode::MUL => {}
         Opcode::SUB => {
             if instr.operand(0) == instr.operand(1) {
                 dfg.write_alu_result(instr.operand(0), ValueRes::from_zero());

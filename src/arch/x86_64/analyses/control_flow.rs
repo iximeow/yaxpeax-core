@@ -51,6 +51,7 @@ impl_control_flow!(
 
 #[test]
 fn test_x86_determinant() {
+    use yaxpeax_arch::AddressDiff;
     use yaxpeax_arch::Decoder;
     use analyses::control_flow::Determinant;
     let decoder = <x86_64 as Arch>::Decoder::default();
