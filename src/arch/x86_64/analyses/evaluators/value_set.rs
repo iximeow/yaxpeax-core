@@ -30,7 +30,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             None
         }
         Operand::RegDeref(reg) => {
-            match dfg.get_use(addr, Location::Register(*reg)).get_data() {
+            match dfg.get_use(addr, Location::Register(*reg)).get_data().as_ref() {
                 Some(Data::ValueSet(values)) => {
                     Some(Data::ValueSet(values.clone()))
                 }
@@ -41,7 +41,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             None
         },
         Operand::RegDisp(reg, disp) => {
-            match dfg.get_use(addr, Location::Register(*reg)).get_data() {
+            match dfg.get_use(addr, Location::Register(*reg)).get_data().as_ref() {
                 Some(Data::ValueSet(values)) => {
                     Data::add(&Data::ValueSet(values.clone()), &Data::Concrete(*disp as i64 as u64, None))
                 }
@@ -58,7 +58,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             if addr == 0x1404d5d88 {
                 println!("mem operand: {:?}", mem_op);
             }
-            let referent = match (dfg.get_use(addr, Location::Register(*base)).get_data(), dfg.get_use(addr, Location::Register(*index)).get_data()) {
+            let referent = match (dfg.get_use(addr, Location::Register(*base)).get_data().as_ref(), dfg.get_use(addr, Location::Register(*index)).get_data().as_ref()) {
                 (Some(Data::ValueSet(base_values)), Some(Data::Concrete(i, _))) => {
                     Data::add(&Data::ValueSet(base_values.clone()), &Data::Concrete(i.wrapping_add(*disp as i64 as u64), None))
                 }
@@ -73,7 +73,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             referent
         }
         Operand::RegScaleDisp(base, scale, disp) => {
-            let _data = dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x));
+//            let _data = dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x));
             let referent = match dfg.get_use(addr, Location::Register(*base)).get_data().as_ref().and_then(|x| Data::underlying(x)) {
                 Some(Data::ValueSet(base_values)) => {
                     if let Some(scaled) = Data::mul(&Data::ValueSet(base_values.clone()), &Data::Concrete(*scale as u64, None)) {
@@ -93,7 +93,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
             if addr == 0x140486bc0 {
                 println!("mem operand: {:?}", mem_op);
             }
-            let referent = match (dfg.get_use(addr, Location::Register(*base)).get_data(), dfg.get_use(addr, Location::Register(*index)).get_data()) {
+            let referent = match (dfg.get_use(addr, Location::Register(*base)).get_data().as_ref(), dfg.get_use(addr, Location::Register(*index)).get_data().as_ref()) {
                 (Some(Data::ValueSet(base_values)), Some(Data::Concrete(i, _))) => {
                     Data::add(&Data::ValueSet(base_values.clone()), &Data::Concrete(i.wrapping_mul(*scale as u64).wrapping_add(*disp as i64 as u64), None))
                 }
@@ -253,7 +253,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), Operand::Register(r)) => {
                         // TODO: respect the sign extendy bits of movsxd
                         dfg.get_def(addr, Location::Register(l)).replace(
-                            dfg.get_use(addr, Location::Register(r)).get_data()
+                            dfg.get_use(addr, Location::Register(r)).get_data().clone()
                         );
                     }
                     _ => {}
@@ -384,8 +384,8 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), Operand::Register(r)) => {
                         dfg.get_def(addr, Location::Register(l)).replace(
-                            dfg.get_use(addr, Location::Register(l)).get_data().and_then(|ldata| {
-                                dfg.get_use(addr, Location::Register(r)).get_data().and_then(|rdata| {
+                            dfg.get_use(addr, Location::Register(l)).get_data().as_ref().and_then(|ldata| {
+                                dfg.get_use(addr, Location::Register(r)).get_data().as_ref().and_then(|rdata| {
                                     Data::add(&ldata, &rdata)
                                 })
                             })

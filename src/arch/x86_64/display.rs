@@ -1070,13 +1070,13 @@ impl <
                     let mut drawn = false;
                     if let Some(ssa) = ctx.ssa.as_ref() {
                         let use_val = ssa.get_use(ctx.addr, Location::Register(*spec));
-                        match use_val.get_data() {
+                        match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
                                 let type_atlas = TypeAtlas::new();
-                                if let SymbolicExpression::Add(base, offset) = expr.offset(*disp as i64 as u64) {
+                                if let SymbolicExpression::Add(base, offset) = expr.clone().offset(*disp as i64 as u64) {
                                     if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
                                         drawn = true;
-                                        let _val_rc = use_val.as_rc();
+//                                        let _val_rc = use_val.as_rc();
                                         let text = if let Some(name) = field.name.as_ref() {
                                             format!("[{}.{}]", reg, name)
                                         } else {
@@ -1103,7 +1103,7 @@ impl <
                                 }
                             }
                             _ => { }
-                        }
+                        };
                     }
 
                     if !drawn {

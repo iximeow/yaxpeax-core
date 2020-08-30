@@ -187,6 +187,7 @@ pub struct DFGLValue<A: SSAValues> {
     pub value: DFGRef<A>
 }
 
+use std::cell::Ref;
 impl <A: SSAValues> DFGLValue<A> {
     pub fn update(&self, new_data: A::Data) {
         // TODO: check to see if the new value conflicts with what we're setting?
@@ -199,8 +200,8 @@ impl <A: SSAValues> DFGLValue<A> {
     pub fn clear(&self) {
         self.value.borrow_mut().data.take();
     }
-    pub fn get_data(&self) -> Option<A::Data> {
-        self.value.borrow().data.clone()
+    pub fn get_data(&self) -> Ref<Option<A::Data>> {
+        Ref::map(self.value.borrow(), |v| &v.data)
     }
     pub fn as_rc(self) -> DFGRef<A> {
         self.value

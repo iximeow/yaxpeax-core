@@ -86,7 +86,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             }
         }
         Operand::RegDeref(reg) => {
-            match dfg.get_use(addr, Location::Register(*reg)).get_data() {
+            match dfg.get_use(addr, Location::Register(*reg)).get_data().as_ref() {
                 Some(Data::Concrete(_v, None)) => {
                     // TODO: check const addr derefs for the same structures checked in disp
                     // eg gs:[rax] for rax = 0
@@ -97,12 +97,12 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                     // eg gs:[rax] for rax = 0
                     None
                 },
-                Some(Data::Expression(sym)) => Some(sym),
+                Some(Data::Expression(sym)) => Some(sym.to_owned()),
                 _ => None
             }
         },
         Operand::RegDisp(reg, disp) => {
-            match dfg.get_use(addr, Location::Register(*reg)).get_data() {
+            match dfg.get_use(addr, Location::Register(*reg)).get_data().as_ref() {
                 Some(Data::Concrete(_v, None)) => {
 //                    v.wrapping_add(*disp as i64 as u64).unwrap();
                     // TODO: check const addr derefs for the same structures checked in disp
@@ -115,7 +115,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                     // eg gs:[rax] for rax = 0
                     None
                 },
-                Some(Data::Expression(sym)) => Some(sym.offset(*disp as i64 as u64)),
+                Some(Data::Expression(sym)) => Some(sym.clone().offset(*disp as i64 as u64)),
                 _ => None
             }
         },
@@ -183,13 +183,13 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                         let use_val = dfg.get_use(addr, Location::Register(l));
                         let def_val = dfg.get_def(addr, Location::Register(l));
         //                println!("Symbolizing use {:?} + {:#x} = ...", use_val.get_data(), i);
-                        match use_val.get_data() {
+                        match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
         //                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
-                                def_val.update(Data::Expression(expr.offset(offset as u64)));
+                                def_val.update(Data::Expression(expr.clone().offset(offset as u64)));
                             }
                             _ => { }
-                        }
+                        };
                     }
                     _ => {
                         // don't handle others yet

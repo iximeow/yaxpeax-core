@@ -8,6 +8,7 @@ use yaxpeax_core::analyses::control_flow::ControlFlowGraph;
 // use yaxpeax_core::analyses::static_single_assignment::Data;
 use yaxpeax_core::analyses::static_single_assignment::SSA;
 use yaxpeax_core::arch::x86_64::analyses::data_flow::{Data, Location};
+use yaxpeax_core::analyses::evaluators::Evaluator;
 
 fn do_analyses(data: &[u8]) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>) {
     // TODO: is this necessary? can this be removed from `AnalysisBuilder::new`?
@@ -23,6 +24,8 @@ fn do_analyses(data: &[u8]) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA
     )
         .ssa_cytron();
 
+    Evaluator::new(&data.to_vec(), &cfg, &dfg).full_function_iterate();
+
     (cfg, dfg)
 }
 
@@ -37,7 +40,6 @@ fn test_arithmetic() {
 
     let (cfg, dfg) = do_analyses(instructions);
 
-    let v = dfg.get_def(10, Location::Register(RegSpec::rcx()));
     // expect that rcx == 8
-    assert_eq!(v.as_rc().borrow().data, Some(Data::Concrete(8, None)));
+    assert_eq!(dfg.get_def(10, Location::rcx()).get_data().as_ref(), Some(&Data::Concrete(8, None)));
 }

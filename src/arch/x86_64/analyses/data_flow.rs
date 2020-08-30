@@ -76,7 +76,28 @@ pub enum Location {
     // necessary to have a location to write that is provably not an Operand variant.
     // no x86 instruction explicitly writes to RIP in a way that could be ambiguous with other
     // operands, so this allows x86 semantics to specialize nicely for control flow.
+    //
+    // well. would. unfortunately, match codegen does not play well. so this doesn't specialize
+    // nearly as nicely as i'd hoped, and might have to get rethunk.
     RIP,
+}
+
+impl Location {
+    pub fn rip() -> Self { Location::RIP }
+
+    pub fn rax() -> Self { Location::Register(RegSpec::rax()) }
+    pub fn rcx() -> Self { Location::Register(RegSpec::rcx()) }
+    pub fn rdx() -> Self { Location::Register(RegSpec::rdx()) }
+//    pub fn rbx() -> Self { Location::Register(RegSpec::rbx()) }
+    pub fn rsp() -> Self { Location::Register(RegSpec::rsp()) }
+    pub fn rbp() -> Self { Location::Register(RegSpec::rbp()) }
+    pub fn rsi() -> Self { Location::Register(RegSpec::rsi()) }
+    pub fn rdi() -> Self { Location::Register(RegSpec::rdi()) }
+
+    pub fn eax() -> Self { Location::Register(RegSpec::eax()) }
+    pub fn ecx() -> Self { Location::Register(RegSpec::ecx()) }
+    pub fn edx() -> Self { Location::Register(RegSpec::edx()) }
+    pub fn ebx() -> Self { Location::Register(RegSpec::ebx()) }
 }
 
 #[derive(Default)]
@@ -582,6 +603,10 @@ impl Data {
 
     pub fn add(left: &Data, right: &Data) -> Option<Data> {
         match (left, right) {
+            (Data::Concrete(left, _), Data::Concrete(right, _)) => {
+                // TODO: preserve types
+                Some(Data::Concrete(left.wrapping_add(*right), None))
+            }
             (Data::ValueSet(values), Data::Concrete(right, _)) => {
                 let mut new_values: Vec<ValueRange> = Vec::new();
                 for value in values {
