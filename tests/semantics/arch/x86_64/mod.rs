@@ -43,3 +43,114 @@ fn test_arithmetic() {
     // expect that rcx == 8
     assert_eq!(dfg.get_def(10, Location::rcx()).get_data().as_ref(), Some(&Data::Concrete(8, None)));
 }
+
+#[test]
+fn test_stack_inference()  {
+    // some function from /bin/bash, 0x9df0
+    //
+    // interesting observations:
+    // * frame pointer elision
+    // * fs-based stack check
+    // * stack-struct at rsp, passed as argument (rcx)
+    //   - layout is dword, qword qword qword qword qword qword qword
+    // * inner call takes rdx, rcx, rsi. rsi == rax == rdx_in
+    // * stack limit from fs:0x28 makes it into the struct?
+    // * both conditional jumps are to non-returning functions
+    //  - `call sym.imp.abort` should not fall through to __stack_chk_fail
+    let instructions = &[
+        0x48, 0x83, 0xec, 0x48,                                        // sub rsp, 0x48
+        0x48, 0x89, 0xd0,                                              // mov rax, rdx
+        0x64, 0x48, 0x8b, 0x14, 0x25, 0x28, 0x00, 0x00, 0x00,          // mov rdx, qword fs:[0x28]
+        0x48, 0x89, 0x54, 0x24, 0x38,                                  // mov qword [rsp + 0x38], rdx
+        0x31, 0xd2,                                                    // xor edx, edx
+        0x83, 0xfe, 0x0a,                                              // cmp esi, 0x0a
+        0x74, 0x68,                                                    // je $ + 0x68
+        0x89, 0x34, 0x24,                                              // mov dword [rsp], esi
+        0x48, 0x89, 0xe1,                                              // mov rcx, rsp
+        0x48, 0xc7, 0xc2, 0xff, 0xff, 0xff, 0xff,                      // mov rdx, -1
+        0x48, 0x89, 0xc6,                                              // mov rsi, rax
+        0x48, 0xc7, 0x44, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x04], 0
+        0x48, 0xc7, 0x44, 0x24, 0x0c, 0x00, 0x00, 0x00, 0x04,          // mov [rsp + 0x0c], 0x4000000
+        0x48, 0xc7, 0x44, 0x24, 0x14, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x14], 0
+        0x48, 0xc7, 0x44, 0x24, 0x1c, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x1c], 0
+        0x48, 0xc7, 0x44, 0x24, 0x24, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x24], 0
+        0x48, 0xc7, 0x44, 0x24, 0x2c, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x2c], 0
+        0x48, 0xc7, 0x44, 0x24, 0x34, 0x00, 0x00, 0x00, 0x00,          // mov [rsp + 0x34], 0
+        0xe8, 0x21, 0xf8, 0xff, 0xff,                                  // call some_fn_taking_a_struct_through_rcx
+        0x48, 0x8b, 0x4c, 0x24, 0x38,                                  // mov rcx, [rsp + 0x38]
+        0x64, 0x48, 0x33, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00,          // xor rcx, fs:[0x28]
+        0x75, 0x0a,                                                    // jne $+0a
+        0x48, 0x83, 0xc4, 0x48,                                        // add rsp, 0x48
+        0xc3,                                                          // ret
+        0xe8, 0x27, 0x7f, 0xff, 0xff,                                  // call sym.imp.abort @noreturn
+        0xe8, 0x22, 0x80, 0xff, 0xff,                                  // call sym.imp.__stack_chk_fail @noreturn
+    ];
+}
+
+#[test]
+fn test_call_inference() {
+    // ELF entrypoint
+    //
+    // interesting observations here:
+    // rbp is zeroed and otherwise unused! this function does !not! conform to the sysv abi
+    // the `call [__libc_start_main]` takes six arguments, the ?return address? is popped into a
+    // register and passed as an argument. `main` is an argument in rdi.
+    // the call does not return (hlt should not be in the cfg)
+    let instructions = &[
+        0x31, 0xed,                                                    // xor ebp, ebp
+        0x49, 0x89, 0xd1,                                              // mov r9, rdx
+        0x5e,                                                          // pop rsi
+        0x48, 0x89, 0xe3,                                              // mov rdx, rsp
+        0x48, 0x83, 0xe4, 0xf0,                                        // and rsp, 0xfffffffffffffff0
+        0x50,                                                          // push rax
+        0x54,                                                          // push rsp
+        0x4c, 0x8d, 0x05, 0xfa, 0x6e, 0x00, 0x00,                      // lea r8, [$ + 0x6efa] ; aka 0x6f10
+        0x48, 0x8d, 0x0d, 0x83, 0x6e, 0x00, 0x00,                      // lea rcx, [$ + 0x6e83] ; aka 0x6ea0
+        0x48, 0x8d, 0x3d, 0xfc, 0xd6, 0xff, 0xff,                      // lea rdi, [main] ; $ + 0xffffd6fc => 0xffffd720 (rip = 0x4b0d in original)
+        0xff, 0x15, 0xbe, 0xb4, 0x20, 0x00,                            // call [0x20ffd8] ; aka `reloc.__libc_start_main_216
+        0xf4,                                                          // hlt
+    ];
+}
+
+#[test]
+fn test_cmp_const() {
+    // this is a `.finit` function.
+    //
+    // observations to test here:
+    // `cmp rax, rdi` is statically const, which means the je is const knowable (is taken)
+    // additionally, `jmp rax` is a tail call
+    // `pop rbp` on both paths restores `rbp` and conforms to the sysv abi
+    // function does not take arguments
+    // function does not write to uninitialized memory
+    // function *does* read a global and may control flow to it
+    let instructions = &[
+        0x48, 0x8d, 0x3d, 0x99, 0xb5, 0x20, 0x00,                      // lea rdi, [0x20b5a0]
+        0x55,                                                          // push rbp
+        0x48, 0x8d, 0x05, 0x91, 0xb5, 0x20, 0x00,                      // lea rax, [0x20b5a0]
+        0x48, 0x39, 0xf8,                                              // cmp rax, rdi
+        0x48, 0x89, 0xe5,                                              // mov rbp, rsp
+        0x74, 0x19,                                                    // je $+0x19
+        0x48, 0x8b, 0x05, 0x92, 0xb4, 0x20, 0x00,                      // mov rax, [0x20b4b0] ; rip + 0x20b492
+        0x48, 0x85, 0xc0,                                              // test rax, rax
+        0x74, 0x0d,                                                    // je $+0x0d
+        0x5d,                                                          // pop rbp
+        0xff, 0xe0,                                                    // jmp rax
+        0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,    // nop word cs:[rax + rax]
+        0x5d,                                                          // pop rbp
+        0xc3,                                                          // ret
+    ];
+}
+
+/* and one more from /bin/bash: 
+ *
+ *  // this is a hashing loop, ebp *= 0x1000193; rcx += 1; ebp ^= eax; eax = *rcx; eax != 0? loop
+    // rcx is an iterator starting at ptr
+    let instructions = &[
+        0x69, 0xed, 0x93, 0x01, 0x00, 0x01,
+        0x48, 0x83, 0xc1, 0x01,
+        0x31, 0xc5,
+        0x0f, 0xbe, 0x01,
+        0x84, 0xc0,
+        0x75, 0xed,
+        0xc3
+    ];
