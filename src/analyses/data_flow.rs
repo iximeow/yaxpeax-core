@@ -14,7 +14,7 @@ use arch::AbiDefaults;
 
 use data::Direction;
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Use {
     Read, Write, ReadWrite
 }

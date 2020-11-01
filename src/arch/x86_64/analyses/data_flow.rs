@@ -48,7 +48,7 @@ pub const FLAGS: [Location; 10] = [
 ];
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MemoryRegion(u16);
+pub struct MemoryRegion(pub u16);
 
 pub const ANY: MemoryRegion = MemoryRegion(0);
 pub const STACK: MemoryRegion = MemoryRegion(1);

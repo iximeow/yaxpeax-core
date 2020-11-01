@@ -9,8 +9,11 @@ use analyses::control_flow::ControlFlowAnalysis;
 use arch::x86_64::analyses::data_flow::Location;
 use analyses::DFG;
 
-impl DFG<control_flow::Effect<<x86_64 as Arch>::Address>, x86_64> for ControlFlowAnalysis<<x86_64 as Arch>::Address> {
-    fn read_loc(&self, loc: <x86_64 as ValueLocations>::Location) -> control_flow::Effect<<x86_64 as Arch>::Address> {
+opaque_indirection_dfg!(x86_64, control_flow::Effect<<x86_64 as Arch>::Address>, (), <x86_64 as ValueLocations>::Location, ControlFlowAnalysis<<x86_64 as Arch>::Address>);
+
+impl DFG<control_flow::Effect<<x86_64 as Arch>::Address>, x86_64, ()> for ControlFlowAnalysis<<x86_64 as Arch>::Address> {
+
+    fn read_loc(&self, _when: (), loc: <x86_64 as ValueLocations>::Location) -> control_flow::Effect<<x86_64 as Arch>::Address> {
         if loc == Location::RIP {
             self.effect.clone()
         } else if let Location::Memory(_) = loc {
@@ -20,7 +23,7 @@ impl DFG<control_flow::Effect<<x86_64 as Arch>::Address>, x86_64> for ControlFlo
         }
     }
 
-    fn write_loc(&mut self, loc: <x86_64 as ValueLocations>::Location, value: control_flow::Effect<<x86_64 as Arch>::Address>) {
+    fn write_loc(&mut self, _when: (), loc: <x86_64 as ValueLocations>::Location, value: control_flow::Effect<<x86_64 as Arch>::Address>) {
         if loc == Location::RIP {
             self.effect = value;
         } else {

@@ -14,7 +14,7 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     loc_idx: u8,
     curr_op: Option<Operand>,
     curr_use: Option<Use>,
-    disambiguator: &'b mut D,
+    _disambiguator: &'b mut D,
     _fn_query: &'c F,
 }
 
@@ -381,7 +381,7 @@ fn locations_in(op: &Operand, usage: Use) -> u8 {
 
 #[allow(dead_code)]
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(_addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a Instruction, disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
+    pub fn new(_addr: <yaxpeax_x86::x86_64 as yaxpeax_arch::Arch>::Address, inst: &'a Instruction, _disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
         LocationIter {
             _addr,
             inst,
@@ -391,7 +391,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
             loc_idx: 0,
             curr_op: None,
             curr_use: None,
-            disambiguator,
+            _disambiguator,
             _fn_query,
         }
     }
@@ -1580,10 +1580,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
             }
         }
 
-        next_loc(self).map(|loc| {
-            let loc_spec = (self.op_idx, self.loc_idx - 1);
-            self.disambiguator.disambiguate(loc_spec).map(|new_loc| (Some(new_loc), loc.1)).unwrap_or(loc)
-        })
+        next_loc(self)
     }
 }
 

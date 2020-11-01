@@ -1,12 +1,19 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+use petgraph::visit::Bfs;
+
 use yaxpeax_arch::Arch;
 use yaxpeax_x86::long_mode::{Arch as x86_64, RegSpec};
 
 use yaxpeax_core::arch::x86_64::semantic;
 use yaxpeax_core::arch::x86_64::x86_64Data;
+use yaxpeax_core::arch::InstructionSpan;
 use yaxpeax_core::analyses::{control_flow, data_flow};
 use yaxpeax_core::analyses::control_flow::ControlFlowGraph;
 // use yaxpeax_core::analyses::static_single_assignment::Data;
 use yaxpeax_core::analyses::static_single_assignment::SSA;
+use yaxpeax_core::analyses::memory_layout::MemoryLayout;
 use yaxpeax_core::arch::x86_64::analyses::data_flow::{Data, Location};
 use yaxpeax_core::analyses::evaluators::Evaluator;
 
@@ -85,6 +92,27 @@ fn test_stack_inference()  {
         0xe8, 0x27, 0x7f, 0xff, 0xff,                                  // call sym.imp.abort @noreturn
         0xe8, 0x22, 0x80, 0xff, 0xff,                                  // call sym.imp.__stack_chk_fail @noreturn
     ];
+
+    let (mut cfg, mut dfg) = do_analyses(instructions);
+
+    let mut mem_analysis = MemoryLayout {
+        ssa: &dfg,
+        per_address_layout: RefCell::new(HashMap::new()),
+        per_value_accesses: RefCell::new(HashMap::new()),
+    };
+
+    let instvec = instructions.to_vec();
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            semantic::evaluate(address, &instr, &mut mem_analysis);
+        }
+    }
+
+    println!("{:?}", mem_analysis.per_address_layout);
 }
 
 #[test]
@@ -154,3 +182,4 @@ fn test_cmp_const() {
         0x75, 0xed,
         0xc3
     ];
+    */
