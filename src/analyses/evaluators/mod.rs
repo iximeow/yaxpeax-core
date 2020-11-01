@@ -48,7 +48,6 @@ impl<'program, 'function, 'ssa, A: Arch + SSAValues, M: MemoryRange<A::Address>>
     }
 
     pub fn full_function_iterate(&self) {
-        use yaxpeax_arch::AddressDisplay;
         let mut bfs = Bfs::new(&self.fn_graph.graph, self.fn_graph.entrypoint);
         while let Some(k) = bfs.next(&self.fn_graph.graph) {
             self.iterate_basic_block(k);

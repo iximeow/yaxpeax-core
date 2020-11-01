@@ -887,7 +887,7 @@ macro_rules! impl_control_flow {
                     return effect;
                 }
                 let mut instr_control_flow = $crate::analyses::control_flow::ControlFlowAnalysis::new();
-                $semantic(self, &mut instr_control_flow);
+                $semantic((), self, &mut instr_control_flow);
                 instr_control_flow.into_effect()
             }
         }

@@ -10,13 +10,15 @@ use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressDiff;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
-use analyses::{DFG, Value};
+use analyses::{DFG, Value, DFGLocationQuery};
 use analyses::CompletionStatus;
 use analyses::ValueRes;
+use analyses::IntoValueIndex;
+use analyses::Indirect;
 
 pub mod specialized;
 
-pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
+pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
     // TODO: get a disambiguator somehow?
     fn effective_address(&self, operand: &Operand) -> V {
         match *operand {
@@ -91,9 +93,8 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
                 }
             }
             op => {
-                let _ea = self.effective_address(op);
-                let disambiguated = Location::Memory(ANY);
-                self.write(&disambiguated, value)
+                let ea = self.effective_address(op);
+                self.indirect(&Location::Memory(ANY)).store(ea.qword(), &value)
             }
         }
     }
@@ -147,9 +148,8 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
                 V::from_const(*imm)
             }
             op => {
-                let _ea = self.effective_address(op);
-                let disambiguated = Location::Memory(ANY);
-                self.read(&disambiguated)
+                let ea = self.effective_address(op);
+                self.indirect(&Location::Memory(ANY)).load(ea.qword())
             }
         }
     }
@@ -241,9 +241,10 @@ pub trait DFGAccessExt<V: Value> where Self: DFG<V, amd64> {
     }
 }
 
-impl<V: Value, D: DFG<V, amd64>> DFGAccessExt<V> for D { }
+impl<V: Value, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
 
-pub(crate) fn evaluate<V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFGAccessExt<V> + DFG<V, amd64>>(instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
+pub fn evaluate<K: Copy, V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus where for<'dfg> &'dfg mut D: crate::analyses::IndirectDFG<V, amd64, K> {
+    let dfg = &mut dfg.query_at(when);
     match instr.opcode() {
         Opcode::Invalid => {
             // TODO: something??
