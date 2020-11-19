@@ -663,8 +663,8 @@ impl ModuleData {
                         std::cmp::min(section.p_filesz as usize, section.p_memsz as usize)
                     };
 
-                    println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
-                    println!("virtual size is {:#x}", section_data.len());
+                    //println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
+                    //println!("virtual size is {:#x}", section_data.len());
                     for i in 0..copy_size {
                         section_data[i] = data[(section.p_offset as usize) + i];
                     }
@@ -674,11 +674,11 @@ impl ModuleData {
                         data: section_data,
                         name: elf::program_header::type_to_str(elf.header.e_machine, section.p_type),
                     };
-                    println!("mapped section {} to [{}, {})",
-                        i,
-                        new_section.start.show(),
-                        (new_section.start as u64 + new_section.data.len() as u64).show()
-                    );
+                    //println!("mapped section {} to [{}, {})",
+                    //    i,
+                    //    new_section.start.show(),
+                    //    (new_section.start as u64 + new_section.data.len() as u64).show()
+                    //);
                     module.segments.push(new_section);
                 }
                 Some(module)

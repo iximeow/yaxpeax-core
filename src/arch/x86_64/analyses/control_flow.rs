@@ -35,7 +35,7 @@ impl_control_flow!(
     yaxpeax_x86::long_mode::Instruction,
     |inst| {
         let assume_calls_return = true;
-        match inst.opcode() {
+        match inst.opcode {
             Opcode::CALL |
             Opcode::SYSCALL => {
                 if assume_calls_return {
@@ -43,6 +43,7 @@ impl_control_flow!(
                     // instr_control_flow.with_effect(control_flow::Effect::cont());
                 }
             }
+            Opcode::UD2 => return Some(control_flow::Effect::stop()),
             _ => {}
         }
         None
@@ -51,7 +52,6 @@ impl_control_flow!(
 
 #[test]
 fn test_x86_determinant() {
-    use yaxpeax_arch::AddressDiff;
     use yaxpeax_arch::Decoder;
     use analyses::control_flow::Determinant;
     let decoder = <x86_64 as Arch>::Decoder::default();
