@@ -951,7 +951,7 @@ impl VW_CFG_Builder{
         let mut addr = start;
         //show_instruction(data,contexts,addr,None);
         loop {
-            show_instruction(data,contexts,addr,None);
+            //show_instruction(data,contexts,addr,None);
             let range = match data.range_from(addr) {
                 Some(range) => range,
                 None => { println!("Decoding range error"); return None; }
