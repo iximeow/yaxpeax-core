@@ -25,6 +25,7 @@ use serialize::GraphSerializer;
 
 use serde::Serialize;
 use arch::x86_64::display::show_instruction;
+use yaxpeax_x86::long_mode::{Opcode};
 
 
 
@@ -903,13 +904,15 @@ impl VW_CFG{
 #[derive(Default)]
 pub struct VW_CFG_Builder{
     pub cfg: VW_CFG,
+    pub switch_targets: HashMap<u64, std::vec::Vec<i64>>,
 }
 
 impl VW_CFG_Builder{
 
-    pub fn new(entrypoint : u64) -> VW_CFG_Builder {
+    pub fn new(entrypoint : u64, switch_targets: &HashMap<u64, std::vec::Vec<i64>>) -> VW_CFG_Builder {
         VW_CFG_Builder {
             cfg: VW_CFG::new(entrypoint),
+            switch_targets : switch_targets.clone(),
         }
     }
 
@@ -972,7 +975,7 @@ impl VW_CFG_Builder{
                         // and for any other cases...
                         effect @ _ => {
                             //println!("Maybe branch? effect = {:?} {:x}", &effect,  addr + instr.len());
-                            let dsts = effect_to_destinations(&effect, addr + instr.len());
+                            let dsts = self.effect_to_destinations(&effect, addr + instr.len(), &instr, addr);
                             let b = VW_Block::new(start, addr + instr.len() - 1);
                             //println!("Hit branch: {:?}", dsts);
                             return Some((dsts,b))
@@ -1004,6 +1007,41 @@ impl VW_CFG_Builder{
         }
         dsts
     }
+
+    //get destinations at end of block
+    //next = start of next instruction
+    fn effect_to_destinations(&self, effect : &Effect<u64>, next: u64, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Vec<u64>{
+        let mut dsts : Vec<u64> = vec![];
+        if !effect.stop_after{
+            dsts.push(next)
+        }
+        match &effect.dest {
+            Some(Target::Relative(rel)) => {
+                let dest_addr = next.wrapping_offset(*rel);
+                dsts.push(dest_addr);
+                return dsts;
+            },
+            Some(Target::Absolute(dest)) => {
+                dsts.push(*dest);
+                return dsts;
+            }
+            Some(Target::Multiple(_targets)) =>  return vec![],
+            Some(Indeterminate) => return vec![],
+            None => {
+                match instr.opcode{
+                    Opcode::JMP => (),
+                    Opcode::RETURN | Opcode::UD2 => (),
+                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode);
+                }
+                if let Opcode::JMP = instr.opcode{
+                    println!("Indirect Jump = {:x}", addr);
+                    // return self.switch_targets.get(addr).unwrap();
+                }
+                return vec![];
+            } 
+        }
+    }
+
 }
 
 fn get_effect(contexts: &MergedContextTable, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Effect<u64>{
@@ -1011,36 +1049,14 @@ fn get_effect(contexts: &MergedContextTable, instr: &yaxpeax_x86::long_mode::Ins
     instr.control_flow(Some(&ctx))
 }
 
-//get destinations at end of block
-//next = start of next instruction
-fn effect_to_destinations(effect : &Effect<u64>, next: u64) -> Vec<u64>{
-    let mut dsts : Vec<u64> = vec![];
-    if !effect.stop_after{
-        dsts.push(next)
-    }
-    match &effect.dest {
-        Some(Target::Relative(rel)) => {
-            let dest_addr = next.wrapping_offset(*rel);
-            dsts.push(dest_addr);
-            return dsts;
-        },
-        Some(Target::Absolute(dest)) => {
-            dsts.push(*dest);
-            return dsts;
-        }
-        Some(Target::Multiple(_targets)) =>  return vec![],
-        Some(Indeterminate) => return vec![],
-        None => return vec![] //TODO: handle indirect jumps
-    }
-}
-
 pub fn get_cfg<M>(
     data: &M,
     contexts: &MergedContextTable,
     entrypoint: u64,
+    switch_targets: &HashMap<u64, std::vec::Vec<i64>>,
 ) -> VW_CFG where M: MemoryRange<u64>,
 {
-    let mut cfg_builder = VW_CFG_Builder::new(entrypoint);
+    let mut cfg_builder = VW_CFG_Builder::new(entrypoint, switch_targets);
     let mut to_explore: VecDeque<u64> = VecDeque::new();
     let mut seen: HashSet<u64> = HashSet::new();
     to_explore.push_back(entrypoint);
