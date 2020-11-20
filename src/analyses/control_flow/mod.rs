@@ -904,15 +904,15 @@ impl VW_CFG{
 #[derive(Default)]
 pub struct VW_CFG_Builder{
     pub cfg: VW_CFG,
-    pub switch_targets: HashMap<u64, std::vec::Vec<i64>>,
+    pub switch_targets: Option<HashMap<u64, std::vec::Vec<i64>>>,
 }
 
 impl VW_CFG_Builder{
 
-    pub fn new(entrypoint : u64, switch_targets: &HashMap<u64, std::vec::Vec<i64>>) -> VW_CFG_Builder {
+    pub fn new(entrypoint : u64, switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>) -> VW_CFG_Builder {
         VW_CFG_Builder {
             cfg: VW_CFG::new(entrypoint),
-            switch_targets : switch_targets.clone(),
+            switch_targets : switch_targets.map(|x| x.clone()),
         }
     }
 
@@ -1028,6 +1028,9 @@ impl VW_CFG_Builder{
             Some(Target::Multiple(_targets)) =>  return vec![],
             Some(Indeterminate) => return vec![],
             None => {
+                if self.switch_targets.is_none(){
+                    return vec![];
+                }
                 match instr.opcode{
                     Opcode::JMP => (),
                     Opcode::RETURN | Opcode::UD2 => (),
@@ -1035,10 +1038,10 @@ impl VW_CFG_Builder{
                 }
                 if let Opcode::JMP = instr.opcode{
                     println!("Indirect Jump = {:x}", addr);
-                    if !self.switch_targets.contains_key(&addr){
+                    if !self.switch_targets.as_ref().unwrap().contains_key(&addr){
                         panic!("No entry in switch_targets for the switch @ {:x}", addr);
                     }
-                    let targets: Vec<u64> = self.switch_targets.get(&addr).unwrap().into_iter().map(|x| *x as u64).rev().collect();
+                    let targets: Vec<u64> = self.switch_targets.as_ref().unwrap().get(&addr).unwrap().into_iter().map(|x| *x as u64).rev().collect();
                     println!("Indirect jumps discovered = {:?}", targets);
                     return targets;
                 }
@@ -1058,7 +1061,7 @@ pub fn get_cfg<M>(
     data: &M,
     contexts: &MergedContextTable,
     entrypoint: u64,
-    switch_targets: &HashMap<u64, std::vec::Vec<i64>>,
+    switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>,
 ) -> VW_CFG where M: MemoryRange<u64>,
 {
     let mut cfg_builder = VW_CFG_Builder::new(entrypoint, switch_targets);
