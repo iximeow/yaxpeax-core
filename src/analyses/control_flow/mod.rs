@@ -1031,11 +1031,16 @@ impl VW_CFG_Builder{
                 match instr.opcode{
                     Opcode::JMP => (),
                     Opcode::RETURN | Opcode::UD2 => (),
-                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode);
+                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode),
                 }
                 if let Opcode::JMP = instr.opcode{
                     println!("Indirect Jump = {:x}", addr);
-                    // return self.switch_targets.get(addr).unwrap();
+                    if !self.switch_targets.contains_key(&addr){
+                        panic!("No entry in switch_targets for the switch @ {:x}", addr);
+                    }
+                    let targets: Vec<u64> = self.switch_targets.get(&addr).unwrap().into_iter().map(|x| *x as u64).rev().collect();
+                    println!("Indirect jumps discovered = {:?}", targets);
+                    return targets;
                 }
                 return vec![];
             } 
