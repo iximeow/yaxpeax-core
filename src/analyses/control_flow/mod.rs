@@ -822,7 +822,28 @@ macro_rules! impl_control_flow {
 }
 
 
-
+pub fn check_cfg_integrity(blocks: &BTreeMap<u64, VW_Block>, graph: &GraphMap<u64, (), petgraph::Directed>){
+    for (addr,block) in blocks.iter(){
+        //1. check that key points to start of block
+        assert!(*addr == block.start);
+        //2. check that block is in the graph
+        assert!(graph.contains_node(*addr));
+        //3. check that there are no overlapping blocks
+        for (a2,b2) in blocks.iter(){
+            if addr == a2 {continue};
+            let before = block.end < b2.start;
+            let after = block.start > b2.end;
+            if !(before || after) {
+                println!("{:?} {:?}", block.as_str(), b2.as_str());
+                assert!(false);
+            }
+        }
+    }
+    //4. check that same number of blocks and graph nodes.
+    //   along with check 3, shows that block nodes and graph nodes are the
+    //   same
+    assert!(blocks.keys().len() == graph.node_count());
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct VW_Block {
@@ -878,26 +899,27 @@ impl VW_CFG{
     }
 
     pub fn check_integrity(&self){
-        for (addr,block) in self.blocks.iter(){
-            //1. check that key points to start of block
-            assert!(*addr == block.start);
-            //2. check that block is in the graph
-            assert!(self.graph.contains_node(*addr));
-            //3. check that there are no overlapping blocks
-            for (a2,b2) in self.blocks.iter(){
-                if addr == a2 {continue};
-                let before = block.end < b2.start;
-                let after = block.start > b2.end;
-                if !(before || after) {
-                    println!("{:?} {:?}", block.as_str(), b2.as_str());
-                    assert!(false);
-                }
-            }
-        }
-        //4. check that same number of blocks and graph nodes.
-        //   along with check 3, shows that block nodes and graph nodes are the
-        //   same
-        assert!(self.blocks.keys().len() == self.graph.node_count());
+        check_cfg_integrity(&self.blocks, &self.graph);
+        // for (addr,block) in self.blocks.iter(){
+        //     //1. check that key points to start of block
+        //     assert!(*addr == block.start);
+        //     //2. check that block is in the graph
+        //     assert!(self.graph.contains_node(*addr));
+        //     //3. check that there are no overlapping blocks
+        //     for (a2,b2) in self.blocks.iter(){
+        //         if addr == a2 {continue};
+        //         let before = block.end < b2.start;
+        //         let after = block.start > b2.end;
+        //         if !(before || after) {
+        //             println!("{:?} {:?}", block.as_str(), b2.as_str());
+        //             assert!(false);
+        //         }
+        //     }
+        // }
+        // //4. check that same number of blocks and graph nodes.
+        // //   along with check 3, shows that block nodes and graph nodes are the
+        // //   same
+        // assert!(self.blocks.keys().len() == self.graph.node_count());
     }
 }
 
@@ -905,6 +927,7 @@ impl VW_CFG{
 pub struct VW_CFG_Builder{
     pub cfg: VW_CFG,
     pub switch_targets: Option<HashMap<u64, std::vec::Vec<i64>>>,
+    pub unresolved_jumps: u32,
 }
 
 impl VW_CFG_Builder{
@@ -913,6 +936,7 @@ impl VW_CFG_Builder{
         VW_CFG_Builder {
             cfg: VW_CFG::new(entrypoint),
             switch_targets : switch_targets.map(|x| x.clone()),
+            unresolved_jumps : 0,
         }
     }
 
@@ -948,7 +972,7 @@ impl VW_CFG_Builder{
     }
 
 
-    fn vw_decode<M>(&self, data: &M, contexts: &MergedContextTable, start: u64) -> Option<(Vec<u64>, VW_Block)> where M: MemoryRange<u64>{
+    fn vw_decode<M>(&mut self, data: &M, contexts: &MergedContextTable, start: u64) -> Option<(Vec<u64>, VW_Block)> where M: MemoryRange<u64>{
         let dsts : Vec<u64> = vec![];
         let decoder = <x86_64 as Arch>::Decoder::default();
         let mut addr = start;
@@ -1010,7 +1034,7 @@ impl VW_CFG_Builder{
 
     //get destinations at end of block
     //next = start of next instruction
-    fn effect_to_destinations(&self, effect : &Effect<u64>, next: u64, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Vec<u64>{
+    fn effect_to_destinations(&mut self, effect : &Effect<u64>, next: u64, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Vec<u64>{
         let mut dsts : Vec<u64> = vec![];
         if !effect.stop_after{
             dsts.push(next)
@@ -1039,17 +1063,22 @@ impl VW_CFG_Builder{
                 if let Opcode::JMP = instr.opcode{
                     println!("Indirect Jump = {:x}", addr);
                     if !self.switch_targets.as_ref().unwrap().contains_key(&addr){
-                        panic!("No entry in switch_targets for the switch @ {:x}", addr);
+                        self.unresolved_jumps += 1;
+                        return vec![];
+                        // panic!("No entry in switch_targets for the switch @ {:x}", addr);
                     }
-                    let targets: Vec<u64> = self.switch_targets.as_ref().unwrap().get(&addr).unwrap().into_iter().map(|x| *x as u64).rev().collect();
-                    println!("Indirect jumps discovered = {:?}", targets);
+                    let switch = self.switch_targets.as_ref().unwrap().get(&addr).unwrap();
+                    let targets: Vec<u64> = switch.into_iter().map(|x| (*x) as u64).rev().collect();
+                    // println!("Indirect jumps discovered");
+                    // for target in &targets{
+                    //     println!("{:x}", target);
+                    // }
                     return targets;
                 }
                 return vec![];
             } 
         }
     }
-
 }
 
 fn get_effect(contexts: &MergedContextTable, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Effect<u64>{
@@ -1062,7 +1091,7 @@ pub fn get_cfg<M>(
     contexts: &MergedContextTable,
     entrypoint: u64,
     switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>,
-) -> VW_CFG where M: MemoryRange<u64>,
+) -> (VW_CFG,u32) where M: MemoryRange<u64>,
 {
     let mut cfg_builder = VW_CFG_Builder::new(entrypoint, switch_targets);
     let mut to_explore: VecDeque<u64> = VecDeque::new();
@@ -1083,6 +1112,6 @@ pub fn get_cfg<M>(
         }
     }
     cfg_builder.cfg.check_integrity();
-    cfg_builder.cfg
+    (cfg_builder.cfg,cfg_builder.unresolved_jumps)
 }
 
