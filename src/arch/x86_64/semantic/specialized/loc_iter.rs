@@ -1132,7 +1132,11 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::JLE |
         Opcode::JGE |
         Opcode::JL => {
-            cond_to_flags(op.condition().unwrap())[i as usize]
+            if i == 0 {
+                (Some(Location::RIP), Direction::Read)
+            } else {
+                cond_to_flags(op.condition().unwrap())[i as usize - 1]
+            }
         }
 
         Opcode::CMOVO |
@@ -1450,7 +1454,8 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::JLE |
         Opcode::JGE |
         Opcode::JL => {
-            cond_to_flags(op.condition().unwrap()).len() as u8
+            // count rip
+            1 + cond_to_flags(op.condition().unwrap()).len() as u8
         }
 
         Opcode::CMOVO |

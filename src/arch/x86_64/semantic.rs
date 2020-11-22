@@ -14,7 +14,7 @@ use analyses::{DFG, Value, DFGLocationQuery};
 use analyses::CompletionStatus;
 use analyses::ValueRes;
 use analyses::IntoValueIndex;
-use analyses::Indirect;
+use analyses::IndirectQuery;
 
 pub mod specialized;
 
@@ -118,7 +118,7 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
 
     // TODO: get a disambiguator somehow
     #[inline(always)]
-    fn read_operand(&self, operand: &Operand) -> V {
+    fn read_operand(&mut self, operand: &Operand) -> V {
         match operand {
             Operand::Register(reg) => {
                 self.read(&Location::Register(*reg))
@@ -243,7 +243,7 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
 
 impl<V: Value, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
 
-pub fn evaluate<K: Copy, V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus where for<'dfg> &'dfg mut D: crate::analyses::IndirectDFG<V, amd64, K> {
+pub fn evaluate<K: Copy, V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     let dfg = &mut dfg.query_at(when);
     match instr.opcode() {
         Opcode::Invalid => {

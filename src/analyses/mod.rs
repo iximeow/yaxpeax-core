@@ -17,8 +17,8 @@ pub enum CompletionStatus {
 }
 
 pub struct ValueRes<V> {
-    value: V,
-    carry: V,
+    pub value: V,
+    pub carry: V,
 }
 
 #[allow(dead_code)]
@@ -91,7 +91,7 @@ impl<V: Value> ValueRes<V> {
 /// suggests that in the most precise case, a DFG might be backed by a `MemoryRepr` with a series
 /// of edits for each generation layered on top? it's not clear how this might interact with
 /// disjoint memory regions that are versioned independently.
-pub trait DFG<V, A: Arch + ValueLocations, When=<A as Arch>::Address> where When: Copy, for<'dfg> &'dfg mut Self: IndirectDFG<V, A, When> {
+pub trait DFG<V: Value, A: Arch + ValueLocations, When=<A as Arch>::Address> where When: Copy {
     fn read_loc(&self, when: When, loc: A::Location) -> V;
     fn read<T: ToDFGLoc<A::Location>>(&self, when: When, loc: &T) -> V {
         self.read_loc(when, loc.convert())
@@ -99,6 +99,18 @@ pub trait DFG<V, A: Arch + ValueLocations, When=<A as Arch>::Address> where When
     fn write_loc(&mut self, when: When, loc: A::Location, value: V);
     fn write<T: ToDFGLoc<A::Location>>(&mut self, when: When, loc: &T, value: V) {
         self.write_loc(when, loc.convert(), value)
+    }
+    // in an ideal world with a GAT-enabled rustc, `Indirect` would be spelled as
+    // ```
+    // type Indirect<'dfg>: IndirectQuery<'dfg>;
+    // ```
+    // and could retain a `&'dfg mut DFG` to do queries through. because we do not have GAT, that
+    // associated type cannot be written, and we must obligate `Self::Indirect` and DFG impls to
+    // holding `Rc<RefCell<IndirectionStruct>>` even though we know no user of a `DFG` interface
+    // can get multiple refs, let alone mutable refs.
+    fn indirect_loc(&mut self, _when: When, _loc: A::Location) -> V::Indirect;
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, when: When, loc: &T) -> V::Indirect {
+        self.indirect_loc(when, loc.convert())
     }
     fn query_at(&mut self, when: When) -> DFGLocationQueryCursor<When, V, A, Self> {
         DFGLocationQueryCursor {
@@ -110,48 +122,14 @@ pub trait DFG<V, A: Arch + ValueLocations, When=<A as Arch>::Address> where When
     }
 }
 
-pub trait IndirectDFG<V, A: Arch + ValueLocations, When=<A as Arch>::Address> where When: Copy {
-    type Indirect: Indirect<V>;
-    fn indirect_loc(&mut self, when: When, loc: A::Location) -> Self::Indirect;
-    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, when: When, loc: A::Location) -> Self::Indirect {
-        self.indirect_loc(when, loc.convert())
-    }
-}
-
-// TODO: grow this in a way to allow more complex data than simple associated loads/stores?
-/*
-trait IndirectQuery<V, A> {
-    fn load(&self, address: V) -> V;
-    fn store(&self, address: V, value: V);
-}
-*/
-
-pub struct DFGLocationQueryCursor<'dfg, K: Copy + Sized, V, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> where for<'cursor> &'cursor mut D: IndirectDFG<V, A, K> {
+pub struct DFGLocationQueryCursor<'dfg, K: Copy + Sized, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> {
     dfg: &'dfg mut D,
     addr: K,
     _a: std::marker::PhantomData<A>,
     _v: std::marker::PhantomData<V>,
 }
 
-impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> IndirectDFGLocationQuery<V, A, K, D> for DFGLocationQueryCursor<'dfg, K, V, A, D> where for<'cursor> &'cursor mut D: IndirectDFG<V, A, K> {
-    fn indirect<'cursor, T: ToDFGLoc<A::Location>>(&'cursor mut self, loc: &T) -> <&'cursor mut D as IndirectDFG<V, A, K>>::Indirect {
-        self.dfg.indirect(self.addr, loc.convert())
-    }
-}
-
-macro_rules! opaque_indirection_dfg {
-    ($arch:ty, $value:ty, $when:ty, $loc:ty, $dfg:ty) => {
-        impl<'dfg> $crate::analyses::IndirectDFG<$value, $arch, $when> for &'dfg mut $dfg {
-            type Indirect = $crate::analyses::OpaqueIndirection<$value>;
-
-            fn indirect_loc(&mut self, _when: $when, loc: $loc) -> Self::Indirect {
-                $crate::analyses::OpaqueIndirection::inst()
-            }
-        }
-    }
-}
-
-impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> DFGLocationQuery<V, A> for DFGLocationQueryCursor<'dfg, K, V, A, D> where for<'cursor> &'cursor mut D: 'dfg + IndirectDFG<V, A, K> {
+impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> DFGLocationQuery<V, A> for DFGLocationQueryCursor<'dfg, K, V, A, D> {
     fn read_loc(&self, loc: A::Location) -> V {
         self.dfg.read_loc(self.addr, loc)
     }
@@ -164,16 +142,18 @@ impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized
     fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
     }
-}
-
-pub trait IndirectDFGLocationQuery<V, A: Arch + ValueLocations, K: Copy + Sized, Indirect: ?Sized=OpaqueIndirection<V>> where for<'cursor> &'cursor mut Indirect: IndirectDFG<V, A, K>, Self: Sized {
-    fn indirect<'cursor, T: ToDFGLoc<A::Location>>(&'cursor mut self, loc: &T) -> <&'cursor mut Indirect as IndirectDFG<V, A, K>>::Indirect;
+    fn indirect_loc(&mut self, loc: A::Location) -> V::Indirect {
+        self.dfg.indirect_loc(self.addr, loc)
+    }
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> V::Indirect {
+        self.indirect_loc(loc.convert())
+    }
 }
 
 /// it's relatively common to want to query a dfg at one address, for multiple values/read-write
 /// accesses. `DFGLocationQuery` is essentially a helper to curry a specific address for future
 /// queries.
-pub trait DFGLocationQuery<V, A: Arch + ValueLocations> where Self: Sized {
+pub trait DFGLocationQuery<V: Value, A: Arch + ValueLocations> where Self: Sized {
     fn read_loc(&self, loc: A::Location) -> V;
     fn read<T: ToDFGLoc<A::Location>>(&self, loc: &T) -> V {
         self.read_loc(loc.convert())
@@ -181,6 +161,10 @@ pub trait DFGLocationQuery<V, A: Arch + ValueLocations> where Self: Sized {
     fn write_loc(&mut self, loc: A::Location, value: V);
     fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
+    }
+    fn indirect_loc(&mut self, loc: A::Location) -> V::Indirect;
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> V::Indirect {
+        self.indirect_loc(loc.convert())
     }
 }
 
@@ -245,7 +229,7 @@ pub trait IntoValueIndex {
 
 impl <T: Value> IntoValueIndex for T {}
 
-pub trait Indirect<V> {
+pub trait IndirectQuery<V> {
     /// attempt to load `address` indirectly through this value, indexed by `address`.
     ///
     /// ## panics
@@ -278,7 +262,7 @@ impl<V> OpaqueIndirection<V> {
 }
 
 
-impl<V: Value> Indirect<V> for OpaqueIndirection<V> {
+impl<V: Value> IndirectQuery<V> for OpaqueIndirection<V> {
     fn load(&self, _: ValueIndex<V>) -> V {
         V::unknown()
     }
@@ -287,6 +271,8 @@ impl<V: Value> Indirect<V> for OpaqueIndirection<V> {
 }
 
 pub trait Value: Sized {
+    type Indirect: IndirectQuery<Self>; // associated type defaults are unstable, but should be `= OpaqueIndirection<V>`
+
     fn unknown() -> Self;
 
     fn from_const(_c: u64) -> Self {

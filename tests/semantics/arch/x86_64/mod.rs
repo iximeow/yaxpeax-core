@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use petgraph::visit::Bfs;
 
 use yaxpeax_arch::Arch;
+use yaxpeax_arch::AddressDisplay;
 use yaxpeax_x86::long_mode::{Arch as x86_64, RegSpec};
 
 use yaxpeax_core::arch::x86_64::semantic;
@@ -97,8 +98,7 @@ fn test_stack_inference()  {
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,
-        per_address_layout: RefCell::new(HashMap::new()),
-        per_value_accesses: RefCell::new(HashMap::new()),
+        segments: HashMap::new(),
     };
 
     let instvec = instructions.to_vec();
@@ -112,7 +112,25 @@ fn test_stack_inference()  {
         }
     }
 
-    println!("{:?}", mem_analysis.per_address_layout);
+    println!("{:?}", mem_analysis.segments);
+use yaxpeax_core::analyses::static_single_assignment::HashedValue;
+use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            if let Some(mem_read) = dfg.try_get_use(address, Location::Memory(ANY)) {
+                let segment = mem_analysis.segments.get(&HashedValue { value: mem_read }).unwrap();
+                println!("{} read : {:?}", address.show(), segment);
+            }
+            if let Some(mem_write) = dfg.try_get_def(address, Location::Memory(ANY)) {
+                let segment = mem_analysis.segments.get(&HashedValue { value: mem_write }).unwrap();
+                println!("{} write: {:?}", address.show(), segment);
+            }
+        }
+    }
 }
 
 #[test]

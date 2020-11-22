@@ -98,7 +98,7 @@ pub(crate) fn evaluate<
     K: Copy,
     V: Value + Clone + From<AddressDiff<<ARMv7 as Arch>::Address>>,
     D: DFG<V, ARMv7, K>
->(when: K, instr: &<ARMv7 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus where for<'dfg> &'dfg mut D: crate::analyses::IndirectDFG<V, ARMv7, K> {
+>(when: K, instr: &<ARMv7 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     let dfg = &mut dfg.query_at(when);
     fn read_operand<V: Value, D: DFGLocationQuery<V, ARMv7>>(_dfg: &mut D, _operand: &Operand) -> V {
         V::unknown()
