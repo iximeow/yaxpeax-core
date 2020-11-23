@@ -53,6 +53,124 @@ fn test_arithmetic() {
 }
 
 #[test]
+fn test_memory() {
+    // synthesized from `test_stack_inference` to specifically track memory analysis, and merging
+    // non-overlapping memory writes.
+    let instructions = &[
+        0x48, 0xc7, 0x44, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00,       // mov [rsp + 0x04], 0
+        0x48, 0xc7, 0x44, 0x24, 0x0c, 0x00, 0x00, 0x00, 0x04,       // mov [rsp + 0x0c], 0x4000000
+        0x48, 0xc7, 0xc2, 0x34, 0x12, 0x00, 0x00,                   // mov rdx, 0x1234
+        0x48, 0x89, 0x44, 0x24, 0x30,                               // mov [rsp + 0x30], rdx
+        0x49, 0x89, 0xd0,                                           // mov r8, rdx
+        0x4c, 0x89, 0x44, 0x24, 0x14,                               // mov [rsp + 0x14], r8
+    ];
+
+    let (mut cfg, mut dfg) = do_analyses(instructions);
+
+    let mut mem_analysis = MemoryLayout {
+        ssa: &dfg,
+        segments: HashMap::new(),
+    };
+
+    let instvec = instructions.to_vec();
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            semantic::evaluate(address, &instr, &mut mem_analysis);
+        }
+    }
+
+//    println!("{:?}", mem_analysis.segments);
+    println!("\n");
+use yaxpeax_core::analyses::static_single_assignment::HashedValue;
+use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            println!("{}: {}", address.show(), instr);
+            let mut post_instr_mem_state = None;
+
+            if let Some(mem_read) = dfg.try_get_use(address, Location::Memory(ANY)) {
+                let segment = mem_analysis.segments.get(&HashedValue { value: mem_read }).unwrap();
+                post_instr_mem_state = Some(segment);
+//                println!("{} read : {:?}", address.show(), segment);
+            }
+            if let Some(mem_write) = dfg.try_get_def(address, Location::Memory(ANY)) {
+                let segment = mem_analysis.segments.get(&HashedValue { value: mem_write }).unwrap();
+                post_instr_mem_state = Some(segment);
+//                println!("{} write: {:?}", address.show(), segment);
+            }
+
+            use yaxpeax_core::analyses::memory_layout::{LocationAccess, LocationOffset};
+
+            if let Some(mem_state) = post_instr_mem_state {
+                // try to find the stack - the stack is named `location: rsp, version: None`.
+                for (value, region) in mem_state.borrow().iter() {
+                    let value = value.value.borrow();
+                    if value.version == None && value.location == Location::Register(yaxpeax_x86::long_mode::RegSpec::rsp()) {
+                        // this is the stack, show it off!
+                        let mut keys: Vec<u64> = region.accesses.keys().cloned().collect();
+                        keys.sort();
+                        println!("      rsp_input");
+                        for key in keys {
+                            let accesses = &region.accesses[&key];
+                            let mut widths: Vec<u64> = accesses.keys().cloned().collect();
+                            widths.sort();
+                            for width in widths {
+                                print!("        - [{}, {}): ", key, key + width);
+                                let access = &accesses[&width];
+                                if access.is_write() {
+                                    print!("write, ");
+                                    match access.1.as_ref().unwrap() {
+                                        LocationAccess::Unknown => {
+                                            println!("unknown");
+                                        }
+                                        LocationAccess::Symbolic {
+                                            base,
+                                            offset: LocationOffset::Concrete(0),
+                                        } => {
+                                            let v: &yaxpeax_core::analyses::static_single_assignment::Value<yaxpeax_x86::x86_64> = &*base.borrow();
+                                            if let Some(version) = v.version.as_ref() {
+                                                print!("{}_{}", v.location, version);
+                                            } else {
+                                                print!("{}_input", v.location);
+                                            }
+                                            if let Some(data) = v.data.as_ref() {
+                                                println!(" (= {:?})", data);
+                                            } else {
+                                                println!(" (unknown)");
+                                            }
+                                        }
+                                        LocationAccess::Const { diff } => {
+                                            println!("{:#x}", diff);
+                                        }
+                                        _ => {
+                                            println!("haha");
+                                        }
+                                    }
+                                } else {
+                                    // if there was an access, it was a read or a write. and it's
+                                    // not a write. so it must be a read.
+                                    assert!(access.is_read());
+                                    println!("read");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+//    println!("{:?}", dfg);
+}
+
+#[test]
 fn test_stack_inference()  {
     // some function from /bin/bash, 0x9df0
     //
@@ -123,14 +241,15 @@ use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
         while let Some((address, instr)) = iter.next() {
             if let Some(mem_read) = dfg.try_get_use(address, Location::Memory(ANY)) {
                 let segment = mem_analysis.segments.get(&HashedValue { value: mem_read }).unwrap();
-                println!("{} read : {:?}", address.show(), segment);
+//                println!("{} read : {:?}", address.show(), segment);
             }
             if let Some(mem_write) = dfg.try_get_def(address, Location::Memory(ANY)) {
                 let segment = mem_analysis.segments.get(&HashedValue { value: mem_write }).unwrap();
-                println!("{} write: {:?}", address.show(), segment);
+//                println!("{} write: {:?}", address.show(), segment);
             }
         }
     }
+    println!("{:?}", dfg);
 }
 
 #[test]

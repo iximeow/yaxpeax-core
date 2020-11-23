@@ -239,6 +239,17 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
                             insert_entry(ssa, (loc, Direction::Read), Rc::clone(value));
                         },
                         Direction::Write => {
+                            // treat writes also as reads of the location they write. this is to
+                            // support linking defs with prior values the def overwrites.
+                            let value = if writelog.contains(&loc) {
+                                self.previous(loc)
+                            } else {
+                                self.current(loc)
+                            };
+                            value.borrow_mut().used = true;
+                            insert_entry(ssa, (loc, Direction::Read), Rc::clone(value));
+
+                            // original write logic.
                             if writelog.contains(&loc) {
                                 continue;
                             } else {
