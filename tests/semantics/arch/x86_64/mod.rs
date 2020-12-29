@@ -61,6 +61,8 @@ fn test_memory() {
         0x48, 0xc7, 0x44, 0x24, 0x0c, 0x00, 0x00, 0x00, 0x04,       // mov [rsp + 0x0c], 0x4000000
         0x48, 0xc7, 0xc2, 0x34, 0x12, 0x00, 0x00,                   // mov rdx, 0x1234
         0x48, 0x89, 0x44, 0x24, 0x30,                               // mov [rsp + 0x30], rdx
+        0x48, 0x8b, 0x4c, 0x24, 0x0c,                               // mov rcx, [rsp + 0x0c]
+        0x48, 0x89, 0x4c, 0x24, 0x60,                               // mov [rsp + 0x60], rcx
         0x49, 0x89, 0xd0,                                           // mov r8, rdx
         0x4c, 0x89, 0x44, 0x24, 0x14,                               // mov [rsp + 0x14], r8
     ];
@@ -83,6 +85,10 @@ fn test_memory() {
         }
     }
 
+    print_memory_layouts(&instvec, &cfg, &dfg, &mem_analysis);
+}
+
+fn print_memory_layouts(instvec: &Vec<u8>, cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>, dfg: &SSA<x86_64>, mem_analysis: &MemoryLayout<x86_64>) {
 //    println!("{:?}", mem_analysis.segments);
     println!("\n");
 use yaxpeax_core::analyses::static_single_assignment::HashedValue;
