@@ -864,7 +864,7 @@ impl VW_Block {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct VW_CFG{
     pub entrypoint: u64,
     pub blocks: BTreeMap<u64, VW_Block>,
@@ -881,7 +881,7 @@ impl VW_CFG{
         }
     }
 
-    fn prev_block(&self, addr: u64) -> Option<VW_Block>{
+    pub fn prev_block(&self, addr: u64) -> Option<VW_Block>{
         for (a,b) in self.blocks.iter(){
             if (addr > b.start) && (addr < b.end){
                 return Some(*b);
@@ -896,6 +896,10 @@ impl VW_CFG{
 
     pub fn destinations(&self, addr: u64) -> Vec<u64> {
         self.graph.neighbors_directed(addr, petgraph::Direction::Outgoing).into_iter().collect()
+    }
+
+    pub fn predecessors(&self, addr: u64) -> Vec<u64> {
+        self.graph.neighbors_directed(addr, petgraph::Direction::Incoming).into_iter().collect()
     }
 
     pub fn check_integrity(&self){
