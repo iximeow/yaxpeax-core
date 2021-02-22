@@ -1065,7 +1065,6 @@ impl VW_CFG_Builder{
                     _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode),
                 }
                 if let Opcode::JMP = instr.opcode{
-                    println!("Indirect Jump = {:x}", addr);
                     if !self.switch_targets.as_ref().unwrap().contains_key(&addr){
                         self.unresolved_jumps += 1;
                         return vec![];
