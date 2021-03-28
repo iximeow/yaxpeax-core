@@ -47,11 +47,11 @@ impl ConditionalBoundInference<x86_64, InstructionModifiers<x86_64>> for Conditi
         });
 
         let def_site: Option<&(<x86_64 as Arch>::Address, DefSource<<x86_64 as Arch>::Address>)> = uses.next().and_then(|loc| {
-            dfg.try_get_def_site(dfg.get_use(addr, *loc).value)
+            dfg.try_get_def_site(dfg.get_use(addr, loc.clone()).value)
         });
 
         while let Some(loc) = uses.next() {
-            if def_site != dfg.try_get_def_site(dfg.get_use(addr, *loc).value) {
+            if def_site != dfg.try_get_def_site(dfg.get_use(addr, loc.clone()).value) {
                 return None;
             }
         }

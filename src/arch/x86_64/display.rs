@@ -18,6 +18,9 @@ use arch::AddressNamer;
 use arch::x86_64::{ContextRead, DisplayCtx, MergedContextTable};
 use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
 use analyses::control_flow::Determinant;
+use analyses::Expression;
+use analyses::Item;
+use analyses::ValueOrImmediate;
 use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use yaxpeax_x86::long_mode::{RegSpec, Segment};
 use yaxpeax_x86::x86_64 as x86_64Arch;
@@ -224,11 +227,12 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
             },
             Data::Str(string) => { write!(fmt, "\"{}\"", string)?; }
             Data::Expression(expr) => {
-                let real_ty = expr.type_of(&type_atlas);
-                if real_ty != TypeSpec::Unknown {
-                    write!(fmt, "{}", expr.show(&type_atlas))?;
+                let real_ty = expr.ty.as_ref().unwrap_or(&TypeSpec::Bottom);
+                panic!("display expr?");
+                if real_ty != &TypeSpec::Unknown {
+                    // write!(fmt, "{}", expr.show(&type_atlas))?;
                 } else {
-                    write!(fmt, "{}", expr.show(&type_atlas))?;
+                    // write!(fmt, "{}", expr.show(&type_atlas))?;
                 }
             },
             Data::Concrete(v, ty) => {
@@ -628,7 +632,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
                 if let Some(location) = self.location.clone() {
                     let mut next_loc = location;
                     let mut next_operand = self.operand;
-                    let curr_loc = locations[location as usize];
+                    let curr_loc = locations[location as usize].clone();
                     while locations[next_loc as usize] == curr_loc {
                         next_loc += 1;
                         if next_loc as usize >= locations.len() {
@@ -695,7 +699,7 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
                 if let Some(location) = self.location.clone() {
                     let mut next_loc = location;
                     let mut next_operand = self.operand;
-                    let curr_loc = locations[location as usize];
+                    let curr_loc = locations[location as usize].clone();
                     while locations[next_loc as usize] == curr_loc {
                         if next_loc == 0 {
                             // try to advance operands..
@@ -1073,31 +1077,33 @@ impl <
                         match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
                                 let type_atlas = TypeAtlas::new();
-                                if let SymbolicExpression::Add(base, offset) = expr.clone().offset(*disp as i64 as u64) {
-                                    if let Some(field) = type_atlas.get_field(&base.type_of(&type_atlas), offset as u32) {
-                                        drawn = true;
-//                                        let _val_rc = use_val.as_rc();
-                                        let text = if let Some(name) = field.name.as_ref() {
-                                            format!("[{}.{}]", reg, name)
-                                        } else {
-                                            format!("[{} + {:#x}]", reg, offset)
-                                        };
-                                        let read_thunk = || {
-                                            ctx.highlight.location(
-                                                &(Location::Memory(ANY), Direction::Read),
-                                                &text
-                                            )
-                                        };
-                                        let write_thunk = || {
-                                            ctx.highlight.location(
-                                                &(Location::Memory(ANY), Direction::Read),
-                                                &text
-                                            )
-                                        };
-                                        match usage {
-                                            Use::Read => { write!(fmt, "{}", read_thunk())?; },
-                                            Use::Write => { write!(fmt, "{}", write_thunk())?; },
-                                            Use::ReadWrite => { write!(fmt, "{} (-> {})", read_thunk(), write_thunk())?; },
+                                if let Expression::Add { left: base, right: offset } = &expr.clone().add(&Item::immediate(*disp as i64 as u64)).as_ref().value {
+                                    if let Some(offset) = offset.value.as_immediate() {
+                                        if let Some(field) = base.ty.as_ref().and_then(|spec| type_atlas.get_field(spec, offset as u32)) {
+                                            drawn = true;
+    //                                        let _val_rc = use_val.as_rc();
+                                            let text = if let Some(name) = field.name.as_ref() {
+                                                format!("[{}.{}]", reg, name)
+                                            } else {
+                                                format!("[{} + {:#x}]", reg, offset)
+                                            };
+                                            let read_thunk = || {
+                                                ctx.highlight.location(
+                                                    &(Location::Memory(ANY), Direction::Read),
+                                                    &text
+                                                )
+                                            };
+                                            let write_thunk = || {
+                                                ctx.highlight.location(
+                                                    &(Location::Memory(ANY), Direction::Read),
+                                                    &text
+                                                )
+                                            };
+                                            match usage {
+                                                Use::Read => { write!(fmt, "{}", read_thunk())?; },
+                                                Use::Write => { write!(fmt, "{}", write_thunk())?; },
+                                                Use::ReadWrite => { write!(fmt, "{} (-> {})", read_thunk(), write_thunk())?; },
+                                            }
                                         }
                                     }
                                 }
@@ -1757,7 +1763,7 @@ impl <
                 for (loc, dir) in <x86_64Arch as ValueLocations>::decompose(instr) {
                     if let (Some(flag), Direction::Read) = (loc, dir) {
                         if [Location::ZF, Location::PF, Location::CF, Location::SF, Location::OF].contains(&flag) {
-                            let use_site = ssa.try_get_def_site(ssa.get_use(address, flag).value);
+                            let use_site = ssa.try_get_def_site(ssa.get_use(address, flag.clone()).value);
                             if let Some(use_site) = use_site {
                                 write!(dest, "\n    uses {:?}, defined by {} at {:#x}", flag, use_site.1, use_site.0)?;
                             } else {

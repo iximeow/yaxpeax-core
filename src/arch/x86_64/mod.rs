@@ -28,10 +28,11 @@ pub mod debug;
 pub mod display;
 pub mod semantic;
 
-#[derive(Serialize, Deserialize)]
+// TODO: DataMemo needs to be updated to serialize symbolic expression graphs
+// #[derive(Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub struct x86_64Data {
-    #[serde(skip)]
+//    #[serde(skip)]
     pub timings: Timings<<x86_64 as Arch>::Address>,
     pub preferred_addr: <x86_64 as Arch>::Address,
     pub contexts: MergedContextTable,

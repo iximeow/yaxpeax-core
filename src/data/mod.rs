@@ -48,7 +48,7 @@ pub trait AliasInfo where Self: Sized {
 /// with appropriate assumptions to refine the memory access into something appropriate for
 /// analysis.
 pub trait ValueLocations: Arch {
-    type Location: Debug + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Copy + Clone + AliasInfo;
+    type Location: Debug + Hash + Eq + Serialize + for<'de> Deserialize<'de> + Clone + AliasInfo;
 
     fn decompose(op: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)>;
 }

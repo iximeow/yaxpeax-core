@@ -136,7 +136,7 @@ impl <Loc: AbiDefaults> FunctionLayout<Loc> {
     }
 }
 
-pub trait AbiDefaults: Copy + Debug {
+pub trait AbiDefaults: Clone + Debug {
     type AbiDefault: FunctionAbiReference<Self> + Debug + Serialize + for<'de> Deserialize<'de> + Default;
 }
 
@@ -149,7 +149,7 @@ impl <Loc: Hash + AbiDefaults> Hash for FunctionLayout<Loc> {
     }
 }
 
-fn insert_at<Loc: Copy>(vs: &mut Vec<Option<Loc>>, el: Option<Loc>, i: usize) {
+fn insert_at<Loc: Clone>(vs: &mut Vec<Option<Loc>>, el: Option<Loc>, i: usize) {
     if i >= vs.len() {
         vs.resize(i + 1, None);
     }
@@ -157,34 +157,34 @@ fn insert_at<Loc: Copy>(vs: &mut Vec<Option<Loc>>, el: Option<Loc>, i: usize) {
     vs[i] = el;
 }
 
-impl <Loc: Clone + Copy + Debug + AbiDefaults> FunctionAbiReference<Loc> for FunctionLayout<Loc> {
+impl <Loc: Clone + Debug + AbiDefaults> FunctionAbiReference<Loc> for FunctionLayout<Loc> {
     fn argument_at(&mut self, i: usize) -> Option<Loc> {
         if self.arguments.get(i).is_none() {
             insert_at(&mut self.arguments, self.defaults.argument_at(i), i);
         }
 
-        self.arguments[i]
+        self.arguments[i].clone()
     }
     fn return_at(&mut self, i: usize) -> Option<Loc> {
         if self.returns.get(i).is_none() {
             insert_at(&mut self.returns, self.defaults.return_at(i), i);
         }
 
-        self.returns[i]
+        self.returns[i].clone()
     }
     fn return_address(&mut self) -> Option<Loc> {
         if self.return_address.is_none() {
             self.return_address = self.defaults.return_address();
         }
 
-        self.return_address
+        self.return_address.clone()
     }
     fn clobber_at(&mut self, i: usize) -> Option<Loc> {
         if self.clobbers.get(i).is_none() {
             insert_at(&mut self.clobbers, self.defaults.clobber_at(i), i);
         }
 
-        self.clobbers[i]
+        self.clobbers[i].clone()
     }
 }
 
@@ -192,7 +192,7 @@ impl <Loc: Clone + Copy + Debug + AbiDefaults> FunctionAbiReference<Loc> for Fun
 // locations based on the type of value at the index in question. x86_64 ABIs typically use xmm
 // registers for floating point values but 64-bit general purpose registers for arguments in the
 // same index if the value is an integer.
-pub trait FunctionAbiReference<Loc: Debug + Copy + Clone>: Debug {
+pub trait FunctionAbiReference<Loc: Debug + Clone>: Debug {
     fn argument_at(&mut self, i: usize) -> Option<Loc>;
     fn return_at(&mut self, i: usize) -> Option<Loc>;
     fn return_address(&mut self) -> Option<Loc>;
@@ -202,7 +202,7 @@ pub trait FunctionAbiReference<Loc: Debug + Copy + Clone>: Debug {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 struct NilAbi {}
 
-impl <Loc: Debug + Copy + Clone> FunctionAbiReference<Loc> for NilAbi {
+impl <Loc: Debug + Clone> FunctionAbiReference<Loc> for NilAbi {
     fn argument_at(&mut self, _: usize) -> Option<Loc> { None }
     fn return_at(&mut self, _: usize) -> Option<Loc> { None }
     fn return_address(&mut self) -> Option<Loc> { None }
@@ -284,10 +284,10 @@ impl <T: AbiDefaults + Debug, V: ValueDescriptionQuery<T>> FunctionRepr for Func
                 write!(res, "{:?}", argument).unwrap();
             }
             if let (Some(argument), Some(values)) = (argument, self.values.as_ref()) {
-                if let Some(name) = values.modifier_name(argument, Direction::Read, Precedence::After) {
+                if let Some(name) = values.modifier_name(argument.clone(), Direction::Read, Precedence::After) {
                     write!(res, ": {}", name).unwrap();
                 }
-                if let Some(value) = values.modifier_value(argument, Direction::Read, Precedence::After) {
+                if let Some(value) = values.modifier_value(argument.clone(), Direction::Read, Precedence::After) {
                     write!(res, " (= {})", value).unwrap();
                 }
             }
@@ -308,10 +308,10 @@ impl <T: AbiDefaults + Debug, V: ValueDescriptionQuery<T>> FunctionRepr for Func
                     res.push_str("return_0");
                 }
                 if let (Some(ret), Some(values)) = (ret, self.values.as_ref()) {
-                    if let Some(name) = values.modifier_name(ret, Direction::Write, Precedence::After) {
+                    if let Some(name) = values.modifier_name(ret.clone(), Direction::Write, Precedence::After) {
                         write!(res, ": {}", name).unwrap();
                     }
-                    if let Some(value) = values.modifier_value(ret, Direction::Write, Precedence::After) {
+                    if let Some(value) = values.modifier_value(ret.clone(), Direction::Write, Precedence::After) {
                         write!(res, " (= {})", value).unwrap();
                     }
                 }
@@ -333,10 +333,10 @@ impl <T: AbiDefaults + Debug, V: ValueDescriptionQuery<T>> FunctionRepr for Func
                         res.push_str(&format!("return_{}", i));
                     }
                     if let (Some(ret), Some(values)) = (ret, self.values.as_ref()) {
-                        if let Some(name) = values.modifier_name(ret, Direction::Write, Precedence::After) {
+                        if let Some(name) = values.modifier_name(ret.clone(), Direction::Write, Precedence::After) {
                             write!(res, ": {}", name).unwrap();
                         }
-                        if let Some(value) = values.modifier_value(ret, Direction::Write, Precedence::After) {
+                        if let Some(value) = values.modifier_value(ret.clone(), Direction::Write, Precedence::After) {
                             write!(res, " (= {})", value).unwrap();
                         }
                     }

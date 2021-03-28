@@ -66,11 +66,11 @@ impl fmt::Display for MemoryRegion {
     }
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum Location {
     Register(RegSpec),
     Memory(MemoryRegion),
-    MemoryLocation(MemoryRegion, u16, i32),
+    MemoryLocation(MemoryRegion, u8, Option<(Data, Data)>),
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL,
     // necessary to have a location to write that is provably not an Operand variant.
@@ -145,6 +145,8 @@ impl<'de> Visitor<'de> for LocationVisitor {
                 Ok(Location::Memory(MemoryRegion(memory)))
             },
             "M" => {
+                panic!("can't serialize or deserialize Location::MemoryLocation yet");
+                /*
                 let memstr = parts.next().ok_or(
                     E::invalid_length(1, &"expected memory region in serialized location")
                 )?;
@@ -163,6 +165,7 @@ impl<'de> Visitor<'de> for LocationVisitor {
                 let memory_addr: i32 = serde_json::from_str(szstr).unwrap();
                 check_end(4, parts)?;
                 Ok(Location::MemoryLocation(MemoryRegion(memory), memory_size, memory_addr))
+                */
             },
             "c" => { check_end(1, parts)?; Ok(Location::CF) }
             "p" => { check_end(1, parts)?; Ok(Location::PF) }
@@ -193,7 +196,9 @@ impl Serialize for Location {
                 // !!!
                 serialized_loc.push_str(&serde_json::to_string(&region.0).unwrap());
             }
-            Location::MemoryLocation(region, size, offset) => {
+            Location::MemoryLocation(region, size, access_info) => {
+                panic!("can't serialize or deserialize Location::MemoryLocation yet");
+                /*
                 serialized_loc.push_str("M:");
 
                 // !!!
@@ -204,6 +209,7 @@ impl Serialize for Location {
                 serialized_loc.push_str(":");
                 // !!!
                 serialized_loc.push_str(&serde_json::to_string(offset).unwrap());
+                */
             },
             Location::CF => { serialized_loc.push_str("c"); }
             Location::PF => { serialized_loc.push_str("p"); }
@@ -239,8 +245,12 @@ impl fmt::Display for Location {
         match self {
             Location::Register(reg) => write!(f, "{}", reg),
             Location::Memory(region) => write!(f, "(mem:{})", region),
-            Location::MemoryLocation(mem, size, offset) => {
-                write!(f, "(mem:{} + {}):{}", mem, offset, size)
+            Location::MemoryLocation(mem, size, access_info) => {
+                if let Some((base, addend)) = access_info {
+                    write!(f, "(mem:{} + {} + {}):{}", mem, base, addend, size)
+                } else {
+                    write!(f, "(mem:{}):{}", mem, size)
+                }
             },
             Location::CF => write!(f, "cf"),
             Location::PF => write!(f, "pf"),
@@ -447,7 +457,18 @@ pub enum SymbolicExpression {
     Add(Box<SymbolicExpression>, u64),
     Deref(Box<SymbolicExpression>),
     Symbol(Symbol),
-    CopOut(String)
+    CopOut(String),
+
+    // `MemoryAccessBaseInference` can be impl'd for `Data`, where a `SymbolicExpression` is where
+    // all the good stuff comes in
+    /*
+    Const(u64),
+    Value(Data),
+    Add(Box<SymbolicExpression>, Box<SymbolicExpression>),
+    Sub(Box<SymbolicExpression>, Box<SymbolicExpression>),
+    Mul(Box<SymbolicExpression>, Box<SymbolicExpression>),
+    Div(Box<SymbolicExpression>, Box<SymbolicExpression>),
+    */
 }
 
 #[ignore]
@@ -455,7 +476,7 @@ pub enum SymbolicExpression {
 fn test_expr_fields() {
     use data::types::KPCR;
     let type_atlas = &TypeAtlas::new();
-    let expr = SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(KPCR))))));
+    let expr = SymbolicExpression::Opaque(TypeSpec::PointerTo(Rc::new(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(KPCR))))));
     println!("expr: {}", expr.show(type_atlas));
     println!("  ty: {:?}", expr.type_of(type_atlas));
     let access = SymbolicExpression::Deref(Box::new(expr.clone()));
@@ -527,14 +548,15 @@ impl Typed for SymbolicExpression {
             SymbolicExpression::Opaque(spec) => spec.clone(),
             SymbolicExpression::Add(expr, offset) => {
                 if let Some(field) = type_atlas.get_field(&expr.type_of(type_atlas), *offset as u32) {
-                    TypeSpec::PointerTo(Box::new(field.type_of()))
+                    TypeSpec::PointerTo(Rc::new(field.type_of()))
                 } else {
                     TypeSpec::Unknown
                 }
             }
             SymbolicExpression::Deref(expr) => {
                 if let TypeSpec::PointerTo(ty) = expr.type_of(type_atlas) {
-                    *ty.to_owned()
+                    todo!("type_of");
+                    // *ty.to_owned()
                 } else {
                     TypeSpec::Unknown
                 }
@@ -552,18 +574,18 @@ impl Typed for SymbolicExpression {
 // => mov rdx_1, [KPCR.field_7 + 0x48]
 // => mov rdx_1, KPCR.field_7.field_9
 
-#[derive(Debug, Clone, Hash, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum ValueRange {
     Between(Data, Data),
     Precisely(Data),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Data {
     Concrete(u64, Option<TypeSpec>),
     Str(String),
-    Expression(SymbolicExpression),
-    Alias(Rc<RefCell<Value<x86_64>>>),
+    Expression(Rc<crate::analyses::Item<crate::analyses::ValueOrImmediate<x86_64>>>),
+    Alias(DFGRef<x86_64>),
     // This is a disjunction of "ranges" that may be a range of a single element
     // eg this is a set of ranges/specific values
     //
@@ -575,6 +597,12 @@ pub enum Data {
     // Not yet added because analyses are not applied more than once, so we know on first check
     // that the value has not been considered yet.
     // Indeterminate,
+}
+
+impl fmt::Display for Data {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.display(None))
+    }
 }
 
 impl Data {
@@ -694,7 +722,7 @@ impl Typed for Data {
         match self {
             Data::Concrete(_, ref t) => t.to_owned().unwrap_or(TypeSpec::Bottom),
             Data::Str(_) => TypeSpec::Bottom,
-            Data::Expression(expr) => expr.type_of(type_atlas),
+            Data::Expression(expr) => expr.ty.as_ref().map(|x| x.clone()).unwrap_or(TypeSpec::Bottom),
             Data::Alias(ptr) => ptr.borrow().data.to_owned().map(|d| d.type_of(type_atlas)).unwrap_or(TypeSpec::Unknown),
             // TODO: technically not valid - we could see if there's a shared type among
             // all the elements of the value set.
@@ -703,6 +731,7 @@ impl Typed for Data {
     }
 }
 
+/*
 // TODO: update memo
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DataMemo {
@@ -822,6 +851,7 @@ impl Memoable for HashedValue<Rc<RefCell<Value<x86_64>>>> {
         }
     }
 }
+*/
 
 impl Hash for Data {
     fn hash<H: Hasher>(&self, state: &mut H) {

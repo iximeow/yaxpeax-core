@@ -154,7 +154,7 @@ impl <
                         for (_, phi_op) in phis.iter() {
                             let out = phi_op.out.borrow();
                             if !out.used {
-                                hiddens.push(out.location);
+                                hiddens.push(out.location.clone());
                                 continue;
                             }
                             let mut phi_line = format!("{} {} <- phi(", frame, phi_op.out.borrow().display());
@@ -208,7 +208,7 @@ impl <
                     write!(instr_string, "{}", termion::style::Invert).unwrap();
                 }
                 let highlights: Vec<(A::Location, Direction)> = self.highlight_locs.iter().filter_map(|(highlight_addr, loc, dir)| {
-                    Some((*loc, *dir)).filter(|_| highlight_addr == &address)
+                    Some((loc.clone(), *dir)).filter(|_| highlight_addr == &address)
                 }).collect();
                 if highlights.len() == 0 {
                     A::display_instruction_in_function(

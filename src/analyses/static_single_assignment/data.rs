@@ -64,7 +64,8 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     pub modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
     pub control_dependent_values: HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
     pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
-    pub phi: HashMap<A::Address, PhiLocations<A>>
+    pub phi: HashMap<A::Address, PhiLocations<A>>,
+    pub indirect_values: HashMap<A::Address, HashMap<A::Location, HashMap<(A::Data, Direction), DFGRef<A>>>>,
 }
 
 pub struct SSAQuery<'a, A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
@@ -87,7 +88,7 @@ pub trait ValueDescriptionQuery<Location> {
 impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a, A> where A::Location: Hash + Eq, A::Address: Hash + Eq {
     fn modifier_name(&self, loc: A::Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> {
         if let Some(rwmap) = self.ssa.modifier_values.get(&(self.addr, precedence)) {
-            if let Some(entry) = rwmap.get(&(loc, dir)) {
+            if let Some(entry) = rwmap.get(&(loc.clone(), dir)) {
                 entry.borrow().name.as_ref().map(|x| x.clone()).or_else(|| {
                     let entry = entry.borrow();
                     if let Some(version) = entry.version() {
@@ -97,7 +98,7 @@ impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a
                     }
                 })
             } else {
-                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc, dir))
+                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc.clone(), dir))
             }
         } else {
             Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
@@ -106,7 +107,7 @@ impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a
 
     fn modifier_value(&self, loc: A::Location, dir: Direction, precedence: modifier::Precedence) -> Option<String> {
         if let Some(rwmap) = self.ssa.modifier_values.get(&(self.addr, precedence)) {
-            if let Some(entry) = rwmap.get(&(loc, dir)) {
+            if let Some(entry) = rwmap.get(&(loc.clone(), dir)) {
                 entry.borrow().name.as_ref().map(|x| x.clone()).or_else(|| {
                     let entry = entry.borrow();
                     if let Some(data) = entry.data.as_ref() {
@@ -116,7 +117,7 @@ impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a
                     }
                 })
             } else {
-                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc, dir))
+                Some(format!("modifier values, but no entry for ({:?}, {:?})", loc.clone(), dir))
             }
         } else {
             Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
@@ -321,7 +322,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
             for dfgref in map.values() {
                 let dfgref = dfgref.borrow();
                 if dfgref.version == None && dfgref.used {
-                    undefineds.push(dfgref.location);
+                    undefineds.push(dfgref.location.clone());
                 }
             }
         }
@@ -330,7 +331,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
             for dfgref in map.values() {
                 let dfgref = dfgref.borrow();
                 if dfgref.version == None && dfgref.used {
-                    undefineds.push(dfgref.location);
+                    undefineds.push(dfgref.location.clone());
                 }
             }
         }
@@ -340,7 +341,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
                 for dfgref in innermap.values() {
                     let dfgref = dfgref.borrow();
                     if dfgref.version == None && dfgref.used {
-                        undefineds.push(dfgref.location);
+                        undefineds.push(dfgref.location.clone());
                     }
                 }
             }
@@ -353,7 +354,7 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
                 }
                 for inref in phiop.ins.iter() {
                     if inref.borrow().version == None {
-                        undefineds.push(*loc);
+                        undefineds.push(loc.clone());
                     }
                 }
             }
@@ -391,17 +392,17 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
     // that flag should also remove the try_get_* variants
     pub fn get_def(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
         DFGLValue {
-            value: self.get_value(addr, loc, Direction::Write)
+            value: self.get_value(addr, loc.clone(), Direction::Write)
                 .unwrap_or_else(|| {
-                    panic!("Failed to get def of {:?} at {}", loc, addr.show())
+                    panic!("Failed to get def of {:?} at {}", loc.clone(), addr.show())
                 })
         }
     }
     pub fn get_use(&self, addr: A::Address, loc: A::Location) -> DFGLValue<A> {
         DFGLValue {
-            value: self.get_value(addr, loc, Direction::Read)
+            value: self.get_value(addr, loc.clone(), Direction::Read)
                 .unwrap_or_else(|| {
-                    panic!("Failed to get use of {:?} at {}", loc, addr.show())
+                    panic!("Failed to get use of {:?} at {}", loc.clone(), addr.show())
                 })
         }
     }

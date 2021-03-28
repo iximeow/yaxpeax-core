@@ -120,19 +120,19 @@ impl <A: crate::data::ValueLocations> UseDefTracker<A> {
     }
 
     pub fn track_use(&mut self, loc: A::Location) {
-        self.all_locations.insert(loc);
+        self.all_locations.insert(loc.clone());
         for alias in loc.aliases_of() {
-            self.track_alias(alias, loc);
+            self.track_alias(alias, loc.clone());
         }
     }
 
     pub fn track_def(&mut self, loc: A::Location, addr: A::Address) {
-        self.assignments.entry(loc).or_insert_with(|| HashSet::new()).insert(addr);
+        self.assignments.entry(loc.clone()).or_insert_with(|| HashSet::new()).insert(addr);
         self.track_use(loc);
     }
 
     pub fn track_alias(&mut self, alias: A::Location, loc: A::Location) {
-        self.all_locations.insert(alias);
+        self.all_locations.insert(alias.clone());
         self.aliases.entry(alias).or_insert_with(|| HashSet::new())
             .insert(loc);
     }
@@ -176,8 +176,8 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
         };
 
         for loc in tracker.all_locations {
-            allocator.C.insert(loc, 0);
-            allocator.S.insert(loc, vec![Rc::new(RefCell::new(Value::new(loc, None)))]);
+            allocator.C.insert(loc.clone(), 0);
+            allocator.S.insert(loc.clone(), vec![Rc::new(RefCell::new(Value::new(loc.clone(), None)))]);
         }
 
         allocator
@@ -189,7 +189,7 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
 
     fn new_value(&mut self, loc: A::Location) -> Value<A> {
         use std::collections::hash_map::Entry;
-        if let Entry::Occupied(mut e) = self.C.entry(loc) {
+        if let Entry::Occupied(mut e) = self.C.entry(loc.clone()) {
             let i = *e.get();
             *e.get_mut() += 1;
             Value::new(loc, Some(i))
@@ -203,23 +203,23 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
     }
 
     pub fn alloc_value(&mut self, loc: A::Location) -> Rc<RefCell<Value<A>>> {
-        let new_ref = Rc::new(RefCell::new(self.new_value(loc)));
+        let new_ref = Rc::new(RefCell::new(self.new_value(loc.clone())));
         self.S.get_mut(&loc).expect("S should have entries for all locations.").push(Rc::clone(&new_ref));
         new_ref
     }
     pub fn alloc_value_with<F: FnMut(Value<A>) -> Rc<RefCell<Value<A>>>>(&mut self, loc: A::Location, mut f: F) -> Rc<RefCell<Value<A>>> {
-        let new_ref = f(self.new_value(loc));
+        let new_ref = f(self.new_value(loc.clone()));
         self.S.get_mut(&loc).expect("S should have entries for all locations.").push(Rc::clone(&new_ref));
         new_ref
     }
 
-    pub fn current(&self, loc: A::Location) -> &Rc<RefCell<Value<A>>> {
-        let stack = &self.S[&loc];
+    pub fn current(&self, loc: &A::Location) -> &Rc<RefCell<Value<A>>> {
+        let stack = &self.S[loc];
         &stack[stack.len() - 1]
     }
 
-    pub fn previous(&self, loc: A::Location) -> &Rc<RefCell<Value<A>>> {
-        let stack = &self.S[&loc];
+    pub fn previous(&self, loc: &A::Location) -> &Rc<RefCell<Value<A>>> {
+        let stack = &self.S[loc];
         &stack[stack.len() - 2]
     }
 
@@ -227,13 +227,13 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
         let mut writelog: HashSet<A::Location> = HashSet::new();
         for (maybeloc, direction) in items {
             if let Some(loc) = maybeloc {
-                for loc in std::iter::once(loc).chain(loc.aliases_of().into_iter()) {
+                for loc in std::iter::once(loc.clone()).chain(loc.aliases_of().into_iter()) {
                     match direction {
                         Direction::Read => {
                             let value = if writelog.contains(&loc) {
-                                self.previous(loc)
+                                self.previous(&loc)
                             } else {
-                                self.current(loc)
+                                self.current(&loc)
                             };
                             value.borrow_mut().used = true;
                             insert_entry(ssa, (loc, Direction::Read), Rc::clone(value));
@@ -242,12 +242,12 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
                             // treat writes also as reads of the location they write. this is to
                             // support linking defs with prior values the def overwrites.
                             let value = if writelog.contains(&loc) {
-                                self.previous(loc)
+                                self.previous(&loc)
                             } else {
-                                self.current(loc)
+                                self.current(&loc)
                             };
                             value.borrow_mut().used = true;
-                            insert_entry(ssa, (loc, Direction::Read), Rc::clone(value));
+                            insert_entry(ssa, (loc.clone(), Direction::Read), Rc::clone(value));
 
                             // original write logic.
                             if writelog.contains(&loc) {
@@ -255,11 +255,11 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
                             } else {
                                 writelog.insert(loc.clone());
                             }
-                            let new_value = self.alloc_value(loc);
+                            let new_value = self.alloc_value(loc.clone());
                             ssa.defs.insert(HashedValue {
                                 value: Rc::clone(&new_value)
                             }, def_source);
-                            insert_entry(ssa, (loc, Direction::Write), new_value);
+                            insert_entry(ssa, (loc.clone(), Direction::Write), new_value);
                             // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                             // eg is it faster to store this and pop it back or is it faster to just
                             // decode again..?
@@ -353,7 +353,8 @@ pub fn generate_ssa<
         modifier_values: HashMap::new(),
         control_dependent_values: HashMap::new(),
         defs: HashMap::new(),
-        phi: HashMap::new()
+        phi: HashMap::new(),
+        indirect_values: HashMap::new(),
     };
 
     let mut iter_count = 0;
@@ -382,9 +383,9 @@ pub fn generate_ssa<
                     if has_already[Y] < iter_count {
                         // versioned at 0xffffffff to indicate a specialness to them.
                         // These should never be present after search().
-                        let new_value = Rc::new(RefCell::new(Value::new(*loc, Some(0xffffffff))));
+                        let new_value = Rc::new(RefCell::new(Value::new(loc.clone(), Some(0xffffffff))));
                         ssa.phi.entry(*Y).or_insert_with(|| HashMap::new())
-                            .insert(*loc, PhiOp { out: new_value, ins: vec![] });
+                            .insert(loc.clone(), PhiOp { out: new_value, ins: vec![] });
                         // TODO: phi nodes are assignments too! this is definitely a bug.
                         has_already.insert(*Y, iter_count);
                         if work[Y] < iter_count {
@@ -440,7 +441,7 @@ pub fn generate_ssa<
         if let Some(phis) = ssa.phi.get(&block.start) {
             for (loc, _data) in phis {
                 // these are very clear reads vs assignments:
-                let phi_dest = value_allocator.alloc_value_with(*loc, |value| {
+                let phi_dest = value_allocator.alloc_value_with(loc.clone(), |value| {
                     let phi_dest = Rc::clone(&ssa.phi[&block.start][loc].out);
                     phi_dest.replace(value);
                     phi_dest
@@ -451,7 +452,7 @@ pub fn generate_ssa<
                 // for very assignment-heavy blocks maybe there's a good way to summarize multiple of the same location being assigned
                 // eg is it faster to store this and pop it back or is it faster to just
                 // decode again..?
-                assignments.push(*loc); // ???
+                assignments.push(loc.clone()); // ???
             }
         }
 
@@ -498,7 +499,7 @@ pub fn generate_ssa<
                 for (loc, phi_op) in block_phis.iter_mut() {
 //                    phi.operands[j] = .. /* value for S[V] */
 //                    // not quite perfect, but good enough
-                    phi_op.ins.push(Rc::clone(value_allocator.current(*loc)));
+                    phi_op.ins.push(Rc::clone(value_allocator.current(loc)));
                 }
             }
         }
@@ -519,7 +520,7 @@ pub fn generate_ssa<
                                 // being on the relevant edge of `control_dependent_values`,
                                 // so we have to inform the allocator of these new transient
                                 // values.
-                                value_allocator.track_external(*loc, Rc::clone(value));
+                                value_allocator.track_external(loc.clone(), Rc::clone(value));
                             }
                         }
                     }
@@ -541,7 +542,7 @@ pub fn generate_ssa<
                     if let Some(adjustments) = ssa.control_dependent_values.get(&block.start).and_then(|map| map.get(&u)) {
                         for ((loc, direction), _value) in adjustments {
                             if *direction == Direction::Write {
-                                value_allocator.free(*loc);
+                                value_allocator.free(loc.clone());
                             }
                         }
                     }

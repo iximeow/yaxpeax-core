@@ -92,6 +92,8 @@ impl<V: Value> ValueRes<V> {
 /// of edits for each generation layered on top? it's not clear how this might interact with
 /// disjoint memory regions that are versioned independently.
 pub trait DFG<V: Value, A: Arch + ValueLocations, When=<A as Arch>::Address> where When: Copy {
+    type Indirect: IndirectQuery<V>;
+
     fn read_loc(&self, when: When, loc: A::Location) -> V;
     fn read<T: ToDFGLoc<A::Location>>(&self, when: When, loc: &T) -> V {
         self.read_loc(when, loc.convert())
@@ -108,8 +110,8 @@ pub trait DFG<V: Value, A: Arch + ValueLocations, When=<A as Arch>::Address> whe
     // associated type cannot be written, and we must obligate `Self::Indirect` and DFG impls to
     // holding `Rc<RefCell<IndirectionStruct>>` even though we know no user of a `DFG` interface
     // can get multiple refs, let alone mutable refs.
-    fn indirect_loc(&mut self, _when: When, _loc: A::Location) -> V::Indirect;
-    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, when: When, loc: &T) -> V::Indirect {
+    fn indirect_loc(&mut self, _when: When, _loc: A::Location) -> Self::Indirect;
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, when: When, loc: &T) -> Self::Indirect {
         self.indirect_loc(when, loc.convert())
     }
     fn query_at(&mut self, when: When) -> DFGLocationQueryCursor<When, V, A, Self> {
@@ -130,6 +132,8 @@ pub struct DFGLocationQueryCursor<'dfg, K: Copy + Sized, V: Value, A: Arch + Val
 }
 
 impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized> DFGLocationQuery<V, A> for DFGLocationQueryCursor<'dfg, K, V, A, D> {
+    type Indirect = D::Indirect;
+
     fn read_loc(&self, loc: A::Location) -> V {
         self.dfg.read_loc(self.addr, loc)
     }
@@ -142,10 +146,10 @@ impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized
     fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
     }
-    fn indirect_loc(&mut self, loc: A::Location) -> V::Indirect {
+    fn indirect_loc(&mut self, loc: A::Location) -> Self::Indirect {
         self.dfg.indirect_loc(self.addr, loc)
     }
-    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> V::Indirect {
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> Self::Indirect {
         self.indirect_loc(loc.convert())
     }
 }
@@ -154,6 +158,8 @@ impl<'dfg, K: Copy, V: Value, A: Arch + ValueLocations, D: DFG<V, A, K> + ?Sized
 /// accesses. `DFGLocationQuery` is essentially a helper to curry a specific address for future
 /// queries.
 pub trait DFGLocationQuery<V: Value, A: Arch + ValueLocations> where Self: Sized {
+    type Indirect: IndirectQuery<V>;
+
     fn read_loc(&self, loc: A::Location) -> V;
     fn read<T: ToDFGLoc<A::Location>>(&self, loc: &T) -> V {
         self.read_loc(loc.convert())
@@ -162,8 +168,8 @@ pub trait DFGLocationQuery<V: Value, A: Arch + ValueLocations> where Self: Sized
     fn write<T: ToDFGLoc<A::Location>>(&mut self, loc: &T, value: V) {
         self.write_loc(loc.convert(), value)
     }
-    fn indirect_loc(&mut self, loc: A::Location) -> V::Indirect;
-    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> V::Indirect {
+    fn indirect_loc(&mut self, loc: A::Location) -> Self::Indirect;
+    fn indirect<T: ToDFGLoc<A::Location>>(&mut self, loc: &T) -> Self::Indirect {
         self.indirect_loc(loc.convert())
     }
 }
@@ -271,7 +277,7 @@ impl<V: Value> IndirectQuery<V> for OpaqueIndirection<V> {
 }
 
 pub trait Value: Sized {
-    type Indirect: IndirectQuery<Self>; // associated type defaults are unstable, but should be `= OpaqueIndirection<V>`
+//    type Indirect: IndirectQuery<Self>; // associated type defaults are unstable, but should be `= OpaqueIndirection<V>`
 
     fn unknown() -> Self;
 
@@ -377,5 +383,395 @@ pub trait Value: Sized {
 
     fn ror(&self, _width: &Self) -> Self {
         Self::unknown()
+    }
+}
+
+use SSAValues;
+use std::rc::Rc;
+use analyses::static_single_assignment::DFGRef;
+use data::types::TypeSpec;
+
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct Item<Leaf> {
+    pub ty: Option<TypeSpec>,
+    pub value: Expression<Leaf>,
+}
+
+impl<Leaf: fmt::Display> fmt::Display for Item<Leaf> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Eq + fmt::Display {
+    pub fn immediate(v: u64) -> Rc<Self> {
+        Self::untyped(Expression::value(ValueOrImmediate::Immediate(v)))
+    }
+}
+
+impl<Leaf> Item<Leaf> {
+    pub fn untyped(value: Expression<Leaf>) -> Rc<Self> {
+        Rc::new(Item {
+            ty: None,
+            value,
+        })
+    }
+
+    pub fn opaque(ty: TypeSpec) -> Rc<Self> {
+        Rc::new(Item {
+            ty: Some(ty),
+            value: Expression::unknown()
+        })
+    }
+
+    pub fn unknown() -> Rc<Self> {
+        Self::untyped(Expression::unknown())
+    }
+
+    pub fn value(leaf: Leaf) -> Rc<Self> {
+        Self::untyped(Expression::value(leaf))
+    }
+
+    pub fn loadb(addr: &Rc<Self>) -> Rc<Self> {
+        Self::load(addr, 1)
+    }
+
+    pub fn loadw(addr: &Rc<Self>) -> Rc<Self> {
+        Self::load(addr, 2)
+    }
+
+    pub fn loadd(addr: &Rc<Self>) -> Rc<Self> {
+        Self::load(addr, 4)
+    }
+
+    pub fn loadq(addr: &Rc<Self>) -> Rc<Self> {
+        Self::load(addr, 8)
+    }
+
+    pub fn load(addr: &Rc<Self>, size: u8) -> Rc<Self> {
+        Self::untyped(Expression::Load { address: Rc::clone(addr), size })
+    }
+
+    pub fn add(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Add { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn sub(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Sub { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn mul(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Mul { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn or(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Or { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn and(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::And { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn xor(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Xor { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn shl(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Shl { value: Rc::clone(self), amount: Rc::clone(other) })
+    }
+
+    pub fn shr(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Self::untyped(Expression::Shr { value: Rc::clone(self), amount: Rc::clone(other) })
+    }
+}
+
+/// a very literal construction of `Value` operations into an expression tree. if `Leaf` is only
+/// concrete values, this is suitable for computation. if `Leaf` can be abstract variables, this is
+/// becomes a symbolic expression tree. realistically these expressions are often a mix of the two;
+/// constants from immediates and variables from the rest of the program.
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub enum Expression<Leaf> {
+    Unknown,
+    Value(Leaf),
+    Load { address: Rc<Item<Leaf>>, size: u8 },
+    // TODO: should there be a corresponding "store"?
+    // Store { address: Rc<Item<Leaf>>, size: u8, value: Rc<Item<Leaf>> },
+    Add { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    Sub { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    Mul { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    Or { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    And { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    Xor { left: Rc<Item<Leaf>>, right: Rc<Item<Leaf>> },
+    Shl { value: Rc<Item<Leaf>>, amount: Rc<Item<Leaf>> },
+    Shr { value: Rc<Item<Leaf>>, amount: Rc<Item<Leaf>> },
+}
+
+impl<Leaf: fmt::Display> fmt::Display for Expression<Leaf> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Expression::Unknown => {
+                write!(f, "<unknown>")
+            }
+            Expression::Value(l) => {
+                write!(f, "{}", l)
+            }
+            Expression::Load { address, size } => {
+                write!(f, "[{}:{}]", address, size)
+            }
+            Expression::Add { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::Sub { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::Mul { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::Or { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::And { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::Xor { left, right } => {
+                write!(f, "({} + {})", left, right)
+            }
+            Expression::Shl { value, amount } => {
+                write!(f, "({} + {})", value, amount)
+            }
+            Expression::Shr { value, amount } => {
+                write!(f, "({} + {})", value, amount)
+            }
+        }
+    }
+}
+
+impl<T: SSAValues> Expression<ValueOrImmediate<T>> where T::Data: Eq + fmt::Display {
+    pub fn as_immediate(&self) -> Option<u64> {
+        if let Expression::Value(ValueOrImmediate::Immediate(i)) = self {
+            Some(*i)
+        } else {
+            None
+        }
+    }
+}
+
+impl<Leaf> Expression<Leaf> {
+    pub fn unknown() -> Self {
+        Self::Unknown
+    }
+
+    pub fn value(leaf: Leaf) -> Self {
+        Self::Value(leaf)
+    }
+
+    /*
+    pub fn add(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Add { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn sub(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Sub { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn mul(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Mul { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn or(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Or { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn and(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::And { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn xor(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Xor { left: Rc::clone(self), right: Rc::clone(other) })
+    }
+
+    pub fn shl(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Shl { value: Rc::clone(self), amount: Rc::clone(other) })
+    }
+
+    pub fn shr(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
+        Rc::new(Expression::Shr { value: Rc::clone(self), amount: Rc::clone(other) })
+    }
+    */
+}
+
+use std::hash::Hash;
+use std::hash::Hasher;
+pub enum ValueOrImmediate<A: SSAValues> where A::Data: Eq + fmt::Display {
+    Immediate(u64),
+    Value(DFGRef<A>),
+}
+
+impl<A: SSAValues> ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    pub fn immediate(v: u64) -> Expression<Self> {
+        Expression::value(ValueOrImmediate::Immediate(v))
+    }
+}
+
+use std::fmt;
+impl<A: SSAValues> fmt::Debug for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueOrImmediate::Immediate(v) => {
+                write!(f, "Immediate({})", v)
+            }
+            ValueOrImmediate::Value(v) => {
+                write!(f, "Value({:?})", v)
+            }
+        }
+    }
+}
+
+impl<A: SSAValues> fmt::Display for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ValueOrImmediate::Immediate(v) => {
+                write!(f, "{}", v)
+            }
+            ValueOrImmediate::Value(v) => {
+                if let Some(data) = v.borrow().data.as_ref() {
+                    write!(f, "{}", data)
+                } else {
+                    write!(f, "<unknown value>")
+                }
+            }
+        }
+    }
+}
+
+impl<A: SSAValues> Eq for ValueOrImmediate<A> where A::Data: Eq + fmt::Display { }
+impl<A: SSAValues> PartialEq for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ValueOrImmediate::Immediate(l), ValueOrImmediate::Immediate(r)) => {
+                l == r
+            }
+            (ValueOrImmediate::Value(l), ValueOrImmediate::Value(r)) => {
+                Rc::ptr_eq(l, r)
+            }
+            _ => {
+                false
+            }
+        }
+    }
+}
+
+impl<A: SSAValues> Clone for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    fn clone(&self) -> Self {
+        match self {
+            ValueOrImmediate::Immediate(v) => {
+                ValueOrImmediate::Immediate(*v)
+            }
+            ValueOrImmediate::Value(v) => {
+                ValueOrImmediate::Value(Rc::clone(v))
+            }
+        }
+    }
+}
+
+impl<A: SSAValues> Hash for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            ValueOrImmediate::Immediate(v) => {
+                state.write_u8(1);
+                state.write_u64(*v);
+            }
+            ValueOrImmediate::Value(value) => {
+                state.write_u8(2);
+                (crate::analyses::static_single_assignment::HashedValue { value: Rc::clone(value) }).hash(state);
+            }
+        }
+    }
+}
+
+impl<A: SSAValues> Value for Rc<Item<ValueOrImmediate<A>>> where A::Data: Hash + Eq + fmt::Display {
+    // type Indirect = OpaqueIndirection<Self>;
+
+    fn unknown() -> Self {
+        Item::untyped(Expression::Unknown)
+    }
+
+    fn from_const(c: u64) -> Self {
+        Item::untyped(Expression::Value(ValueOrImmediate::Immediate(c)))
+    }
+
+    fn from_set(xs: &[Self]) -> Self {
+        // TODO: tag the information loss here
+        Self::unknown()
+    }
+
+    fn to_const(&self) -> Option<u64> {
+        if let Expression::Value(ValueOrImmediate::Immediate(c)) = self.as_ref().value {
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    fn as_bool(&self) -> Option<bool> {
+        self.to_const().map(|x| x != 0)
+    }
+
+    fn add(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::Add { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn sub(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::Sub { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn mul(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::Mul { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn or(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::Or { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn and(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::And { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn xor(&self, other: &Self) -> ValueRes<Self> {
+        ValueRes {
+            value: Item::untyped(Expression::Xor { left: Rc::clone(self), right: Rc::clone(other) }),
+            carry: Self::unknown()
+        }
+    }
+
+    fn sxt(&self, _width: &Self) -> Self {
+        Self::unknown()
+    }
+
+    fn zxt(&self, _width: &Self) -> Self {
+        Self::unknown()
+    }
+
+    fn shr(&self, amount: &Self) -> Self {
+        Item::untyped(Expression::Shr { value: Rc::clone(self), amount: Rc::clone(amount) })
+    }
+
+    fn shl(&self, amount: &Self) -> Self {
+        Item::untyped(Expression::Shl { value: Rc::clone(self), amount: Rc::clone(amount) })
     }
 }

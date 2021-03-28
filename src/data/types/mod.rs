@@ -1,4 +1,7 @@
 #![allow(non_snake_case, non_upper_case_globals)]
+
+use std::rc::Rc;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub size: u32,
@@ -235,24 +238,24 @@ impl TypeAtlas {
                 // 0x0004
                 Field { size: 8, ty: Some(TypeSpec::LayoutId(I64)), name: Some("Rsp0".to_string()) },
                 // 0x000c
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp1".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp1".to_string()) },
                 // 0x0014
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp2".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Rsp2".to_string()) },
                 // 0x001c
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[0]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[1]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[2]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[3]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[4]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[5]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[6]".to_string()) },
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[7]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[0]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[1]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[2]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[3]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[4]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[5]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[6]".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Ist[7]".to_string()) },
                 // 0x005c
-                Field { size: 8, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I64)))), name: Some("Reserved1".to_string()) },
+                Field { size: 8, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I64)))), name: Some("Reserved1".to_string()) },
                 // 0x0064
-                Field { size: 2, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I16)))), name: Some("Reserved2".to_string()) },
+                Field { size: 2, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I16)))), name: Some("Reserved2".to_string()) },
                 // 0x0066
-                Field { size: 2, ty: Some(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(I16)))), name: Some("IoMapBase".to_string()) },
+                Field { size: 2, ty: Some(TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(I16)))), name: Some("IoMapBase".to_string()) },
 
             ]
         );
@@ -298,17 +301,17 @@ impl TypeAtlas {
 pub enum TypeSpec {
     Top,
     LayoutId(usize),
-    PointerTo(Box<TypeSpec>),
+    PointerTo(Rc<TypeSpec>),
     Unknown,
     Bottom,
 }
 
 impl TypeSpec {
     pub fn struct_pointer(id: usize) -> Self {
-        TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(id)))
+        TypeSpec::PointerTo(Rc::new(TypeSpec::LayoutId(id)))
     }
     pub fn pointer_to(self) -> Self {
-        TypeSpec::PointerTo(Box::new(self))
+        TypeSpec::PointerTo(Rc::new(self))
     }
 }
 

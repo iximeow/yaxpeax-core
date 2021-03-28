@@ -811,7 +811,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::RCR |
         Opcode::RCL |
@@ -822,7 +822,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             [
                 (Some(Location::CF), Direction::Write),
                 (Some(Location::OF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::CBW |
         Opcode::CDQ |
@@ -832,7 +832,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Read),
                 (Some(Location::Register(RegSpec::rax())), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::ADC |
         Opcode::SBB => {
@@ -846,7 +846,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         },
         Opcode::ADD |
         Opcode::SUB |
@@ -862,7 +862,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
 
         Opcode::IMUL => {
@@ -877,7 +877,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         },
         Opcode::IDIV |
         Opcode::DIV => {
@@ -891,8 +891,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
-
+            ][i as usize].clone()
         }
         Opcode::MUL => {
             // TODO: this is lazy and assumes writes of all flags
@@ -907,7 +906,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
 
         Opcode::PUSH => {
@@ -915,14 +914,14 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         },
         Opcode::POP => {
             [
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Read),
-            ][i as usize]
+            ][i as usize].clone()
         },
         Opcode::INC |
         Opcode::DEC => {
@@ -932,7 +931,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::AF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::ENTER => {
             [
@@ -941,7 +940,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rbp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rbp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::LEAVE => {
             [
@@ -949,7 +948,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Register(RegSpec::rbp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::POPF => {
             [
@@ -957,7 +956,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Read),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::PUSHF => {
             [
@@ -965,19 +964,19 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Write),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::LAHF => {
             [
                 (Some(Location::Register(RegSpec::ax())), Direction::Write),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::SAHF => {
             [
                 (Some(Location::Register(RegSpec::ax())), Direction::Read),
                 (Some(Location::Register(RegSpec::rflags())), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::TEST |
         Opcode::CMP => {
@@ -988,7 +987,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::SF), Direction::Write),
                 (Some(Location::ZF), Direction::Write),
                 (Some(Location::PF), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::NEG => {
             (Some(Location::CF), Direction::Write)
@@ -1001,7 +1000,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::ZF), Direction::Write),
                 // this is over-general
                 (Some(Location::Register(RegSpec::rax())), Direction::Read),
-            ][i as usize]
+            ][i as usize].clone()
         },
         Opcode::CALLF | // TODO: this is wrong
         Opcode::CALL => {
@@ -1009,7 +1008,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Write),
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::JMP => {
             panic!();
@@ -1024,7 +1023,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
                 (Some(Location::Register(RegSpec::rsp())), Direction::Read),
                 (Some(Location::Register(RegSpec::rsp())), Direction::Write),
                 (Some(Location::Memory(ANY)), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::LFENCE |
         Opcode::MFENCE |
@@ -1059,40 +1058,40 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             [
                 (Some(Location::Register(RegSpec::gs())), Direction::Read),
                 (Some(Location::Register(RegSpec::gs())), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::RDTSCP => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Write),
                 (Some(Location::Register(RegSpec::rcx())), Direction::Write),
                 (Some(Location::Register(RegSpec::rdx())), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::WRMSR => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Read),
                 (Some(Location::Register(RegSpec::rdx())), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::RDMSR => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Write),
                 (Some(Location::Register(RegSpec::rdx())), Direction::Write),
                 (Some(Location::Register(RegSpec::rcx())), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::RDTSC => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Write),
                 (Some(Location::Register(RegSpec::rdx())), Direction::Write)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::RDPMC => {
             [
                 (Some(Location::Register(RegSpec::rax())), Direction::Write),
                 (Some(Location::Register(RegSpec::rdx())), Direction::Write),
                 (Some(Location::Register(RegSpec::rcx())), Direction::Read)
-            ][i as usize]
+            ][i as usize].clone()
         }
         Opcode::VERR |
         Opcode::VERW => {
@@ -1135,7 +1134,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             if i == 0 {
                 (Some(Location::RIP), Direction::Read)
             } else {
-                cond_to_flags(op.condition().unwrap())[i as usize - 1]
+                cond_to_flags(op.condition().unwrap())[i as usize - 1].clone()
             }
         }
 
@@ -1155,7 +1154,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::CMOVLE |
         Opcode::CMOVGE |
         Opcode::CMOVL => {
-            cond_to_flags(op.condition().unwrap())[i as usize]
+            cond_to_flags(op.condition().unwrap())[i as usize].clone()
         }
         Opcode::SETO |
         Opcode::SETNO |
@@ -1173,7 +1172,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::SETLE |
         Opcode::SETGE |
         Opcode::SETL => {
-            cond_to_flags(op.condition().unwrap())[i as usize]
+            cond_to_flags(op.condition().unwrap())[i as usize].clone()
         }
         Opcode::LSL => {
             (Some(Location::ZF), Direction::Write)

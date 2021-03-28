@@ -11,6 +11,8 @@ use data::modifier::ModifierExpression;
 use data::ValueLocations;
 use data::types::TypeSpec;
 use memory::MemoryRange;
+use analyses::Item;
+use analyses::ValueOrImmediate;
 use yaxpeax_arch::LengthedInstruction;
 
 pub struct SymbolicDomain;
@@ -28,15 +30,16 @@ impl Domain for SymbolicDomain {
     }
 }
 
-fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<SymbolicExpression> {
+use analyses::Expression;
+use std::rc::Rc;
+fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Rc<Item<ValueOrImmediate<x86_64>>>> {
     match mem_op {
         Operand::DisplacementU32(disp) => {
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
-                    Some(SymbolicExpression::Add(
-                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(data::types::KPCR))))),
-                        *disp as u64
-                    ))
+                    Some(
+                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp as u64))
+                    )
                 } else {
                 // TODO
                     None
@@ -49,11 +52,9 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
         Operand::DisplacementU64(disp) => {
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
-                    Some(SymbolicExpression::Add(
-                        Box::new(SymbolicExpression::Opaque(TypeSpec::PointerTo(Box::new(TypeSpec::LayoutId(data::types::KPCR))))),
-                        *disp as u64
-                        *disp
-                    ))
+                    Some(
+                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp))
+                    )
                 } else {
                 // TODO
                     None
@@ -68,19 +69,11 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             if addr == 0x1402a3148 {
                 // its that global struct referenced in ntoskrnl:0x1402a9370
                 // ... it's actually the linear address of the KPCR...
-                Some(SymbolicExpression::Opaque(
-                    TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(
-                        TypeSpec::LayoutId(data::types::KPCR)
-                    ))))
-                ))
+                Some(Item::opaque(TypeSpec::struct_pointer(data::types::KPCR).pointer_to()))
             } else if addr == 0x1402a3148 {
                 // its that global struct referenced in ntoskrnl:0x1402a9387
                 // stored in the KPCR, MAYBE??
-                Some(SymbolicExpression::Opaque(
-                    TypeSpec::PointerTo(Box::new(TypeSpec::PointerTo(Box::new(
-                        TypeSpec::Unknown
-                    ))))
-                ))
+                Some(Item::opaque(TypeSpec::PointerTo(Rc::new(TypeSpec::Unknown)).pointer_to()))
             } else {
                 None
             }
@@ -115,7 +108,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                     // eg gs:[rax] for rax = 0
                     None
                 },
-                Some(Data::Expression(sym)) => Some(sym.clone().offset(*disp as i64 as u64)),
+                Some(Data::Expression(sym)) => Some(sym.add(&Item::immediate(*disp as i64 as u64))),
                 _ => None
             }
         },
@@ -157,7 +150,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                                 let def = dfg.get_def(addr, Location::Register(l));
                                 if def.get_data().is_none() {
                                     def.update(
-                                        Data::Expression(SymbolicExpression::Deref(Box::new(src)))
+                                        Data::Expression(Item::load(&src, l.width()))
                                     )
                                 }
                             }
@@ -186,7 +179,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                         match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
         //                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
-                                def_val.update(Data::Expression(expr.clone().offset(offset as u64)));
+                                def_val.update(Data::Expression(expr.add(&Item::immediate(offset as u64))));
                             }
                             _ => { }
                         };

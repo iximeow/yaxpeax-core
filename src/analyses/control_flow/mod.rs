@@ -774,8 +774,6 @@ impl ToAddrDiff for u32 {
 }
 
 impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
-    type Indirect = crate::analyses::OpaqueIndirection<Self>;
-
     fn unknown() -> Self {
         control_flow::Effect::stop()
     }

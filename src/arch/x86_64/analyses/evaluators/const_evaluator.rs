@@ -119,10 +119,10 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
                 ModifierExpression::Below(_) |
                 ModifierExpression::Above(_) => { }
                 ModifierExpression::Is(v) => {
-                    if let Some(loc) = location {
+                    if let Some(loc) = &location {
                         println!("Applying bound {:?} to location {:?}", expr, loc);
-                        println!("The corresponding def version is: {:?}", dfg.get_transient_def(from, to, loc).as_rc());
-                        dfg.get_transient_def(from, to, loc).update(Data::Concrete(*v, None));
+                        println!("The corresponding def version is: {:?}", dfg.get_transient_def(from, to, loc.clone()).as_rc());
+                        dfg.get_transient_def(from, to, loc.clone()).update(Data::Concrete(*v, None));
                     }
                 }
             }

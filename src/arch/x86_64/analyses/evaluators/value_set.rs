@@ -202,7 +202,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     fn apply_transient(from: <x86_64 as Arch>::Address, to: <x86_64 as Arch>::Address, location: Option<<x86_64 as ValueLocations>::Location>, exprs: &Vec<<ValueSetDomain as Domain>::Modifier>, dfg: &SSA<x86_64>, _contexts: &()) {
         if let Some(loc) = location {
             for expr in exprs {
-                let new_value = dfg.get_transient_value(from, to, loc, Direction::Read).and_then(|_lvalue| {
+                let new_value = dfg.get_transient_value(from, to, loc.clone(), Direction::Read).and_then(|_lvalue| {
                     // TODO
 //                    lvalue.get_data().and_then(|data| data.merge_modifier(expr))
                     None
@@ -234,9 +234,9 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                 });
 
                 if let Some(new_value) = new_value {
-                    dfg.get_transient_def(from, to, loc).update(new_value);
+                    dfg.get_transient_def(from, to, loc.clone()).update(new_value);
                 } else {
-                    dfg.get_transient_def(from, to, loc).clear();
+                    dfg.get_transient_def(from, to, loc.clone()).clear();
                 }
             }
         } else {

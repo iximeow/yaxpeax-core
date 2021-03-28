@@ -10,6 +10,8 @@ use arch::arm::v8::aarch64::analyses::data_flow::Location;
 use analyses::DFG;
 
 impl DFG<control_flow::Effect<<ARMv8 as Arch>::Address>, ARMv8, ()> for ControlFlowAnalysis<<ARMv8 as Arch>::Address> {
+    type Indirect = OpaqueIndirection<control_flow::Effect<<ARMv8 as Arch>::Address>>;
+
     fn indirect_loc(&mut self, _when: (), _loc: <ARMv8 as ValueLocations>::Location) -> OpaqueIndirection<control_flow::Effect<<ARMv8 as Arch>::Address>> {
         OpaqueIndirection::inst()
     }

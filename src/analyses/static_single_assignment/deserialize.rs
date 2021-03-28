@@ -79,7 +79,7 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
         for (addr, locmap) in instruction_values.iter() {
             let mut value_locmap = HashMap::new();
             for (locdir, idx) in locmap.iter() {
-                value_locmap.insert(*locdir, values[idx].clone().value);
+                value_locmap.insert(locdir.clone(), values[idx].clone().value);
             }
             dememoized_values.insert(*addr, value_locmap);
         }
@@ -90,6 +90,7 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
             control_dependent_values: HashMap::new(),
             defs: HashMap::new(),
             phi: dememoized_phis,
+            indirect_values: HashMap::new(), // TODO: serialize and deserialize
         })
     }
 }

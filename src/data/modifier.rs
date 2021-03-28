@@ -173,8 +173,8 @@ impl<A: Arch + ValueLocations> ModifierCollection<A> for InstructionModifiers<A>
                 for arg in layout.returns.iter() {
                     res.push((arg.to_owned(), Direction::Write));
                 }
-                if let Some(ret) = layout.return_address {
-                    res.push((Some(ret), Direction::Read));
+                if let Some(ret) = &layout.return_address {
+                    res.push((Some(ret.clone()), Direction::Read));
                 }
                 // we can add all the reads/writes of f.
             } else {

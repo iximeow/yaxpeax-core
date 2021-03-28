@@ -243,7 +243,7 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
 
 impl<V: Value, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
 
-pub fn evaluate<K: Copy, V: Value + From<AddressDiff<<amd64 as Arch>::Address>>, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
+pub fn evaluate<K: Copy, V: Value, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     let dfg = &mut dfg.query_at(when);
     match instr.opcode() {
         Opcode::Invalid => {
