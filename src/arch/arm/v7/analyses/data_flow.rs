@@ -226,13 +226,13 @@ impl SSAValues for ARMv7 {
 
 #[derive(Default)]
 pub struct NoDisambiguation {}
-impl Disambiguator<Location, (u8, u8)> for NoDisambiguation {
-    fn disambiguate(&mut self, _spec: (u8, u8)) -> Option<Location> {
+impl Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> for NoDisambiguation {
+    fn disambiguate(&self, _instr: &<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Instruction, _loc: (Option<Location>, Direction), _spec: (u8, u8)) -> Option<Location> {
         None
     }
 }
 
-pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address> + ?Sized> {
+pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address> + ?Sized> {
     // TODO:
     _addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address,
     inst: &'a yaxpeax_arm::armv7::Instruction,
@@ -242,13 +242,13 @@ pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Size
     loc_idx: u8,
     curr_op: Option<yaxpeax_arm::armv7::Operand>,
     curr_use: Option<Use>,
-    disambiguator: &'b mut D,
+    disambiguator: &'b D,
     // TODO:
     _fn_query: &'c F,
 }
 
-impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
-    pub fn new(_addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv7::Instruction, disambiguator: &'b mut D, _fn_query: &'c F) -> Self {
+impl <'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>> LocationIter<'a, 'b, 'c, D, F> {
+    pub fn new(_addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, inst: &'a yaxpeax_arm::armv7::Instruction, disambiguator: &'b D, _fn_query: &'c F) -> Self {
         LocationIter {
             _addr,
             inst,
@@ -435,10 +435,10 @@ fn operands_in(_inst: &yaxpeax_arm::armv7::Instruction) -> u8 {
     */
 }
 
-impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>> Iterator for LocationIter<'a, 'b, 'c, D, F> {
+impl <'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)>, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>> Iterator for LocationIter<'a, 'b, 'c, D, F> {
     type Item = (Option<Location>, Direction);
     fn next(&mut self) -> Option<Self::Item> {
-        fn next_loc<'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>>(iter: &mut LocationIter<'a, 'b, 'c, D, F>) -> Option<(Option<Location>, Direction)> {
+        fn next_loc<'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)>, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address>>(iter: &mut LocationIter<'a, 'b, 'c, D, F>) -> Option<(Option<Location>, Direction)> {
             while iter.loc_count == iter.loc_idx {
                 // advance op
                 iter.op_idx += 1;
@@ -472,15 +472,15 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
 
         next_loc(self).map(|loc| {
             let loc_spec = (self.op_idx, self.loc_idx - 1);
-            self.disambiguator.disambiguate(loc_spec).map(|new_loc| (Some(new_loc), loc.1)).unwrap_or(loc)
+            self.disambiguator.disambiguate(self.inst, loc, loc_spec).map(|new_loc| (Some(new_loc), loc.1)).unwrap_or(loc)
         })
     }
 }
-impl <'a, 'b, 'c, D: 'b + Disambiguator<Location, (u8, u8)>, F: 'c + FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, Function=FunctionImpl<Location>>> crate::data::LocIterator<'b, 'c, <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, Location, D, F> for &'a yaxpeax_arm::armv7::Instruction {
+impl <'a, 'b, 'c, D: 'b + Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)>, F: 'c + FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, Function=FunctionImpl<Location>>> crate::data::LocIterator<'b, 'c, yaxpeax_arm::armv7::ARMv7, Location, D, F> for &'a yaxpeax_arm::armv7::Instruction {
     type Item = (Option<Location>, Direction);
     type LocSpec = (u8, u8);
     type Iter = LocationIter<'a, 'b, 'c, D, F>;
-    fn iter_locs(self, addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, disam: &'b mut D, functions: &'c F) -> Self::Iter {
+    fn iter_locs(self, addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address, disam: &'b D, functions: &'c F) -> Self::Iter {
         LocationIter::new(addr, self, disam, functions)
     }
 }

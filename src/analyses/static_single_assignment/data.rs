@@ -66,6 +66,12 @@ pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Ha
     pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
     pub phi: HashMap<A::Address, PhiLocations<A>>,
     pub indirect_values: HashMap<A::Address, HashMap<A::Location, HashMap<(A::Data, Direction), DFGRef<A>>>>,
+    // invariant:
+    // for (k, v) in external_defs {
+    //   assert_eq!(k, v.location);
+    //   assert!(v.version.is_none());
+    // }
+    pub external_defs: HashMap<A::Location, DFGRef<A>>,
 }
 
 pub struct SSAQuery<'a, A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {

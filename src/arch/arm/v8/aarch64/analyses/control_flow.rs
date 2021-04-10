@@ -12,7 +12,7 @@ use analyses::DFG;
 impl DFG<control_flow::Effect<<ARMv8 as Arch>::Address>, ARMv8, ()> for ControlFlowAnalysis<<ARMv8 as Arch>::Address> {
     type Indirect = OpaqueIndirection<control_flow::Effect<<ARMv8 as Arch>::Address>>;
 
-    fn indirect_loc(&mut self, _when: (), _loc: <ARMv8 as ValueLocations>::Location) -> OpaqueIndirection<control_flow::Effect<<ARMv8 as Arch>::Address>> {
+    fn indirect_loc(&self, _when: (), _loc: <ARMv8 as ValueLocations>::Location) -> OpaqueIndirection<control_flow::Effect<<ARMv8 as Arch>::Address>> {
         OpaqueIndirection::inst()
     }
     fn read_loc(&self, _when: (), loc: <ARMv8 as ValueLocations>::Location) -> control_flow::Effect<<ARMv8 as Arch>::Address> {

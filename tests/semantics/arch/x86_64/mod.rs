@@ -18,19 +18,36 @@ use yaxpeax_core::analyses::memory_layout::MemoryLayout;
 use yaxpeax_core::arch::x86_64::analyses::data_flow::{Data, Location};
 use yaxpeax_core::analyses::evaluators::Evaluator;
 
-fn do_analyses(data: &[u8]) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>) {
+fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layout: Option<(&'dfg SSA<x86_64>, &'layout MemoryLayout<'dfg, x86_64>)>) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>) {
     // TODO: is this necessary? can this be removed from `AnalysisBuilder::new`?
     let mut x86_64_data = x86_64Data::default();
 
     let cfg = control_flow::AnalysisBuilder::new(&data.to_vec(), &mut x86_64_data.contexts)
         .evaluate();
-    let dfg = data_flow::AnalysisBuilder::new(
-        &data.to_vec(),
-        &cfg,
-        &*x86_64_data.contexts.functions.borrow(),
-        &mut yaxpeax_core::arch::x86_64::analyses::data_flow::NoDisambiguation::default(),
-    )
-        .ssa_cytron();
+
+    let dfg = if let Some((prior_dfg, layout)) = memory_layout {
+        let mut disambiguator = yaxpeax_core::arch::x86_64::analyses::data_flow::ContextualDisambiguation {
+            dfg: prior_dfg,
+            memory_layout: Some(layout),
+        };
+
+        data_flow::AnalysisBuilder::new(
+            &data.to_vec(),
+            &cfg,
+            &*x86_64_data.contexts.functions.borrow(),
+            &mut disambiguator,
+        )
+            .ssa_cytron_refining(prior_dfg)
+
+    } else {
+        data_flow::AnalysisBuilder::new(
+            &data.to_vec(),
+            &cfg,
+            &*x86_64_data.contexts.functions.borrow(),
+            &mut yaxpeax_core::arch::x86_64::analyses::data_flow::NoDisambiguation::default(),
+        )
+            .ssa_cytron()
+    };
 
     Evaluator::new(&data.to_vec(), &cfg, &dfg).full_function_iterate();
 
@@ -46,7 +63,7 @@ fn test_arithmetic() {
         0xc3,
     ];
 
-    let (cfg, dfg) = do_analyses(instructions);
+    let (cfg, dfg) = do_analyses(instructions, None);
 
     // expect that rcx == 8
     assert_eq!(dfg.get_def(10, Location::rcx()).get_data().as_ref(), Some(&Data::Concrete(8, None)));
@@ -67,11 +84,11 @@ fn test_memory() {
         0x4c, 0x89, 0x44, 0x24, 0x14,                               // mov [rsp + 0x14], r8
     ];
 
-    let (mut cfg, mut dfg) = do_analyses(instructions);
+    let (mut cfg, mut dfg) = do_analyses(instructions, None);
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,
-        segments: HashMap::new(),
+        segments: RefCell::new(HashMap::new()),
     };
 
     let instvec = instructions.to_vec();
@@ -88,6 +105,11 @@ fn test_memory() {
             let addr: u64 = address;
             semantic::evaluate(address, &instr, &mut mem_analysis);
         }
+    }
+    let (mut cfg, mut dfg) = do_analyses(instructions, Some((&dfg, &mem_analysis)));
+
+    for k in dfg.defs.keys() {
+        println!("{:?}", k.value.borrow().location);
     }
 
     print_memory_layouts(&instvec, &cfg, &dfg, &mem_analysis);
@@ -109,13 +131,27 @@ use std::rc::Rc;
             println!("{}: {}", address.show(), instr);
             let mut post_instr_mem_state = None;
 
+            let segments = mem_analysis.segments.borrow();
+
             if let Some(mem_read) = dfg.try_get_use(address, Location::Memory(ANY)) {
-                let segment = mem_analysis.segments.get(&ValueOrImmediate::Value(mem_read)).unwrap();
+                println!("getting segment for {:?}", mem_read);
+                println!("{:x}", Rc::clone(&mem_read).as_ptr() as u64);
+                print!("segments: ");
+                for key in segments.keys() {
+                    if let ValueOrImmediate::Value(v) = key {
+                        print!("{:x} - ", Rc::clone(&v).as_ptr() as u64);
+                        print!("{}_{}, ", v.borrow().location, v.borrow().version.map(|x| x.to_string()).unwrap_or_else(||"input".to_string()));
+                    } else {
+                        panic!("memory analysis key is an immediate. this is not actually impossible (x86 offset addressing exists) but is unhandled in this test");
+                    }
+                }
+                print!("\n");
+                let segment = segments.get(&ValueOrImmediate::Value(mem_read)).unwrap();
                 post_instr_mem_state = Some(segment);
 //                println!("{} read : {:?}", address.show(), segment);
             }
             if let Some(mem_write) = dfg.try_get_def(address, Location::Memory(ANY)) {
-                let segment = mem_analysis.segments.get(&ValueOrImmediate::Value(mem_write)).unwrap();
+                let segment = segments.get(&ValueOrImmediate::Value(mem_write)).unwrap();
                 post_instr_mem_state = Some(segment);
 //                println!("{} write: {:?}", address.show(), segment);
             }
@@ -243,11 +279,11 @@ fn test_stack_inference()  {
         0xe8, 0x22, 0x80, 0xff, 0xff,                                  // call sym.imp.__stack_chk_fail @noreturn
     ];
 
-    let (mut cfg, mut dfg) = do_analyses(instructions);
+    let (mut cfg, mut dfg) = do_analyses(instructions, None);
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,
-        segments: HashMap::new(),
+        segments: RefCell::new(HashMap::new()),
     };
 
     let instvec = instructions.to_vec();
@@ -274,14 +310,15 @@ use std::rc::Rc;
         let block = cfg.get_block(k);
         let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
         while let Some((address, instr)) = iter.next() {
+            let segments = mem_analysis.segments.borrow();
             if let Some(mem_read) = dfg.try_get_use(address, Location::Memory(ANY)) {
                 let mem_read = ValueOrImmediate::Value(Rc::clone(&mem_read));
-                let segment = mem_analysis.segments.get(&mem_read).unwrap();
+                let segment = segments.get(&mem_read).unwrap();
                 println!("{} read : {:?}", address.show(), segment);
             }
             if let Some(mem_write) = dfg.try_get_def(address, Location::Memory(ANY)) {
                 let mem_write = ValueOrImmediate::Value(Rc::clone(&mem_write));
-                let segment = mem_analysis.segments.get(&mem_write).unwrap();
+                let segment = segments.get(&mem_write).unwrap();
                 println!("{} write: {:?}", address.show(), segment);
             }
         }

@@ -10,7 +10,7 @@ use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressDiff;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
-use analyses::{DFG, Value, DFGLocationQuery};
+use analyses::{DFG, Value, DFGLocationQuery, DFGLocationQueryMut};
 use analyses::CompletionStatus;
 use analyses::ValueRes;
 use analyses::IntoValueIndex;
@@ -74,6 +74,46 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
 
     // TODO: get a disambiguator somehow
     #[inline(always)]
+    fn read_operand(&self, operand: &Operand) -> V {
+        match operand {
+            Operand::Register(reg) => {
+                self.read(&Location::Register(*reg))
+            },
+            Operand::ImmediateI8(imm) => {
+                V::from_const(*imm as i64 as u64)
+            }
+            Operand::ImmediateU8(imm) => {
+                V::from_const(*imm as u64)
+            }
+            Operand::ImmediateI16(imm) => {
+                V::from_const(*imm as i64 as u64)
+            }
+            Operand::ImmediateU16(imm) => {
+                V::from_const(*imm as u64)
+            }
+            Operand::ImmediateI32(imm) => {
+                V::from_const(*imm as i64 as u64)
+            }
+            Operand::ImmediateU32(imm) => {
+                V::from_const(*imm as u64)
+            }
+            Operand::ImmediateI64(imm) => {
+                V::from_const(*imm as u64)
+            }
+            Operand::ImmediateU64(imm) => {
+                V::from_const(*imm)
+            }
+            op => {
+                let ea = self.effective_address(op);
+                self.indirect(&Location::Memory(ANY)).load(ea.qword())
+            }
+        }
+    }
+}
+
+pub trait DFGAccessExtMut<V: Value> where Self: DFGLocationQueryMut<V, amd64> {
+    // TODO: get a disambiguator somehow
+    #[inline(always)]
     fn write_operand(&mut self, operand: &Operand, value: V) {
         match operand {
             Operand::Register(reg) => {
@@ -112,44 +152,6 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
                 unsafe {
                     std::hint::unreachable_unchecked();
                 }
-            }
-        }
-    }
-
-    // TODO: get a disambiguator somehow
-    #[inline(always)]
-    fn read_operand(&mut self, operand: &Operand) -> V {
-        match operand {
-            Operand::Register(reg) => {
-                self.read(&Location::Register(*reg))
-            },
-            Operand::ImmediateI8(imm) => {
-                V::from_const(*imm as i64 as u64)
-            }
-            Operand::ImmediateU8(imm) => {
-                V::from_const(*imm as u64)
-            }
-            Operand::ImmediateI16(imm) => {
-                V::from_const(*imm as i64 as u64)
-            }
-            Operand::ImmediateU16(imm) => {
-                V::from_const(*imm as u64)
-            }
-            Operand::ImmediateI32(imm) => {
-                V::from_const(*imm as i64 as u64)
-            }
-            Operand::ImmediateU32(imm) => {
-                V::from_const(*imm as u64)
-            }
-            Operand::ImmediateI64(imm) => {
-                V::from_const(*imm as u64)
-            }
-            Operand::ImmediateU64(imm) => {
-                V::from_const(*imm)
-            }
-            op => {
-                let ea = self.effective_address(op);
-                self.indirect(&Location::Memory(ANY)).load(ea.qword())
             }
         }
     }
@@ -242,9 +244,10 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
 }
 
 impl<V: Value, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
+impl<V: Value, D: DFGLocationQueryMut<V, amd64>> DFGAccessExtMut<V> for D { }
 
 pub fn evaluate<K: Copy, V: Value, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
-    let dfg = &mut dfg.query_at(when);
+    let dfg = &mut dfg.query_at_mut(when);
     match instr.opcode() {
         Opcode::Invalid => {
             // TODO: something??

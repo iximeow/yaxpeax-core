@@ -9,7 +9,7 @@ use data::modifier::NoModifiers;
 use analyses::static_single_assignment::SSAValues;
 use analyses::control_flow::ControlFlowGraph;
 use analyses::static_single_assignment::SSA;
-use analyses::static_single_assignment::cytron::generate_ssa;
+use analyses::static_single_assignment::cytron::{generate_ssa, generate_refined_ssa};
 use arch::AbiDefaults;
 
 use data::Direction;
@@ -63,10 +63,10 @@ impl<
     M: MemoryRange<A::Address>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     LocSpec,
-    D: Disambiguator<A::Location, LocSpec>,
+    D: Disambiguator<A, LocSpec>,
 > AnalysisBuilder<'memory, 'cfg, 'functions, 'disambiguator, 'modifiers, A, M, F, LocSpec, D, NoModifiers> where
     A::Location: 'static + AbiDefaults,
-    for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, D, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, D, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
 {
     pub fn new(memory: &'memory M, cfg: &'cfg ControlFlowGraph<A::Address>, functions: &'functions F, disambiguator: &'disambiguator mut D) -> AnalysisBuilder<'memory, 'cfg, 'functions, 'disambiguator, 'static, A, M, F, LocSpec, D, NoModifiers> {
         AnalysisBuilder {
@@ -90,11 +90,11 @@ impl<
     M: MemoryRange<A::Address>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     LocSpec,
-    D: Disambiguator<A::Location, LocSpec>,
+    D: Disambiguator<A, LocSpec>,
     U: ModifierCollection<A>,
 > AnalysisBuilder<'memory, 'cfg, 'functions, 'disambiguator, 'modifiers, A, M, F, LocSpec, D, U> where
     A::Location: 'static + AbiDefaults,
-    for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, D, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, D, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
 {
     pub fn with_modifiers<'new_modifiers, NewU: ModifierCollection<A>>(self, new_modifiers: &'new_modifiers NewU) -> AnalysisBuilder<'memory, 'cfg, 'functions, 'disambiguator, 'new_modifiers, A, M, F, LocSpec, D, NewU> {
         let Self {
@@ -127,5 +127,18 @@ impl<
         } = self;
 
         generate_ssa(memory, cfg.entrypoint, &cfg, &cfg.graph, modifiers, disambiguator, functions)
+    }
+
+    pub fn ssa_cytron_refining(self, prior_dfg: &SSA<A>) -> SSA<A> {
+        let Self {
+            memory,
+            cfg,
+            functions,
+            disambiguator,
+            modifiers,
+            ..
+        } = self;
+
+        generate_refined_ssa(memory, cfg.entrypoint, &cfg, &cfg.graph, prior_dfg, modifiers, disambiguator, functions)
     }
 }

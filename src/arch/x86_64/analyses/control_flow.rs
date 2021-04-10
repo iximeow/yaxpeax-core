@@ -13,7 +13,7 @@ use analyses::DFG;
 impl DFG<control_flow::Effect<<x86_64 as Arch>::Address>, x86_64, ()> for ControlFlowAnalysis<<x86_64 as Arch>::Address> {
     type Indirect = OpaqueIndirection<control_flow::Effect<<x86_64 as Arch>::Address>>;
 
-    fn indirect_loc(&mut self, _when: (), _loc: <x86_64 as ValueLocations>::Location) -> OpaqueIndirection<control_flow::Effect<<x86_64 as Arch>::Address>> {
+    fn indirect_loc(&self, _when: (), _loc: <x86_64 as ValueLocations>::Location) -> OpaqueIndirection<control_flow::Effect<<x86_64 as Arch>::Address>> {
         OpaqueIndirection::inst()
     }
     fn read_loc(&self, _when: (), loc: <x86_64 as ValueLocations>::Location) -> control_flow::Effect<<x86_64 as Arch>::Address> {

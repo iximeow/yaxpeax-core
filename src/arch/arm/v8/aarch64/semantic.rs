@@ -4,11 +4,12 @@ use yaxpeax_arm::armv8::a64::{ARMv8, Opcode, Operand};
 use yaxpeax_arch::{AddressDiff, Arch};
 use analyses::DFG;
 use analyses::DFGLocationQuery;
+use analyses::DFGLocationQueryMut;
 use analyses::CompletionStatus;
 
 fn apply_condition_code<
     V: Value + Clone + From<AddressDiff<<ARMv8 as Arch>::Address>>,
-    D: DFGLocationQuery<V, ARMv8>
+    D: DFGLocationQueryMut<V, ARMv8>
 >(_code: u8, next_addr: V, dfg: &mut D) {
     let current_dest = dfg.read(&Location::PC);
     let joined = V::from_set(&[current_dest, next_addr.clone()]);
@@ -103,12 +104,12 @@ pub(crate) fn evaluate<
     V: Value + Clone + From<AddressDiff<<ARMv8 as Arch>::Address>>,
     D: DFG<V, ARMv8, K>
 >(when: K, instr: &<ARMv8 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
-    let dfg = &mut dfg.query_at(when);
+    let dfg = &mut dfg.query_at_mut(when);
     fn read_operand<V: Value, D: DFGLocationQuery<V, ARMv8>>(_dfg: &mut D, _operand: &Operand) -> V {
         V::unknown()
     }
 
-    fn push<V: Value, D: DFGLocationQuery<V, ARMv8>>(dfg: &mut D, _value: V) {
+    fn push<V: Value, D: DFGLocationQueryMut<V, ARMv8>>(dfg: &mut D, _value: V) {
         dfg.write(&Location::SP, V::unknown())
     }
 

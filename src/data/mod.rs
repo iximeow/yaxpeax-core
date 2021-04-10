@@ -66,11 +66,11 @@ pub trait ValueLocations: Arch {
 /// region we assume is not aliased by other memory means we can insert variables for stack memory
 /// with a naive analysis. This same claim holds for globals and program accesses, with arbitrary
 /// heap accesses still possibly requiring more intensive analysis.
-pub trait Disambiguator<Location, LocSpec> {
-    fn disambiguate(&mut self, spec: LocSpec) -> Option<Location>;
+pub trait Disambiguator<A: ValueLocations, LocSpec> {
+    fn disambiguate(&self, instr: &A::Instruction, loc: (Option<A::Location>, Direction), spec: LocSpec) -> Option<A::Location>;
 }
 
-pub trait LocIterator<'disambiguator, 'fns, A: Address, Location: 'static + AbiDefaults, D: Disambiguator<Location, Self::LocSpec>, F: FunctionQuery<A, Function=FunctionImpl<Location>>> {
+pub trait LocIterator<'disambiguator, 'fns, A: ValueLocations, Location: 'static + AbiDefaults, D: Disambiguator<A, Self::LocSpec>, F: FunctionQuery<A::Address, Function=FunctionImpl<Location>>> {
     type Item;
     type LocSpec;
     type Iter: Iterator<Item = Self::Item>;
@@ -78,7 +78,7 @@ pub trait LocIterator<'disambiguator, 'fns, A: Address, Location: 'static + AbiD
     // this probably needs to grow to know about a table of functions and a mechanism to pick which
     // one(s? plural?) is called. plural, because `call [rbp]` may have a known finite set of
     // targets, and a perfectly fine analysis would consider the union of all reads and writes
-    fn iter_locs(self, loc: A, _: &'disambiguator mut D, functions: &'fns F) -> Self::Iter;
+    fn iter_locs(self, loc: A::Address, _: &'disambiguator D, functions: &'fns F) -> Self::Iter;
 }
 
 /*

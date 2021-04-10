@@ -102,6 +102,7 @@ impl<A: Arch + ValueLocations + SSAValues> MemoryRegion<A> where A::Data: Eq + f
     }
 }
 
+#[derive(Debug)]
 pub struct IndirectLayout<A: Arch + ValueLocations + SSAValues> where A::Data: Eq + fmt::Display {
     /// a mapping to distinct regions in this indirect area from the base values inferred for their
     /// accesses.
@@ -120,7 +121,7 @@ pub struct MemoryLayout<'ssa, A: Arch + ValueLocations + SSAValues> where A::Dat
     pub ssa: &'ssa SSA<A>,
     /// map SSA values at some `A::Location` to their referent layout.
     /// key is likely versions of an architecture's Location::Memory.
-    pub segments: HashMap<ValueOrImmediate<A>, Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>>>,
+    pub segments: RefCell<HashMap<ValueOrImmediate<A>, Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>>>>,
 }
 
 /*
@@ -132,7 +133,7 @@ pub enum LocationAccess<A: Arch> {
 */
 
 /// in most cases, `Base` and `Addend` should both be `Self`.
-trait MemoryAccessBaseInference {
+pub trait MemoryAccessBaseInference {
     /// type of the base address for some. as a common example, the value of a machine's
     /// stack pointer will often be of this type.
     type Base;
@@ -153,7 +154,7 @@ impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> w
     type Addend = Self;
 
     fn infer_base_and_addend(&self) -> Option<(Self::Base, Self::Addend)> {
-        println!("impl infer_base_and_addend: {:?}", self);
+//        println!("impl infer_base_and_addend: {:?}", self);
         let res = match &self.value {
             Expression::Unknown => None,
             Expression::Value(ValueOrImmediate::Value(v)) => {
@@ -226,6 +227,25 @@ impl From<AddressDiff<u64>> for LocationAccess<amd64> {
 use analyses::{IndirectQuery, ValueIndex};
 
 impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediate<A>>>> for IndirectLayout<A> where A::Data: Eq + fmt::Display {
+    fn try_get_load(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Option<Rc<Item<ValueOrImmediate<A>>>> {
+        if let Some((base, addend)) = index.base.infer_base_and_addend() {
+            // base must be a Value otherwise it's some complex composite, OR unknown, and not
+            // eligible for a base of a memory region
+            if let Expression::Value(v) = &base.as_ref().value {
+                let mut regions = self.regions_uses.as_ref().expect("indirect load has a corresponding ssa use").borrow();
+                let v: ValueOrImmediate<A> = v.clone();
+                return regions.get(&v)
+                    .and_then(|region| region.accesses.get(&addend))
+                    .and_then(|offset| offset.get(&(index.size as u64)))
+                    .and_then(|pat| if pat.is_read() {
+                        Some(Item::untyped(Expression::Unknown))
+                    } else {
+                        None
+                    });
+            }
+        }
+        None
+    }
     fn load(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Rc<Item<ValueOrImmediate<A>>> {
         if let Some((base, addend)) = index.base.infer_base_and_addend() {
             // base must be a Value otherwise it's some complex composite, OR unknown, and not
@@ -303,8 +323,8 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
 }
 
 impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::Data: Eq + fmt::Display {
-    fn get_segment(&mut self, indirection_value: DFGRef<A>) -> Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>> {
-        Rc::clone(self.segments.entry(ValueOrImmediate::Value(indirection_value))
+    fn get_segment(&self, indirection_value: DFGRef<A>) -> Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>> {
+        Rc::clone(self.segments.borrow_mut().entry(ValueOrImmediate::Value(indirection_value))
             .or_insert_with(|| Rc::new(RefCell::new(HashMap::new()))))
     }
 }
@@ -316,7 +336,7 @@ use analyses::ValueOrImmediate;
 impl<'ssa> DFG<Rc<Item<ValueOrImmediate<amd64>>>, amd64, <amd64 as Arch>::Address> for MemoryLayout<'ssa, amd64> {
     type Indirect = IndirectLayout<amd64>;
 
-    fn indirect_loc(&mut self, when: <amd64 as Arch>::Address, loc: <amd64 as ValueLocations>::Location) -> IndirectLayout<amd64> {
+    fn indirect_loc(&self, when: <amd64 as Arch>::Address, loc: <amd64 as ValueLocations>::Location) -> IndirectLayout<amd64> {
         let ssa_def = self.ssa.try_get_def(when, loc.clone());
         let ssa_use = self.ssa.try_get_use(when, loc.clone());
         if ssa_def.is_none() {

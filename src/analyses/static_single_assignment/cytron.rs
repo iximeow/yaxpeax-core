@@ -282,13 +282,77 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
     }
 }
 
-pub fn generate_ssa<
+/*
+ * need a variant of `generate_ssa` for "generate refinement of old dfg, then translate expressions
+ * referencing old dfg values"
+ *
+ * this is because expressions describing memory regions can (and should!) reference ssa values as
+ * part of their expressions. so once a new dfg is generated from refinements drived from the old
+ * dfg, those refinements need to instead be phrased in terms of values in the new dfg that will be
+ * returned.
+ *
+ * in general, the values and data in a dfg should be self-referential (otherwise dfg updates and
+ * refinements could cause broken and spooky action!)
+ */
+pub fn generate_refined_ssa<
     'functions,
+    'disambiguator,
+    'dfg,
     A: SSAValues,
     M: MemoryRange<A::Address>,
     U: ModifierCollection<A>,
     LocSpec,
-    Disam: Disambiguator<A::Location, LocSpec>,
+    Disam: Disambiguator<A, LocSpec>,
+    F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
+>(
+    data: &M,
+    entry: A::Address,
+    basic_blocks: &ControlFlowGraph<A::Address>,
+    cfg: &GraphMap<A::Address, (), petgraph::Directed>,
+    old_dfg: &'dfg SSA<A>,
+    value_modifiers: &U,
+    disambiguator: &'disambiguator Disam,
+    functions: &'functions F,
+) -> SSA<A> where
+    A::Location: 'static + AbiDefaults,
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+{
+    let mut new_dfg = generate_ssa(data, entry, basic_blocks, cfg, value_modifiers, disambiguator, functions);
+
+    // iterate `new_dfg` values and replace any `DFGRef` in `old_dfg` with corresponding `DFGRef` in `new_dfg`.
+    println!("{:?}", &new_dfg.instruction_values);
+    for (addr, v) in &new_dfg.instruction_values {
+        println!("{:?}", addr);
+        for ((loc, dir), dfg_ref) in v {
+            let old_value = old_dfg.get_value(*addr, loc.to_owned(), *dir).expect("old value exists");
+            if dfg_ref.borrow().location != old_value.borrow().location || dfg_ref.borrow().version != old_value.borrow().version {
+                println!("{:?} -> {:?}", old_value, dfg_ref);
+            } else {
+                println!("{:?} == {:?}", old_value, dfg_ref);
+            }
+        }
+        // every value has a location, 
+    }
+
+    if true {
+        /*
+        for v in new_dfg.values() {
+            assert!(A::Data::test_integrity(v, &new_dfg))
+        }
+        */
+    }
+
+    new_dfg
+}
+
+pub fn generate_ssa<
+    'functions,
+    'disambiguator,
+    A: SSAValues,
+    M: MemoryRange<A::Address>,
+    U: ModifierCollection<A>,
+    LocSpec,
+    Disam: Disambiguator<A, LocSpec>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
 >(
     data: &M,
@@ -296,11 +360,11 @@ pub fn generate_ssa<
     basic_blocks: &ControlFlowGraph<A::Address>,
     cfg: &GraphMap<A::Address, (), petgraph::Directed>,
     value_modifiers: &U,
-    disambiguator: &mut Disam,
+    disambiguator: &'disambiguator Disam,
     functions: &'functions F,
 ) -> SSA<A> where
     A::Location: 'static + AbiDefaults,
-    for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
 {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -355,6 +419,7 @@ pub fn generate_ssa<
         defs: HashMap::new(),
         phi: HashMap::new(),
         indirect_values: HashMap::new(),
+        external_defs: HashMap::new(),
     };
 
     let mut iter_count = 0;
@@ -414,11 +479,12 @@ pub fn generate_ssa<
     #[allow(non_snake_case)]
     fn search<
         'functions,
+        'disambiguator,
         A: Arch + SSAValues,
         M: MemoryRange<A::Address>,
         U: ModifierCollection<A>,
         LocSpec,
-        Disam: Disambiguator<A::Location, LocSpec>,
+        Disam: Disambiguator<A, LocSpec>,
         F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     >(
         data: &M,
@@ -429,11 +495,11 @@ pub fn generate_ssa<
         idom: &petgraph::algo::dominators::Dominators<A::Address>,
         value_allocator: &mut ValueAllocator<A>,
         value_modifiers: &U,
-        disambiguator: &mut Disam,
+        disambiguator: &'disambiguator Disam,
         functions: &'functions F,
     ) where
         A::Location: 'static + AbiDefaults,
-        for<'a, 'disam, 'fns> &'a <A as Arch>::Instruction: LocIterator<'disam, 'fns, A::Address, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+        for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
     {
         let mut assignments: Vec<A::Location> = Vec::new();
         // for each statement in block {

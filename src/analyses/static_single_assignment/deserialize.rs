@@ -91,6 +91,7 @@ where HashedValue<Rc<RefCell<Value<A>>>>: Memoable {
             defs: HashMap::new(),
             phi: dememoized_phis,
             indirect_values: HashMap::new(), // TODO: serialize and deserialize
+            external_defs: HashMap::new(), // TODO: serialize and deserialize
         })
     }
 }

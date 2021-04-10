@@ -961,20 +961,47 @@ pub(crate) fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>,
 
 #[derive(Default)]
 pub struct NoDisambiguation { }
-impl Disambiguator<Location, (u8, u8)> for NoDisambiguation {
-    fn disambiguate(&mut self, _spec: (u8, u8)) -> Option<Location> {
+impl<T> Disambiguator<x86_64, T> for NoDisambiguation {
+    fn disambiguate(&self, instr: &<x86_64 as crate::Arch>::Instruction, _loc: (Option<Location>, Direction), _spec: T) -> Option<Location> {
         None
     }
 }
 
-pub struct ContextualDisambiguation<'a> {
-    dfg: &'a crate::analyses::static_single_assignment::SSA<x86_64>,
+pub struct ContextualDisambiguation<'dfg, 'mem> {
+    pub dfg: &'dfg crate::analyses::static_single_assignment::SSA<x86_64>,
+    pub memory_layout: Option<&'mem crate::analyses::memory_layout::MemoryLayout<'dfg, x86_64>>,
 }
 
-impl <'a> Disambiguator<Location, (u8, u8)> for ContextualDisambiguation<'a> {
-    fn disambiguate(&mut self, _spec: (u8, u8)) -> Option<Location> {
+impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u8)> for ContextualDisambiguation<'dfg, 'mem> {
+    fn disambiguate(&self, instr: &<x86_64 as crate::Arch>::Instruction, loc: (Option<Location>, Direction), spec: (<x86_64 as crate::Arch>::Address, u8, u8)) -> Option<Location> {
         // figure out if the location is sp-relative or rip-relative
         // .. or, has a relocation?
+//        println!("so you'd like me to disambiguate {}, {:?}", instr, spec);
+        use analyses::DFG;
+        use analyses::IndirectQuery;
+        use arch::x86_64::semantic::DFGAccessExt;
+        if let Some(memory) = self.memory_layout {
+            if let Some(Location::Memory(ANY)) = loc.0 {
+                let q = memory.query_at(spec.0);
+                let access = q.effective_address(&instr.operand(spec.1 - 1));
+                use analyses::memory_layout::MemoryAccessBaseInference;
+                use analyses::Expression;
+                if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&access) {
+                    if base.value != Expression::Unknown && addend.value != Expression::Unknown {
+                        use analyses::IntoValueIndex;
+                        println!("base {}, addend {}, instr {}", base, addend, instr);
+                        let indirect = self.memory_layout.expect("mem layout").indirect_loc(spec.0, loc.0.unwrap());
+                        println!("  {:?}", indirect);
+                        if indirect.try_get_load(access.qword()).is_some() {
+                            // TODO: 8 is the access width. should be inferred from the operand.
+                            // ... one day :)
+                            println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
+                            return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                        }
+                    }
+                }
+            }
+        }
         None
     }
 }
