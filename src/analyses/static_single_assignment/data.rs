@@ -319,6 +319,10 @@ pub trait SSAValues where Self: Arch + ValueLocations {
     type Data: Debug + Hash + Clone + Typed;
 }
 
+pub trait DFGRebase<A: SSAValues + Arch> {
+    fn rebase_references(&self, old_dfg: &SSA<A>, new_dfg: &SSA<A>) -> Self;
+}
+
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
     /// collect all locations that have uses of undefined data
     pub fn get_undefineds(&self) -> Vec<A::Location> {

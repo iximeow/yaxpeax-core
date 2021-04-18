@@ -320,6 +320,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                 }
             }
             Opcode::MOV => {
+                println!("DOING MOV for {}", instr);
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {

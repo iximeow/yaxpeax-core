@@ -100,6 +100,58 @@ impl Location {
     pub fn ebx() -> Self { Location::Register(RegSpec::ebx()) }
 }
 
+use analyses::static_single_assignment::{DFGRebase, SSA};
+use analyses::static_single_assignment::DefSource;
+impl DFGRebase<yaxpeax_x86::x86_64> for Data {
+    fn rebase_references(&self, old_dfg: &SSA<yaxpeax_x86::x86_64>, new_dfg: &SSA<yaxpeax_x86::x86_64>) -> Self {
+        match self {
+            Data::Expression(expr) => {
+                Data::Expression(expr.rebase_references(old_dfg, new_dfg))
+            },
+            Data::Alias(dfg_ref) => {
+                if !new_dfg.defs.contains_key(&HashedValue { value: Rc::clone(dfg_ref) }) {
+                    let (old_ref_addr, old_ref_source) = old_dfg.get_def_site(Rc::clone(dfg_ref));
+                    // "External" might mean f.ex `rsp_input`.
+                    match old_ref_source {
+                        DefSource::External => {
+                            Data::Alias(Rc::clone(new_dfg.external_defs.get(&dfg_ref.borrow().location).expect("external def has matching new def")))
+                        }
+                        DefSource::Instruction => {
+//                            self.to_owned()
+                            panic!("instruction def source");
+                        }
+                        other => {
+                            panic!("unhandled def source: {:?}", other);
+                        }
+                    }
+                } else {
+                    Data::Alias(Rc::clone(dfg_ref))
+                }
+            },
+            Data::ValueSet(value_ranges) => Data::ValueSet(value_ranges.to_owned()),
+            other => other.to_owned(),
+        }
+    }
+}
+
+impl DFGRebase<yaxpeax_x86::x86_64> for Location {
+    fn rebase_references(&self, old_dfg: &SSA<yaxpeax_x86::x86_64>, new_dfg: &SSA<yaxpeax_x86::x86_64>) -> Self {
+        match self {
+            Location::MemoryLocation(region, size, Some((base, addend))) => {
+                let new_base = base.rebase_references(old_dfg, new_dfg);
+                let new_addend = addend.rebase_references(old_dfg, new_dfg);
+                // it doesn't actually matter if `new_base` and `new_addend` are the same as the
+                // pre-rebase forms. if they are, either `new_*` are correct here, or they're
+                // different and we want `new_` ones. we would check here if `rebase_references`
+                // returned an indicator of "this is now a different location", but that's left to
+                // callers for now.
+                Location::MemoryLocation(*region, *size, Some((new_base, new_addend)))
+            }
+            other => other.to_owned()
+        }
+    }
+}
+
 #[derive(Default)]
 struct LocationVisitor {}
 
@@ -991,12 +1043,24 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                         use analyses::IntoValueIndex;
                         println!("base {}, addend {}, instr {}", base, addend, instr);
                         let indirect = self.memory_layout.expect("mem layout").indirect_loc(spec.0, loc.0.unwrap());
-                        println!("  {:?}", indirect);
-                        if indirect.try_get_load(access.qword()).is_some() {
-                            // TODO: 8 is the access width. should be inferred from the operand.
-                            // ... one day :)
-                            println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
-                            return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                        //println!("  {:?}", indirect);
+                        match loc.1 {
+                            Direction::Read => {
+                                if indirect.try_get_load(access.qword()).is_some() {
+                                    // TODO: 8 is the access width. should be inferred from the operand.
+                                    // ... one day :)
+                                    println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
+                                    return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                                }
+                            }
+                            Direction::Write => {
+                                if indirect.try_get_store(access.qword()).is_some() {
+                                    // TODO: 8 is the access width. should be inferred from the operand.
+                                    // ... one day :)
+                                    println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
+                                    return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                                }
+                            }
                         }
                     }
                 }

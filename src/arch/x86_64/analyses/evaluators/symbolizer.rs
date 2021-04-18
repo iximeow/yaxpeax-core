@@ -32,7 +32,7 @@ impl Domain for SymbolicDomain {
 
 use analyses::Expression;
 use std::rc::Rc;
-fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Rc<Item<ValueOrImmediate<x86_64>>>> {
+pub(crate) fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Rc<Item<ValueOrImmediate<x86_64>>>> {
     match mem_op {
         Operand::DisplacementU32(disp) => {
             if instr.prefixes.gs() {
@@ -95,7 +95,10 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
             }
         },
         Operand::RegDisp(reg, disp) => {
-            match dfg.get_use(addr, Location::Register(*reg)).get_data().as_ref() {
+            let reg = dfg.get_use(addr, Location::Register(*reg));
+            Some(Item::value(ValueOrImmediate::Value(reg.value)).add(&Item::immediate(*disp as i64 as u64)))
+            /*
+            match .get_data().as_ref() {
                 Some(Data::Concrete(_v, None)) => {
 //                    v.wrapping_add(*disp as i64 as u64).unwrap();
                     // TODO: check const addr derefs for the same structures checked in disp
@@ -111,6 +114,7 @@ fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addre
                 Some(Data::Expression(sym)) => Some(sym.add(&Item::immediate(*disp as i64 as u64))),
                 _ => None
             }
+            */
         },
         Operand::RegScale(_reg, _scale) => {
             None
@@ -145,13 +149,57 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
-                            // might be a pointer deref or somesuch.
+                            println!("DOING MOV for {}", instr);
+                            // `referent` is also called `effective_address` in other circumstances
+                            // - either we can find an access expression known to `dfg` (in which
+                            // case we might be able to just alias an existing value), otherwise
+                            // it's a load of some opaque value.
                             if let Some(src) = referent(instr, &op, addr, dfg, contexts) {
+                                use analyses::memory_layout::MemoryAccessBaseInference;
+                                use crate::arch::x86_64::analyses::data_flow::ANY;
                                 let def = dfg.get_def(addr, Location::Register(l));
-                                if def.get_data().is_none() {
-                                    def.update(
-                                        Data::Expression(Item::load(&src, l.width()))
-                                    )
+
+                                if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&src) {
+                                    println!("inferred base and addend {:?}, {:?}", base, addend);
+                                    println!("  def is {:?}={:p}", def.value, def.value.as_ptr());
+                                    if let Some(memory) = dfg.try_get_use(addr, Location::MemoryLocation(ANY, 8 /* l.width() */, Some((Data::Expression(base), Data::Expression(addend))))) {
+                                        println!("    AND aliasing to {:?}, was {:?}", memory, def.get_data());
+                                        def.update(Data::Alias(Rc::clone(&memory)));
+                                        println!("    DONE aliasing to {:?}, is {:?}", memory, dfg.get_def(addr, Location::Register(l)).value);
+                                        return;
+                                    } else {
+                                        if def.get_data().is_none() {
+                                            def.update(
+                                                Data::Expression(Item::load(&src, l.width()))
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    if def.get_data().is_none() {
+                                        def.update(
+                                            Data::Expression(Item::load(&src, l.width()))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    (op, Operand::Register(r)) => {
+                        if op.is_memory() {
+                            // `referent` is also called `effective_address` in other circumstances
+                            // - either we can find an access expression known to `dfg` (in which
+                            // case we might be able to just alias an existing value), otherwise
+                            // it's a load of some opaque value.
+                            if let Some(src) = referent(instr, &op, addr, dfg, contexts) {
+                                use analyses::memory_layout::MemoryAccessBaseInference;
+                                use crate::arch::x86_64::analyses::data_flow::ANY;
+                                let usage = dfg.get_use(addr, Location::Register(r));
+
+                                if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&src) {
+                                    println!("inferred base and addend {:?}, {:?}", base, addend);
+                                    if let Some(def) = dfg.try_get_def(addr, Location::MemoryLocation(ANY, 8 /* l.width() */, Some((Data::Expression(base), Data::Expression(addend))))) {
+                                        def.borrow_mut().data.replace(Data::Alias(Rc::clone(&usage.value)));
+                                    }
                                 }
                             }
                         }

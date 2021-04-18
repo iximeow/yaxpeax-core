@@ -221,14 +221,21 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
                         value: &Some(Rc::clone(alias)),
                         colors: self.colors
                     })?;
+                } else if let Location::MemoryLocation(region, size, Some((base, addend))) = &alias.borrow().location {
+                    if let Some(data) = &alias.borrow().data {
+                        write!(fmt, "{}[{} + {}, {}] (= {})", region, base, addend, size, DataDisplay { data: data, colors: self.colors })?;
+                    } else {
+                        write!(fmt, "{}[{} + {}, {}] (= unknown)", region, base, addend, size)?;
+                    }
                 } else {
-                    unreachable!("Register alias must be another register");
+                    unreachable!("impossible register alias, either not a register or not bounded memory");
                 }
             },
             Data::Str(string) => { write!(fmt, "\"{}\"", string)?; }
             Data::Expression(expr) => {
                 let real_ty = expr.ty.as_ref().unwrap_or(&TypeSpec::Bottom);
-                panic!("display expr?");
+                write!(fmt, "{}", expr)?;
+//                panic!("display expr?");
                 if real_ty != &TypeSpec::Unknown {
                     // write!(fmt, "{}", expr.show(&type_atlas))?;
                 } else {

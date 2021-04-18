@@ -80,6 +80,8 @@ impl<
     }
 }
 
+use data::ValueLocations;
+use analyses::static_single_assignment::DFGRebase;
 impl<
     'memory,
     'cfg,
@@ -129,7 +131,7 @@ impl<
         generate_ssa(memory, cfg.entrypoint, &cfg, &cfg.graph, modifiers, disambiguator, functions)
     }
 
-    pub fn ssa_cytron_refining(self, prior_dfg: &SSA<A>) -> SSA<A> {
+    pub fn ssa_cytron_refining(self, prior_dfg: &SSA<A>) -> SSA<A> where <A as ValueLocations>::Location: DFGRebase<A> {
         let Self {
             memory,
             cfg,

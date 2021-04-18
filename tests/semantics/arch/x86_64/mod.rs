@@ -18,7 +18,7 @@ use yaxpeax_core::analyses::memory_layout::MemoryLayout;
 use yaxpeax_core::arch::x86_64::analyses::data_flow::{Data, Location};
 use yaxpeax_core::analyses::evaluators::Evaluator;
 
-fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layout: Option<(&'dfg SSA<x86_64>, &'layout MemoryLayout<'dfg, x86_64>)>) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>) {
+fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layout: Option<(&'dfg SSA<x86_64>, &'layout MemoryLayout<'dfg, x86_64>)>) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>, x86_64Data) {
     // TODO: is this necessary? can this be removed from `AnalysisBuilder::new`?
     let mut x86_64_data = x86_64Data::default();
 
@@ -51,7 +51,7 @@ fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layo
 
     Evaluator::new(&data.to_vec(), &cfg, &dfg).full_function_iterate();
 
-    (cfg, dfg)
+    (cfg, dfg, x86_64_data)
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn test_arithmetic() {
         0xc3,
     ];
 
-    let (cfg, dfg) = do_analyses(instructions, None);
+    let (cfg, dfg, _) = do_analyses(instructions, None);
 
     // expect that rcx == 8
     assert_eq!(dfg.get_def(10, Location::rcx()).get_data().as_ref(), Some(&Data::Concrete(8, None)));
@@ -82,9 +82,11 @@ fn test_memory() {
         0x48, 0x89, 0x4c, 0x24, 0x60,                               // mov [rsp + 0x60], rcx
         0x49, 0x89, 0xd0,                                           // mov r8, rdx
         0x4c, 0x89, 0x44, 0x24, 0x14,                               // mov [rsp + 0x14], r8
+        0x4c, 0x8b, 0x4c, 0x24, 0x14,                               // mov r9, [rsp + 0x14]
+        0x4c, 0x89, 0x4c, 0x24, 0x24,                               // mov [rsp + 0x24], r9
     ];
 
-    let (mut cfg, mut dfg) = do_analyses(instructions, None);
+    let (mut cfg, mut dfg, _) = do_analyses(instructions, None);
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,
@@ -106,13 +108,84 @@ fn test_memory() {
             semantic::evaluate(address, &instr, &mut mem_analysis);
         }
     }
-    let (mut cfg, mut dfg) = do_analyses(instructions, Some((&dfg, &mem_analysis)));
+    let (mut cfg, mut dfg, contexts) = do_analyses(instructions, Some((&dfg, &mem_analysis)));
 
     for k in dfg.defs.keys() {
         println!("{:?}", k.value.borrow().location);
     }
 
+    let mut mem_analysis = MemoryLayout {
+        ssa: &dfg,
+        segments: RefCell::new(HashMap::new()),
+    };
+
+    let instvec = instructions.to_vec();
+
+    /*
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            let addr: u64 = address;
+            semantic::evaluate(address, &instr, &mut mem_analysis);
+        }
+    }
+
     print_memory_layouts(&instvec, &cfg, &dfg, &mem_analysis);
+*/
+    println!("=-=-=-=-=-=-=-=-=");
+
+    use yaxpeax_core::arch::display::function::FunctionInstructionDisplay;
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+//            println!("{:?}", dfg.instruction_values.get(&address));
+            let mut s = String::new();
+            x86_64::display_instruction_in_function(
+                &mut s,
+                &instr,
+                address,
+                &contexts,
+                Some(&dfg),
+                None,
+                &yaxpeax_core::display::location::NoHighlights
+            ).unwrap();
+            println!("{:#x}: {}", address, s);
+            continue;
+            print!("{:#x}: {} ", address, instr.opcode());
+            for op in 0..instr.operand_count() {
+                match instr.operand(op) {
+                    yaxpeax_x86::long_mode::Operand::RegDisp(reg, disp) => {
+                        use yaxpeax_core::analyses::memory_layout::MemoryAccessBaseInference;
+                        use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
+                        let reg = dfg.get_use(address, Location::Register(reg));
+                        let reg = reg.value;
+                        let expr = Item::value(ValueOrImmediate::Value(Rc::clone(&reg))).add(&Item::immediate(disp as i64 as u64));
+                        if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&expr) {
+                            let loc = Location::MemoryLocation(ANY, 8 /* TODO access size */, Some((Data::Expression(base), Data::Expression(addend))));
+//                            println!("looking up def or use for location {:?}", loc);
+                            // not sure if this is a read or write of memory though, try both.
+                            if let Some(write) = dfg.try_get_def(address, loc.clone()) {
+                                print!("[{} + {}] (= {}), ", reg.borrow(), disp, write.borrow());
+                            } else if let Some(read) = dfg.try_get_use(address, loc.clone()) {
+                                print!("[{} + {}] (= {}), ", reg.borrow(), disp, read.borrow());
+                            } else {
+                                print!("{}, ", instr.operand(op));
+                            }
+                        }
+                    }
+                    other => {
+                        print!("{}, ", other);
+                    }
+                };
+            }
+            println!("");
+        }
+    }
 }
 
 fn print_memory_layouts(instvec: &Vec<u8>, cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>, dfg: &SSA<x86_64>, mem_analysis: &MemoryLayout<x86_64>) {
@@ -163,11 +236,12 @@ use std::rc::Rc;
                 // try to find the stack - the stack is named `location: rsp, version: None`.
                 for (value, region) in mem_state.borrow().iter() {
                     let value = if let ValueOrImmediate::Value(value) = value {
-                        value.borrow()
+                        value
                     } else {
                         println!("memory region is constant offset: {:?}", value);
                         continue;
                     };
+                    let value = value.borrow();
                     if value.version == None && value.location == Location::Register(yaxpeax_x86::long_mode::RegSpec::rsp()) {
                         // this is the stack, show it off!
                         let mut keys: Vec<Rc<Item<ValueOrImmediate<yaxpeax_x86::x86_64>>>> = region.accesses.keys().cloned().collect();
@@ -279,7 +353,7 @@ fn test_stack_inference()  {
         0xe8, 0x22, 0x80, 0xff, 0xff,                                  // call sym.imp.__stack_chk_fail @noreturn
     ];
 
-    let (mut cfg, mut dfg) = do_analyses(instructions, None);
+    let (mut cfg, mut dfg, _) = do_analyses(instructions, None);
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,

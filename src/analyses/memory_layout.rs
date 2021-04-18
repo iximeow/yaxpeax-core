@@ -246,6 +246,25 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
         }
         None
     }
+    fn try_get_store(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Option<()> {
+        if let Some((base, addend)) = index.base.infer_base_and_addend() {
+            // base must be a Value otherwise it's some complex composite, OR unknown, and not
+            // eligible for a base of a memory region
+            if let Expression::Value(v) = &base.as_ref().value {
+                let mut regions = self.regions_defs.as_ref().expect("indirect store has a corresponding ssa def").borrow();
+                let v: ValueOrImmediate<A> = v.clone();
+                return regions.get(&v)
+                    .and_then(|region| region.accesses.get(&addend))
+                    .and_then(|offset| offset.get(&(index.size as u64)))
+                    .and_then(|pat| if pat.is_write() {
+                        Some(())
+                    } else {
+                        None
+                    });
+            }
+        }
+        None
+    }
     fn load(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Rc<Item<ValueOrImmediate<A>>> {
         if let Some((base, addend)) = index.base.infer_base_and_addend() {
             // base must be a Value otherwise it's some complex composite, OR unknown, and not

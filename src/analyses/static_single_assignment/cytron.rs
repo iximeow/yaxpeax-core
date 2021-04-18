@@ -1,5 +1,4 @@
 use yaxpeax_arch::Arch;
-
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::cmp::Eq;
@@ -17,7 +16,9 @@ use memory::MemoryRange;
 
 use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, SSA, SSAValues, PhiLocations};
 use analyses::static_single_assignment::data::PhiOp;
+use analyses::static_single_assignment::data::DFGRebase;
 use data::{AliasInfo, Direction, Disambiguator, LocIterator};
+use data::ValueLocations;
 use data::modifier::ModifierCollection;
 use data::modifier;
 
@@ -315,26 +316,58 @@ pub fn generate_refined_ssa<
     functions: &'functions F,
 ) -> SSA<A> where
     A::Location: 'static + AbiDefaults,
-    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>,
+    <A as ValueLocations>::Location: DFGRebase<A>,
 {
     let mut new_dfg = generate_ssa(data, entry, basic_blocks, cfg, value_modifiers, disambiguator, functions);
 
     // iterate `new_dfg` values and replace any `DFGRef` in `old_dfg` with corresponding `DFGRef` in `new_dfg`.
     println!("{:?}", &new_dfg.instruction_values);
+    let mut loc_updates = HashMap::new();
     for (addr, v) in &new_dfg.instruction_values {
         println!("{:?}", addr);
         for ((loc, dir), dfg_ref) in v {
-            let old_value = old_dfg.get_value(*addr, loc.to_owned(), *dir).expect("old value exists");
-            if dfg_ref.borrow().location != old_value.borrow().location || dfg_ref.borrow().version != old_value.borrow().version {
-                println!("{:?} -> {:?}", old_value, dfg_ref);
+            println!("location for {:?}, {:?}", loc, dir);
+            if let Some(old_value) = old_dfg.get_value(*addr, loc.to_owned(), *dir) {
+                if dfg_ref.borrow().location != old_value.borrow().location || dfg_ref.borrow().version != old_value.borrow().version {
+                    println!("{:?} -> {:?}", old_value, dfg_ref);
+                } else {
+                    println!("{:?} == {:?}", old_value, dfg_ref);
+                }
             } else {
-                println!("{:?} == {:?}", old_value, dfg_ref);
+                // okay this is some kinda location that didn't exist before. maybe this is a new
+                // memory access expression. iterate the fields and try to update those to
+                // values in this dfg...?
+                let new_loc = loc.rebase_references(old_dfg, &new_dfg);
+                if &new_loc != loc {
+                    loc_updates.insert(loc.clone(), new_loc);
+                }
             }
         }
         // every value has a location, 
     }
+    println!("{} locations to update", loc_updates.len());
+    for (k, v) in loc_updates.iter() {
+        println!("  - {:?} => {:?}", k, v);
+    }
+
+    for (addr, values) in new_dfg.instruction_values.iter_mut() {
+        let mut new_values = values.clone();
+        for ((loc, dir), value) in values.iter() {
+            if loc_updates.contains_key(loc) {
+                new_values.remove(&(loc.to_owned(), *dir));
+                new_values.insert((loc_updates[loc].to_owned(), *dir), Rc::clone(value));
+                value.borrow_mut().location = loc_updates[loc].to_owned();
+            }
+        }
+        *values = new_values;
+    }
 
     if true {
+        println!("instruction values {:?}", &new_dfg.instruction_values);
+        println!("modifier values {:?}", &new_dfg.modifier_values);
+        println!("defs {:?}", &new_dfg.defs);
+//        println!("phi {:?}", &new_dfg.phi);
         /*
         for v in new_dfg.values() {
             assert!(A::Data::test_integrity(v, &new_dfg))

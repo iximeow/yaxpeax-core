@@ -299,6 +299,15 @@ pub trait IndirectQuery<V> {
     /// a register can probably not be indexed. the value backing main memory probably can be
     /// indexed.
     fn try_get_load(&self, _address: ValueIndex<V>) -> Option<V>;
+
+    /// check if `address` is a store known to this query cursor. `Some(())` if it is, `None` if not.
+    ///
+    /// ## panics
+    ///
+    /// * if `self` does not represent a value that can be indexed. for example, the value backing
+    /// a register can probably not be indexed. the value backing main memory probably can be
+    /// indexed.
+    fn try_get_store(&self, _address: ValueIndex<V>) -> Option<()>;
 }
 
 pub struct OpaqueIndirection<V> {
@@ -322,6 +331,10 @@ impl<V: Value> IndirectQuery<V> for OpaqueIndirection<V> {
     fn store(&self, _: ValueIndex<V>, _: &V) { }
 
     fn try_get_load(&self, _: ValueIndex<V>) -> Option<V> {
+        None
+    }
+
+    fn try_get_store(&self, _: ValueIndex<V>) -> Option<()> {
         None
     }
 }
@@ -685,9 +698,9 @@ impl<A: SSAValues> fmt::Display for ValueOrImmediate<A> where A::Data: Eq + fmt:
             }
             ValueOrImmediate::Value(v) => {
                 if let Some(data) = v.borrow().data.as_ref() {
-                    write!(f, "{}", data)
+                    write!(f, "{} ({:?}_{})", data, v.borrow().location, v.borrow().version.unwrap_or(0xffff))
                 } else {
-                    write!(f, "<unknown value>")
+                    write!(f, "<unknown value> ({:?}_{})", v.borrow().location, v.borrow().version.unwrap_or(0xffff))
                 }
             }
         }
@@ -735,6 +748,103 @@ impl<A: SSAValues> Hash for ValueOrImmediate<A> where A::Data: Eq + fmt::Display
                 state.write_u8(2);
                 (crate::analyses::static_single_assignment::HashedValue { value: Rc::clone(value) }).hash(state);
             }
+        }
+    }
+}
+
+use analyses::static_single_assignment::{DFGRebase, DefSource, HashedValue, SSA};
+impl<A: SSAValues + Arch> DFGRebase<A> for Rc<Item<ValueOrImmediate<A>>> where A::Data: Hash + Eq + fmt::Display, A::Location: DFGRebase<A> {
+    fn rebase_references(&self, old_dfg: &SSA<A>, new_dfg: &SSA<A>) -> Self {
+        match &self.value {
+            Expression::Unknown => Item::unknown(),
+            Expression::Value(leaf) => {
+                match leaf {
+                    ValueOrImmediate::Immediate(v) => {
+                        Item::untyped(Expression::Value(ValueOrImmediate::Immediate(*v)))
+                    }
+                    ValueOrImmediate::Value(v) => {
+                        if !new_dfg.defs.contains_key(&HashedValue { value: Rc::clone(v) }) {
+                            let (old_def_addr, old_def_source) = old_dfg.get_def_site(Rc::clone(v));
+                            let new_use = match old_def_source {
+                                DefSource::Instruction => {
+                                    new_dfg.get_use(old_def_addr, v.borrow().location.rebase_references(old_dfg, new_dfg))
+                                        .value
+                                },
+                                DefSource::External => {
+                                    new_dfg.instruction_values.values()
+                                        .find_map(|values| {
+                                            values.iter().find_map(|((loc, dir), dfg_ref)| {
+                                                if dir == &crate::data::Direction::Read && loc == &v.borrow().location && v.borrow().version.is_none() {
+                                                    Some(Rc::clone(dfg_ref))
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                        })
+                                        .expect(&format!("corresponding external def exists for location {:?}", v.borrow().location))
+                                }
+                                other => {
+                                    panic!("aaaa {}", other);
+                                }
+                            };
+                            Item::untyped(Expression::Value(ValueOrImmediate::Value(new_use)))
+                        } else {
+                            Item::untyped(Expression::Value(ValueOrImmediate::Value(Rc::clone(v))))
+                        }
+                    }
+                }
+            }
+            Expression::Load { address, size } => {
+                Item::load(&address.rebase_references(old_dfg, new_dfg), *size)
+            },
+            Expression::Add { left, right } => {
+                Item::add(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Sub { left, right } => {
+                Item::sub(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Mul { left, right } => {
+                Item::mul(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Or { left, right } => {
+                Item::or(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::And { left, right } => {
+                Item::and(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Xor { left, right } => {
+                Item::xor(
+                    &left.rebase_references(old_dfg, new_dfg),
+                    &right.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Shl { value, amount } => {
+                Item::shl(
+                    &value.rebase_references(old_dfg, new_dfg),
+                    &amount.rebase_references(old_dfg, new_dfg),
+                )
+            },
+            Expression::Shr { value, amount } => {
+                Item::shr(
+                    &value.rebase_references(old_dfg, new_dfg),
+                    &amount.rebase_references(old_dfg, new_dfg),
+                )
+            },
         }
     }
 }
