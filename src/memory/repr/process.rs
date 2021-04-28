@@ -121,9 +121,9 @@ pub struct ELFExport {
 
 #[derive(Debug)]
 pub struct Segment {
-    start: usize,
-    data: Vec<u8>,
-    name: String
+    pub start: usize,
+    pub data: Vec<u8>,
+    pub name: String
 }
 
 impl Segment {
