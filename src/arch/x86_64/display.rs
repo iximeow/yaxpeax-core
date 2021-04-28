@@ -583,8 +583,20 @@ pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec
             Operand::Nothing => {
                 panic!("Logical error: requested locations present in a Nothing operand");
             }
-            _ => {
-                // this is an immediate, displacement, or Nothing. no locations.
+            Operand::ImmediateI8(_) |
+            Operand::ImmediateU8(_) |
+            Operand::ImmediateI16(_) |
+            Operand::ImmediateU16(_) |
+            Operand::ImmediateI32(_) |
+            Operand::ImmediateU32(_) |
+            Operand::ImmediateI64(_) |
+            Operand::ImmediateU64(_) |
+            Operand::DisplacementU32(_) |
+            Operand::DisplacementU64(_) => {
+                // this is an immediate, displacement. no locations.
+            }
+            op => {
+                panic!("Logical error: requested locations in an unknown operand type: {}", op);
             }
         }
     }
@@ -1264,6 +1276,9 @@ impl <
                 Operand::Nothing => {
                     Ok(())
                 },
+                op => {
+                    panic!("attempted to display unknown operand kind: {}", op);
+                }
             }?;
 
             Ok(())

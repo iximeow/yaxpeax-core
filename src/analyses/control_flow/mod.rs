@@ -84,7 +84,7 @@ pub enum Target<Addr: AddressDiffAmount + Debug> {
 }
 
 pub trait Determinant<T, Addr: AddressDiffAmount + Debug> {
-    fn control_flow(&self, Option<&T>) -> Effect<Addr>;
+    fn control_flow(&self, _: Option<&T>) -> Effect<Addr>;
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -1059,12 +1059,12 @@ impl VW_CFG_Builder{
                 if self.switch_targets.is_none(){
                     return vec![];
                 }
-                match instr.opcode{
+                match instr.opcode() {
                     Opcode::JMP => (),
                     Opcode::RETURN | Opcode::UD2 => (),
-                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode),
+                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode()),
                 }
-                if let Opcode::JMP = instr.opcode{
+                if let Opcode::JMP = instr.opcode() {
                     if !self.switch_targets.as_ref().unwrap().contains_key(&addr){
                         self.unresolved_jumps += 1;
                         return vec![];

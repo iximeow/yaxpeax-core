@@ -674,7 +674,7 @@ pub enum ControlFlowEffect<Addr> {
 }
 
 pub trait ControlFlowDeterminant {
-    fn control_flow<T, Addr>(&self, &T) -> ControlFlowEffect<Addr>;
+    fn control_flow<T, Addr>(&self, _: &T) -> ControlFlowEffect<Addr>;
 }
 
 trait MCU {
@@ -709,7 +709,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
                                 Err(_) => None
                             }
                         } else {
-                            println!("BUG: No data available for {}", self.current.show());
+                            //println!("BUG: No data available for {}", self.current.show());
                             None
                         }
                     } else {
@@ -729,7 +729,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
                         None => None
                     }
                 } else {
-                    println!("BUG: No data available for {}", self.current.show());
+                    //println!("BUG: No data available for {}", self.current.show());
                     None
                 }
             } else {

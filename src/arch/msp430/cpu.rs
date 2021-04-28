@@ -73,7 +73,7 @@ impl InstructionContext for msp430::cpu::CPU {
 }
 
 trait Contextual<T> {
-    fn contextualize(&self, &T) -> String;
+    fn contextualize(&self, _: &T) -> String;
 }
 
 impl <T> Contextual<T> for yaxpeax_msp430::Instruction
@@ -265,7 +265,7 @@ impl MCU for CPU {
             Ok(_instr) => {
                 panic!("MSP430 emulation not yet supported");
             },
-            Err(msg) => { panic!(msg); }
+            Err(msg) => { panic!("{}", msg); }
         };
     }
 

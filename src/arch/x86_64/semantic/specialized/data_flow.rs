@@ -80,6 +80,9 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::Nothing => {
                 vec![]
             }
+            op => {
+                panic!("unhandled write operand: {}", op);
+            }
         }
     }
     fn decompose_read(op: &Operand) -> Vec<(Option<Location>, Direction)> {
@@ -156,6 +159,9 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             },
             Operand::Nothing => {
                 vec![]
+            }
+            op => {
+                panic!("unhandled read operand: {}", op);
             }
         }
     }
@@ -248,6 +254,9 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             },
             Operand::Nothing => {
                 vec![]
+            }
+            op => {
+                panic!("unhandled readwrite operand: {}", op);
             }
         }
     }

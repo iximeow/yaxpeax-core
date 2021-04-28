@@ -24,6 +24,7 @@ use ContextWrite;
 
 pub mod analyses;
 pub mod cpu;
+#[cfg(target_os = "linux")]
 pub mod debug;
 pub mod display;
 pub mod semantic;
