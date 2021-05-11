@@ -1,0 +1,3 @@
+this branch includes tweaks by the UCSD team behind [VeriWasm](https://github.com/PLSysSec/veriwasm) and others. ideally, yaxpeax-core would simply provide the interfaces necessary, but they found that in particular CFG inspection and switch table data weren't sufficiently exposed.
+
+**the intent of this branch is for feature-parity to be built into mainline yaxpeax-core**, but this may not happen in a seamless manner. there are and will be more API differences between this branch and `no-gods-no-`. i would strongly disadvise depending on this branch or tweaks here unless you want breaking changes in the future! when the mainline crate has feature parity with this branch, i plan to delete `vw-tweaks`.
