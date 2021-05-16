@@ -321,6 +321,16 @@ impl Disambiguator<ARMv8, (u8, u8)> for NoDisambiguation {
     }
 }
 
+impl crate::data::LocationAliasDescriptions<ARMv8> for NoDisambiguation {
+    fn may_alias(&self, _left: &Location, _right: &Location) -> bool {
+        false
+    }
+
+    fn aliases_for(&self, loc: &Location) -> Vec<Location> {
+        loc.aliases_of()
+    }
+}
+
 use data::AliasInfo;
 impl AliasInfo for Location {
     fn aliases_of(&self) -> Vec<Self> {

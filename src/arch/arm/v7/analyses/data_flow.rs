@@ -232,6 +232,16 @@ impl Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> for NoDisambiguation {
     }
 }
 
+impl crate::data::LocationAliasDescriptions<yaxpeax_arm::armv7::ARMv7> for NoDisambiguation {
+    fn may_alias(&self, _left: &Location, _right: &Location) -> bool {
+        false
+    }
+
+    fn aliases_for(&self, loc: &Location) -> Vec<Location> {
+        loc.aliases_of()
+    }
+}
+
 pub struct LocationIter<'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> + ?Sized, F: FunctionQuery<<yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address> + ?Sized> {
     // TODO:
     _addr: <yaxpeax_arm::armv7::ARMv7 as yaxpeax_arch::Arch>::Address,
