@@ -284,13 +284,9 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             }
         }
         Opcode::TEST => {
-            if instr.operand(0) == instr.operand(1) {
-                dfg.write_bitwise_flags(ValueRes::from_zero());
-            } else {
-                let dest = dfg.read_operand(&instr.operand(0));
-                let src = dfg.read_operand(&instr.operand(1));
-                dfg.write_bitwise_flags(dest.and(&src));
-            }
+            let dest = dfg.read_operand(&instr.operand(0));
+            let src = dfg.read_operand(&instr.operand(1));
+            dfg.write_bitwise_flags(dest.and(&src));
         }
         Opcode::MOV => {
             let value = dfg.read_operand(&instr.operand(1));
