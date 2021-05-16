@@ -990,7 +990,14 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             ][i as usize].clone()
         }
         Opcode::NEG => {
-            (Some(Location::CF), Direction::Write)
+            [
+                (Some(Location::CF), Direction::Write),
+                (Some(Location::OF), Direction::Write),
+                (Some(Location::AF), Direction::Write),
+                (Some(Location::SF), Direction::Write),
+                (Some(Location::ZF), Direction::Write),
+                (Some(Location::PF), Direction::Write),
+            ][i as usize].clone()
         }
         Opcode::NOT => {
             panic!();
@@ -1347,7 +1354,7 @@ fn implicit_locs(op: Opcode) -> u8 {
             6
         }
         Opcode::NEG => {
-            1
+            6
         }
         Opcode::NOT => {
             0
