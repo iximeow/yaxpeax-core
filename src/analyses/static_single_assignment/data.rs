@@ -324,6 +324,32 @@ pub trait DFGRebase<A: SSAValues + Arch> {
 }
 
 impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
+    pub fn log_contents(&self) {
+        println!("instruction_values:");
+        // pub instruction_values: HashMap<A::Address, RWMap<A>>,
+        for (addr, rwmap) in self.instruction_values.iter() {
+            println!("  {:?} -> {{", addr);
+            for ((loc, dir), value) in rwmap.iter() {
+                println!("    {:?} {:?} value={:?}", dir, loc, value);
+            }
+            println!("  }}");
+        }
+        println!("modifier_values:");
+        // pub modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
+        for ((addr, precedence), rwmap) in self.modifier_values.iter() {
+            println!("  {:?}, {:?} -> {:?}", addr, precedence, rwmap);
+        }
+        // pub control_dependent_values: HashMap<A::Address, HashMap<A::Address, RWMap<A>>>,
+        // pub defs: HashMap<HashedValue<DFGRef<A>>, (A::Address, DefSource<A::Address>)>,
+        // pub phi: HashMap<A::Address, PhiLocations<A>>,
+        // pub indirect_values: HashMap<A::Address, HashMap<A::Location, HashMap<(A::Data, Direction), DFGRef<A>>>>,
+        println!("external_defs:");
+        // pub external_defs: HashMap<A::Location, DFGRef<A>>,
+        for (loc, value) in self.external_defs.iter() {
+            println!("  {:?} -> {:?}", loc, value);
+        }
+    }
+
     /// collect all locations that have uses of undefined data
     pub fn get_undefineds(&self) -> Vec<A::Location> {
         let mut undefineds = Vec::new();

@@ -18,7 +18,7 @@ use analyses::IndirectQuery;
 
 pub mod specialized;
 
-pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
+pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64>, V: std::fmt::Debug {
     // TODO: get a disambiguator somehow?
     fn effective_address(&self, operand: &Operand) -> V {
         match *operand {
@@ -111,7 +111,7 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64> {
     }
 }
 
-pub trait DFGAccessExtMut<V: Value> where Self: DFGLocationQueryMut<V, amd64> {
+pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQueryMut<V, amd64> {
     // TODO: get a disambiguator somehow
     #[inline(always)]
     fn write_operand(&mut self, operand: &Operand, value: V) {
@@ -243,10 +243,10 @@ pub trait DFGAccessExtMut<V: Value> where Self: DFGLocationQueryMut<V, amd64> {
     }
 }
 
-impl<V: Value, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
-impl<V: Value, D: DFGLocationQueryMut<V, amd64>> DFGAccessExtMut<V> for D { }
+impl<V: Value + std::fmt::Debug, D: DFGLocationQuery<V, amd64>> DFGAccessExt<V> for D { }
+impl<V: Value + std::fmt::Debug, D: DFGLocationQueryMut<V, amd64>> DFGAccessExtMut<V> for D { }
 
-pub fn evaluate<K: Copy, V: Value, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
+pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: K, instr: &<amd64 as Arch>::Instruction, dfg: &mut D) -> CompletionStatus {
     let dfg = &mut dfg.query_at_mut(when);
     match instr.opcode() {
         Opcode::Invalid => {

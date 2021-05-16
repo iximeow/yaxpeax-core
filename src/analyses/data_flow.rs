@@ -4,6 +4,7 @@ use arch::FunctionQuery;
 use arch::FunctionImpl;
 use data::Disambiguator;
 use data::LocIterator;
+use data::LocationAliasDescriptions;
 use data::modifier::ModifierCollection;
 use data::modifier::NoModifiers;
 use analyses::static_single_assignment::SSAValues;
@@ -92,7 +93,7 @@ impl<
     M: MemoryRange<A::Address>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     LocSpec,
-    D: Disambiguator<A, LocSpec>,
+    D: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,
     U: ModifierCollection<A>,
 > AnalysisBuilder<'memory, 'cfg, 'functions, 'disambiguator, 'modifiers, A, M, F, LocSpec, D, U> where
     A::Location: 'static + AbiDefaults,

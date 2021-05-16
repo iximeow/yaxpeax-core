@@ -472,6 +472,15 @@ impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Eq + fmt::Display {
     }
 }
 
+use analyses::memory_layout::Underlying;
+impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+    pub fn dealiased(&self) -> Rc<Self> {
+        let ty = self.ty.clone();
+        let value = self.value.dealiased();
+        Rc::new(Item { ty, value })
+    }
+}
+
 impl<Leaf> Item<Leaf> {
     pub fn untyped(value: Expression<Leaf>) -> Rc<Self> {
         Rc::new(Item {
@@ -495,24 +504,24 @@ impl<Leaf> Item<Leaf> {
         Self::untyped(Expression::value(leaf))
     }
 
-    pub fn loadb(addr: &Rc<Self>) -> Rc<Self> {
-        Self::load(addr, 1)
+    pub fn loadb(self: &Rc<Self>) -> Rc<Self> {
+        self.load(1)
     }
 
-    pub fn loadw(addr: &Rc<Self>) -> Rc<Self> {
-        Self::load(addr, 2)
+    pub fn loadw(self: &Rc<Self>) -> Rc<Self> {
+        self.load(2)
     }
 
-    pub fn loadd(addr: &Rc<Self>) -> Rc<Self> {
-        Self::load(addr, 4)
+    pub fn loadd(self: &Rc<Self>) -> Rc<Self> {
+        self.load(4)
     }
 
-    pub fn loadq(addr: &Rc<Self>) -> Rc<Self> {
-        Self::load(addr, 8)
+    pub fn loadq(self: &Rc<Self>) -> Rc<Self> {
+        self.load(8)
     }
 
-    pub fn load(addr: &Rc<Self>, size: u8) -> Rc<Self> {
-        Self::untyped(Expression::Load { address: Rc::clone(addr), size })
+    pub fn load(self: &Rc<Self>, size: u8) -> Rc<Self> {
+        Self::untyped(Expression::Load { address: Rc::clone(self), size })
     }
 
     pub fn add(self: &Rc<Self>, other: &Rc<Self>) -> Rc<Self> {
@@ -619,6 +628,47 @@ impl<T: SSAValues> Expression<ValueOrImmediate<T>> where T::Data: Eq + fmt::Disp
     }
 }
 
+impl<A: SSAValues> Expression<ValueOrImmediate<A>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+    pub fn dealiased(&self) -> Self {
+        match self {
+            Expression::Unknown => Expression::Unknown,
+            Expression::Value(ValueOrImmediate::Immediate(i)) => Expression::Value(ValueOrImmediate::Immediate(*i)),
+            Expression::Value(ValueOrImmediate::Value(v)) => {
+                if let Some(underlying) = v.borrow().data.as_ref().and_then(|x| x.underlying()) {
+                    Expression::Value(ValueOrImmediate::Value(underlying))
+                } else {
+                    Expression::Value(ValueOrImmediate::Value(Rc::clone(v)))
+                }
+            }
+            Expression::Load { address, size } => Expression::Load { address: address.dealiased(), size: *size },
+            Expression::Add { left, right } => Expression::Add {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::Sub { left, right } => Expression::Sub {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::Mul { left, right } => Expression::Mul {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::Or { left, right } => Expression::Or {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::And { left, right } => Expression::And {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::Xor { left, right } => Expression::Xor {
+                left: left.dealiased(), right: right.dealiased(),
+            },
+            Expression::Shl { value, amount } => Expression::Shl {
+                value: value.dealiased(), amount: amount.dealiased(),
+            },
+            Expression::Shr { value, amount } => Expression::Shr {
+                value: value.dealiased(), amount: amount.dealiased(),
+            },
+        }
+    }
+}
+
 impl<Leaf> Expression<Leaf> {
     pub fn unknown() -> Self {
         Self::Unknown
@@ -697,10 +747,14 @@ impl<A: SSAValues> fmt::Display for ValueOrImmediate<A> where A::Data: Eq + fmt:
                 write!(f, "{}", v)
             }
             ValueOrImmediate::Value(v) => {
+                let version_string = match v.borrow().version {
+                    Some(v) => { v.to_string() },
+                    None => "input".to_string()
+                };
                 if let Some(data) = v.borrow().data.as_ref() {
-                    write!(f, "{} ({:?}_{})", data, v.borrow().location, v.borrow().version.unwrap_or(0xffff))
+                    write!(f, "{} ({:?}_{})", data, v.borrow().location, version_string)
                 } else {
-                    write!(f, "<unknown value> ({:?}_{})", v.borrow().location, v.borrow().version.unwrap_or(0xffff))
+                    write!(f, "<unknown value> ({:?}_{})", v.borrow().location, version_string)
                 }
             }
         }

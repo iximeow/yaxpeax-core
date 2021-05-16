@@ -149,7 +149,17 @@ pub trait MemoryAccessBaseInference {
     fn infer_base_and_addend(&self) -> Option<(Self::Base, Self::Addend)>;
 }
 
-impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> where A::Data: Eq + fmt::Display {
+/// allow `Self` to have simple aliases for other values of the same type.
+/// for example, an x86_64 `Data` can be `Data::Alias(DFGRef<x86_64>)`. for all purposes other
+/// than display reasoning, these values should be operated on as if they were the underlying
+/// aliased location.
+pub trait Underlying {
+    type Target;
+
+    fn underlying(&self) -> Option<Self::Target>;
+}
+
+impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
     type Base = Self;
     type Addend = Self;
 
@@ -165,12 +175,12 @@ impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> w
                 if let Expression::Value(ValueOrImmediate::Immediate(i)) = right.value {
                     if let Some((inner_base, inner_addend)) = left.infer_base_and_addend() {
                         if let Expression::Value(ValueOrImmediate::Immediate(j)) = inner_addend.value {
-                            Some((Rc::clone(&inner_base), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(i.wrapping_add(j))))))
+                            Some((inner_base.dealiased(), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(i.wrapping_add(j))))))
                         } else {
-                            Some((Rc::clone(&left), Rc::clone(&right)))
+                            Some((left.dealiased(), right.dealiased()))
                         }
                     } else {
-                        Some((Rc::clone(&left), Rc::clone(&right)))
+                        Some((left.dealiased(), right.dealiased()))
                     }
                 } else {
                     None
@@ -180,12 +190,12 @@ impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> w
                 if let Expression::Value(ValueOrImmediate::Immediate(i)) = right.value {
                     if let Some((inner_base, inner_addend)) = left.infer_base_and_addend() {
                         if let Expression::Value(ValueOrImmediate::Immediate(j)) = inner_addend.value {
-                            Some((Rc::clone(&inner_base), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(i.wrapping_sub(j))))))
+                            Some((inner_base.dealiased(), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(i.wrapping_sub(j))))))
                         } else {
-                            Some((Rc::clone(&left), Rc::clone(&right)))
+                            Some((left.dealiased(), right.dealiased()))
                         }
                     } else {
-                        Some((Rc::clone(&left), Rc::clone(&right)))
+                        Some((left.dealiased(), right.dealiased()))
                     }
                 } else {
                     None
@@ -226,7 +236,7 @@ impl From<AddressDiff<u64>> for LocationAccess<amd64> {
 
 use analyses::{IndirectQuery, ValueIndex};
 
-impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediate<A>>>> for IndirectLayout<A> where A::Data: Eq + fmt::Display {
+impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediate<A>>>> for IndirectLayout<A> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
     fn try_get_load(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Option<Rc<Item<ValueOrImmediate<A>>>> {
         if let Some((base, addend)) = index.base.infer_base_and_addend() {
             // base must be a Value otherwise it's some complex composite, OR unknown, and not
@@ -341,9 +351,15 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
     }
 }
 
-impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::Data: Eq + fmt::Display {
+impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
     fn get_segment(&self, indirection_value: DFGRef<A>) -> Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>> {
-        Rc::clone(self.segments.borrow_mut().entry(ValueOrImmediate::Value(indirection_value))
+        let mut underlying = Rc::clone(&indirection_value);
+        if let Some(inner) = indirection_value.borrow().data.as_ref().and_then(|x| x.underlying()) {
+            underlying = inner;
+        }
+
+        let segment_base = ValueOrImmediate::Value(underlying);
+        Rc::clone(self.segments.borrow_mut().entry(segment_base)
             .or_insert_with(|| Rc::new(RefCell::new(HashMap::new()))))
     }
 }
@@ -390,7 +406,10 @@ impl<'ssa> DFG<Rc<Item<ValueOrImmediate<amd64>>>, amd64, <amd64 as Arch>::Addres
     fn write_loc(&mut self, when: <amd64 as Arch>::Address, loc: <amd64 as ValueLocations>::Location, value: Rc<Item<ValueOrImmediate<amd64>>>) {
         // TODO: HACK: ignore weird rip semantics for now
         if loc != crate::arch::x86_64::analyses::data_flow::Location::RIP {
-            self.ssa.get_def(when, loc).update(crate::arch::x86_64::analyses::data_flow::Data::Expression(value));
+            let dest = self.ssa.get_def(when, loc);
+            if dest.value.borrow().data.is_none() {
+                dest.update(crate::arch::x86_64::analyses::data_flow::Data::Expression(value));
+            }
         }
     }
 }

@@ -18,6 +18,7 @@ use analyses::static_single_assignment::{HashedValue, DefSource, DFGRef, Value, 
 use analyses::static_single_assignment::data::PhiOp;
 use analyses::static_single_assignment::data::DFGRebase;
 use data::{AliasInfo, Direction, Disambiguator, LocIterator};
+use data::LocationAliasDescriptions;
 use data::ValueLocations;
 use data::modifier::ModifierCollection;
 use data::modifier;
@@ -105,34 +106,44 @@ pub fn compute_dominance_frontiers_from_idom<A>(graph: &GraphMap<A, (), petgraph
     dominance_frontiers
 }
 
-struct UseDefTracker<A: crate::data::ValueLocations> {
+struct UseDefTracker<'lad, A: crate::data::ValueLocations, LAD: LocationAliasDescriptions<A>> {
+    loc_descs: Option<&'lad LAD>,
     pub all_locations: HashSet<A::Location>,
     pub assignments: HashMap<A::Location, HashSet<A::Address>>,
     pub aliases: HashMap<A::Location, HashSet<A::Location>>,
 }
 
-impl <A: crate::data::ValueLocations> UseDefTracker<A> {
-    pub fn new() -> Self {
+impl <'lad, A: crate::data::ValueLocations, LAD: LocationAliasDescriptions<A>> UseDefTracker<'lad, A, LAD> {
+    pub fn new(loc_descs: Option<&'lad LAD>) -> Self {
         UseDefTracker {
+            loc_descs,
             all_locations: HashSet::new(),
             assignments: HashMap::new(),
             aliases: HashMap::new(),
         }
     }
 
-    pub fn track_use(&mut self, loc: A::Location) {
+    fn track_use(&mut self, loc: A::Location) {
         self.all_locations.insert(loc.clone());
-        for alias in loc.aliases_of() {
-            self.track_alias(alias, loc.clone());
+        if let Some(loc_descs) = self.loc_descs {
+            // NOTE: `loc_descs.aliases_for(loc)` should be a superset of `loc.aliases_of()`
+            // TODO: verify this with asserts.
+            for alias in loc_descs.aliases_for(&loc) {
+                self.track_alias(alias, loc.clone());
+            }
+        } else {
+            for alias in loc.aliases_of() {
+                self.track_alias(alias, loc.clone());
+            }
         }
     }
 
-    pub fn track_def(&mut self, loc: A::Location, addr: A::Address) {
+    fn track_def(&mut self, loc: A::Location, addr: A::Address) {
         self.assignments.entry(loc.clone()).or_insert_with(|| HashSet::new()).insert(addr);
         self.track_use(loc);
     }
 
-    pub fn track_alias(&mut self, alias: A::Location, loc: A::Location) {
+    fn track_alias(&mut self, alias: A::Location, loc: A::Location) {
         self.all_locations.insert(alias.clone());
         self.aliases.entry(alias).or_insert_with(|| HashSet::new())
             .insert(loc);
@@ -170,7 +181,7 @@ struct ValueAllocator<A: Arch + SSAValues> {
 }
 
 impl<A: Arch + SSAValues> ValueAllocator<A> {
-    fn from_use_tracker(tracker: UseDefTracker<A>) -> Self {
+    fn from_use_tracker<'lad, LAD: LocationAliasDescriptions<A>>(tracker: UseDefTracker<'lad, A, LAD>) -> Self {
         let mut allocator = ValueAllocator {
             C: HashMap::new(),
             S: HashMap::new(),
@@ -228,6 +239,7 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
         let mut writelog: HashSet<A::Location> = HashSet::new();
         for (maybeloc, direction) in items {
             if let Some(loc) = maybeloc {
+                // TODO: use a `LocationAliasDescriptions` here in place of `loc.aliases_of()`
                 for loc in std::iter::once(loc.clone()).chain(loc.aliases_of().into_iter()) {
                     match direction {
                         Direction::Read => {
@@ -299,11 +311,12 @@ pub fn generate_refined_ssa<
     'functions,
     'disambiguator,
     'dfg,
+    'location_disambiguator,
     A: SSAValues,
     M: MemoryRange<A::Address>,
     U: ModifierCollection<A>,
     LocSpec,
-    Disam: Disambiguator<A, LocSpec>,
+    Disam: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
 >(
     data: &M,
@@ -385,7 +398,7 @@ pub fn generate_ssa<
     M: MemoryRange<A::Address>,
     U: ModifierCollection<A>,
     LocSpec,
-    Disam: Disambiguator<A, LocSpec>,
+    Disam: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
 >(
     data: &M,
@@ -397,7 +410,7 @@ pub fn generate_ssa<
     functions: &'functions F,
 ) -> SSA<A> where
     A::Location: 'static + AbiDefaults,
-    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>
+    for<'a> &'a <A as Arch>::Instruction: LocIterator<'disambiguator, 'functions, A, A::Location, Disam, F, Item=(Option<A::Location>, Direction), LocSpec=LocSpec>,
 {
     let idom = petgraph::algo::dominators::simple_fast(&cfg, entry);
 
@@ -405,7 +418,7 @@ pub fn generate_ssa<
 
     // extract out dominance frontiers .... one day...
 
-    let mut use_tracker = UseDefTracker::<A>::new();
+    let mut use_tracker = UseDefTracker::<A, _>::new(Some(disambiguator));
 
     let mut has_already: HashMap<A::Address, u32> = HashMap::new();
     let mut work: HashMap<A::Address, u32> = HashMap::new();

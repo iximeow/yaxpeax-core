@@ -30,7 +30,10 @@ use serde::{Serialize, Deserialize};
 use serde::de::{self, Deserializer, Visitor, Unexpected};
 use serde::ser::{Serializer};
 
+use tracing::error;
+
 use data::{Direction, Disambiguator, ValueLocations};
+use data::LocationAliasDescriptions;
 use arch::x86_64::display::DataDisplay;
 use yaxpeax_arch::ColorSettings;
 
@@ -651,6 +654,28 @@ pub enum Data {
     // Indeterminate,
 }
 
+impl crate::analyses::memory_layout::Underlying for Data {
+    type Target = DFGRef<x86_64>;
+
+    fn underlying(&self) -> Option<Self::Target> {
+        match self {
+            Data::Alias(alias) => {
+                let mut underlying = Rc::clone(alias);
+                loop {
+                    let next = if let Some(Data::Alias(inner)) = &underlying.borrow().data {
+                        Rc::clone(inner)
+                    } else {
+                        break;
+                    };
+                    underlying = next;
+                }
+                Some(underlying)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display(None))
@@ -667,13 +692,15 @@ impl Data {
 
     pub fn underlying(&self) -> Option<Data> {
         let mut curr = self.to_owned();
-        while let Data::Alias(alias) = curr {
-            match alias.borrow().data.clone() {
+        while let Data::Alias(alias) = &curr {
+            let alias = Rc::clone(alias);
+            let referent = alias.borrow().data.clone();
+            match referent {
                 Some(aliased) => {
                     curr = aliased;
                 }
                 None => {
-                    return None;
+                    break;
                 }
             }
         }
@@ -1019,9 +1046,129 @@ impl<T> Disambiguator<x86_64, T> for NoDisambiguation {
     }
 }
 
+impl LocationAliasDescriptions<x86_64> for NoDisambiguation {
+    fn may_alias(&self, left: &Location, right: &Location) -> bool {
+        false
+    }
+
+    fn aliases_for(&self, loc: &Location) -> Vec<Location> {
+        loc.aliases_of()
+    }
+}
+
 pub struct ContextualDisambiguation<'dfg, 'mem> {
     pub dfg: &'dfg crate::analyses::static_single_assignment::SSA<x86_64>,
     pub memory_layout: Option<&'mem crate::analyses::memory_layout::MemoryLayout<'dfg, x86_64>>,
+}
+
+impl <'dfg, 'mem> LocationAliasDescriptions<x86_64> for ContextualDisambiguation<'dfg, 'mem> {
+    fn may_alias(&self, left: &Location, right: &Location) -> bool {
+        match (left, right) {
+            (Location::MemoryLocation(_, l_size, Some((l_base, l_addend))), Location::MemoryLocation(_, r_size, Some((r_base, r_addend)))) => {
+                if let Some(memory_layout) = self.memory_layout {
+                    let segments = memory_layout.segments.borrow();
+
+                    use analyses::Expression;
+                    let l_segment = if let Data::Expression(base) = l_base {
+                        if let Expression::Value(v) = &base.value {
+                            segments.get(&v)
+                        } else {
+                            error!("l_base is a Data::Expression, but the expression is non-Value: {:?}", base.value);
+                            return true;
+                        }
+                    } else {
+                        error!("l_base is not a Data::Expression, but is assumed to always be an Expression");
+                        return true;
+                    };
+                    let r_segment = if let Data::Expression(base) = r_base {
+                        if let Expression::Value(v) = &base.value {
+                            segments.get(&v)
+                        } else {
+                            error!("r_base is a Data::Expression, but the expression is non-Value: {:?}", base.value);
+                            return true;
+                        }
+                    } else {
+                        error!("r_base is not a Data::Expression, but is assumed to always be an Expression");
+                        return true;
+                    };
+                    match (l_segment, r_segment) {
+                        (Some(l_segment), Some(r_segment)) => {
+                            // if one or both accesses are unknown, they may alias
+                            /*
+                            let _l_access = if let Some(access) = l_segment.borrow().get(l_addend) {
+                                access
+                            } else {
+                                return true;
+                            };
+                            let _r_access = if let Some(access) = r_segment.borrow().get(r_addend) {
+                                access
+                            } else {
+                                return true;
+                            };
+                            */
+
+                            if Rc::ptr_eq(l_segment, r_segment) {
+                                // the two segments are the same, then these only overlap if the
+                                // two accesses are known to be the same
+                                //
+                                // TODO: not entirely accurate. if l_access and r_access overlap
+                                // but are not identical, this incorrectly reports no alias. at
+                                // some point the following line should be uncomment-able:
+                                // ```
+                                // l_access.is_overlapping(r_access)
+                                // ```
+                                //
+                                // TODO: segments are the same, which means these would look up
+                                // the same MemoryRegion, but there's no Eq on MemoryRegion yet
+                                // and we can just use these directly. eventually,
+                                // `.is_overlapping` will handle cases where non-equal regions
+                                // do overlap a bit.
+                                l_addend == r_addend
+                            } else {
+                                // if the segments are known, but not known to be the same,
+                                // regardless of addends they may overlap - one may be a subset of
+                                // another, so different addends could select the same location.
+                                //
+                                // TODO: `noalias` assumption to optimistically conclude that some
+                                // regions still would not overlap? some operations are assumed to
+                                // return new non-aliasing memory (malloc, new, mmap,
+                                // NtAllocateVirtualMemory, and others..). this still needs to be
+                                // controllable because in circumstances like malloc corruption -
+                                // which yaxpeax may be used to reason about - these assumptions
+                                // certainly could be violated..
+                                true
+                            }
+                        }
+                        _ => {
+                            true
+                        }
+                    }
+                } else {
+                    // we have no memory layout information; pessimistically assume that any memory
+                    // accesses can alias.
+                    //
+                    // TODO: if both memory operands are constants we can still determine they
+                    // don't overlap. that circumstance is ... probably rare.
+                    true
+                }
+            }
+            (Location::MemoryLocation(_, _, _), Location::Memory(_)) |
+            (Location::Memory(_), Location::MemoryLocation(_, _, _)) |
+            (Location::Memory(_), Location::Memory(_)) => {
+                true
+            }
+            (l, r) => {
+                l.aliases_of().contains(r) || r.aliases_of().contains(l)
+            }
+        }
+    }
+
+    // given this `memory_layout` and `dfg`, what locations (including memory partitions) may
+    // overlap with `loc`?
+    fn aliases_for(&self, loc: &Location) -> Vec<Location> {
+        // TODO: (incorrectly) assert that there are no different aliasing relationships
+        loc.aliases_of()
+    }
 }
 
 impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u8)> for ContextualDisambiguation<'dfg, 'mem> {

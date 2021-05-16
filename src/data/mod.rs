@@ -15,35 +15,43 @@ pub enum Direction {
     Write
 }
 
-/// AliasInfo provides a description of aliasing rules for a given instruction set's `Location`s.
+/// `AliasInfo` provides a description of aliasing rules for a given instruction set's `Location`s.
 pub trait AliasInfo where Self: Sized {
-    /// Retrieve all locations aliased by `self`. An x86_64 example, the `al` register aliases
-    /// `ax`, `eax`, and `rax`, but *not* `ah`. This must not include `self` in the list of
-    /// aliases.
-    fn aliases_of(&self) -> Vec<Self>;
-    /// Find the widest alias of `self`.
+    /// retrieve all locations aliased by `self`. an x86_64 example, the `al` register aliases
+    /// `ax`, `eax`, and `rax`, but *not* `ah`. this must not include `self` in the list of
+    /// aliases. this aliasing relationship extends in both directions - `rax` aliases `eax`, `ax`,
+    /// `al`, and `ah`.
     ///
-    /// TODO: This interface is probably incorrect. It may not be the case that there exists one
-    /// widest alias. In memory analyses we may find a situation with values like:
+    /// TODO: extend this for memory locations known through a disambiguator. `any[rsp_inout +
+    /// 0x1234, 8]` aliases `any[rsp_input + 0x1238, 4]`, and this needs to be reported somehow for
+    /// dfg construction.
+    ///
+    /// `aliases_of` (or some variant) should take a disambiguator and report all paritally- or
+    /// fully-overlapping aliases with `Self`.
+    fn aliases_of(&self) -> Vec<Self>;
+    /// find the widest alias of `self`.
+    ///
+    /// TODO: this interface is probably incorrect. it may not be the case that there exists one
+    /// widest alias. in memory analyses we may find a situation with values like:
     /// ```text
     /// Value A: | 0x0000   0x0001 |
     /// Value B:          | 0x0001   0x0002 |
     /// ```
-    /// That is to say that value A and value B share the word at address `0x0001`. As a
-    /// consequence, the byte at `0x0001` may not have an alias that aliases all others. Often we
-    /// may be able to say "All of memory" as a widest alias, but it may exist that no such concept
+    /// that is to say that value A and value B share the word at address `0x0001`. as a
+    /// consequence, the byte at `0x0001` may not have an alias that aliases all others. often we
+    /// may be able to say "all of memory" as a widest alias, but it may exist that no such concept
     /// is appropriate for some location in some instruction set.
     fn maximal_alias_of(&self) -> Self;
 }
 
 /// `ValueLocations` allows decomposition of an instruction into a series of locations and an
-/// indication of them being read or written. This defines the data flow relation between
+/// indication of them being read or written. this defines the data flow relation between
 /// instructions and all locations in programs.
 ///
 /// NOTE: **`ValueLocations` is deprecated in favor of `LocIterator`.**
 ///
-/// Implementation guidance: for correctness, `decompose` must express the most conservative
-/// locations. As an example, x86_64 "push" should not be defined to use a stack-specific location
+/// implementation guidance: for correctness, `decompose` must express the most conservative
+/// locations. as an example, x86_64 "push" should not be defined to use a stack-specific location
 /// - `ValueLocations::decompose` should simply specify memory access, and allow a `Disambiguator`
 /// with appropriate assumptions to refine the memory access into something appropriate for
 /// analysis.
@@ -68,6 +76,34 @@ pub trait ValueLocations: Arch {
 /// heap accesses still possibly requiring more intensive analysis.
 pub trait Disambiguator<A: ValueLocations, LocSpec> {
     fn disambiguate(&self, instr: &A::Instruction, loc: (Option<A::Location>, Direction), spec: LocSpec) -> Option<A::Location>;
+}
+
+/// `LocationAliasDescriptions` is the rules describing how all locations in some data-flow graph
+/// may overlap. it is a logical error for, as an example, for a `LocationAliasDescriptions` to be
+/// used on a graph including locations from a `Disambiguator::disambiguate` that are not in
+/// `Self`.
+pub trait LocationAliasDescriptions<A: ValueLocations> {
+    /// primarily for memory locations; returns `true` if `left` and `right` may refer to any of
+    /// the same state, `false` if `left` and `right` are totally disjoint.
+    /// ```
+    /// Disambiguator::may_alias(rcx, ch)
+    /// ```
+    /// should always be true.
+    /// ```
+    /// Disambiguator::may_alias(any[rsp_input + 4, 4], any[rsp_input + 8, 4])
+    /// ```
+    /// should always be false.
+    /// ```
+    /// Disambiguator::may_alias(any[rcx_input + 4, 4], any[rsp_input + 4, 4])
+    /// ```
+    /// should be true if `rcx` or `rsp` are unknown, or are known to potentially alias.
+    fn may_alias(&self, left: &A::Location, right: &A::Location) -> bool;
+
+    /// what other locations may `loc` overlap with?
+    /// returns the set of locations known to `Self`, which should be all locations in a given
+    /// function, that can overlap with `loc`.
+    /// TODO: some kind of iterator built on `&self` to avoid the vec alloc/collect...
+    fn aliases_for(&self, loc: &A::Location) -> Vec<A::Location>;
 }
 
 pub trait LocIterator<'disambiguator, 'fns, A: ValueLocations, Location: 'static + AbiDefaults, D: Disambiguator<A, Self::LocSpec>, F: FunctionQuery<A::Address, Function=FunctionImpl<Location>>> {

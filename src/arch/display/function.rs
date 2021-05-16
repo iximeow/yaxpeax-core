@@ -110,7 +110,9 @@ impl <
             let block = self.fn_graph.get_block(*blockaddr);
 
             // hack to avoid looking at the "basic block" over [0, ... first real basic block)
-            if block.start == A::Address::zero() { continue; }
+            // shouldn't be necessary anymore here since `fn_graph` is by definition blocks only in
+            // this function?
+            // if block.start == A::Address::zero() { continue; }
 
             let mut iter = self.data.instructions_spanning(A::Decoder::default(), block.start, block.end);
 

@@ -54,6 +54,30 @@ fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layo
     (cfg, dfg, x86_64_data)
 }
 
+fn do_memory_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8]) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>, x86_64Data) {
+    let (cfg, dfg, _) = do_analyses(data, None);
+
+    let mut mem_analysis = MemoryLayout {
+        ssa: &dfg,
+        segments: RefCell::new(HashMap::new()),
+    };
+
+    let instvec = data.to_vec();
+
+    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
+    while let Some(k) = bfs.next(&cfg.graph) {
+        let block = cfg.get_block(k);
+        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
+        while let Some((address, instr)) = iter.next() {
+            let addr: u64 = address;
+            semantic::evaluate(address, &instr, &mut mem_analysis);
+        }
+    }
+    let (cfg, dfg, context) = do_analyses(data, Some((&dfg, &mem_analysis)));
+    dfg.log_contents();
+    (cfg, dfg, context)
+}
+
 #[test]
 fn test_arithmetic() {
     let instructions = &[
@@ -86,106 +110,74 @@ fn test_memory() {
         0x4c, 0x89, 0x4c, 0x24, 0x24,                               // mov [rsp + 0x24], r9
     ];
 
-    let (mut cfg, mut dfg, _) = do_analyses(instructions, None);
+    let (mut cfg, mut dfg, contexts) = do_memory_analyses(instructions);
+    let instructions = instructions.to_vec();
 
-    let mut mem_analysis = MemoryLayout {
-        ssa: &dfg,
-        segments: RefCell::new(HashMap::new()),
-    };
-
-    let instvec = instructions.to_vec();
-
-    use yaxpeax_arch::AddressDiff;
-    use std::rc::Rc;
-    use yaxpeax_core::analyses::{Item, ValueOrImmediate};
-
-    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
-    while let Some(k) = bfs.next(&cfg.graph) {
-        let block = cfg.get_block(k);
-        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
-        while let Some((address, instr)) = iter.next() {
-            let addr: u64 = address;
-            semantic::evaluate(address, &instr, &mut mem_analysis);
-        }
-    }
-    let (mut cfg, mut dfg, contexts) = do_analyses(instructions, Some((&dfg, &mem_analysis)));
-
-    for k in dfg.defs.keys() {
-        println!("{:?}", k.value.borrow().location);
-    }
-
-    let mut mem_analysis = MemoryLayout {
-        ssa: &dfg,
-        segments: RefCell::new(HashMap::new()),
-    };
-
-    let instvec = instructions.to_vec();
-
-    /*
-    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
-    while let Some(k) = bfs.next(&cfg.graph) {
-        let block = cfg.get_block(k);
-        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
-        while let Some((address, instr)) = iter.next() {
-            let addr: u64 = address;
-            semantic::evaluate(address, &instr, &mut mem_analysis);
-        }
-    }
-
-    print_memory_layouts(&instvec, &cfg, &dfg, &mem_analysis);
-*/
     println!("=-=-=-=-=-=-=-=-=");
 
-    use yaxpeax_core::arch::display::function::FunctionInstructionDisplay;
-
-    let mut bfs = Bfs::new(&cfg.graph, cfg.entrypoint);
-    while let Some(k) = bfs.next(&cfg.graph) {
-        let block = cfg.get_block(k);
-        let mut iter = instvec.instructions_spanning(<x86_64 as Arch>::Decoder::default(), block.start, block.end);
-        while let Some((address, instr)) = iter.next() {
-//            println!("{:?}", dfg.instruction_values.get(&address));
-            let mut s = String::new();
-            x86_64::display_instruction_in_function(
-                &mut s,
-                &instr,
-                address,
-                &contexts,
-                Some(&dfg),
-                None,
-                &yaxpeax_core::display::location::NoHighlights
-            ).unwrap();
-            println!("{:#x}: {}", address, s);
-            continue;
-            print!("{:#x}: {} ", address, instr.opcode());
-            for op in 0..instr.operand_count() {
-                match instr.operand(op) {
-                    yaxpeax_x86::long_mode::Operand::RegDisp(reg, disp) => {
-                        use yaxpeax_core::analyses::memory_layout::MemoryAccessBaseInference;
-                        use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
-                        let reg = dfg.get_use(address, Location::Register(reg));
-                        let reg = reg.value;
-                        let expr = Item::value(ValueOrImmediate::Value(Rc::clone(&reg))).add(&Item::immediate(disp as i64 as u64));
-                        if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&expr) {
-                            let loc = Location::MemoryLocation(ANY, 8 /* TODO access size */, Some((Data::Expression(base), Data::Expression(addend))));
-//                            println!("looking up def or use for location {:?}", loc);
-                            // not sure if this is a read or write of memory though, try both.
-                            if let Some(write) = dfg.try_get_def(address, loc.clone()) {
-                                print!("[{} + {}] (= {}), ", reg.borrow(), disp, write.borrow());
-                            } else if let Some(read) = dfg.try_get_use(address, loc.clone()) {
-                                print!("[{} + {}] (= {}), ", reg.borrow(), disp, read.borrow());
-                            } else {
-                                print!("{}, ", instr.operand(op));
-                            }
-                        }
-                    }
-                    other => {
-                        print!("{}, ", other);
-                    }
-                };
-            }
-            println!("");
+    let disp = yaxpeax_core::arch::x86_64::display::show_function(&instructions, &contexts.contexts, Some(&dfg), &cfg, None);
+    use yaxpeax_core::arch::display::function::FunctionDisplay;
+    for (addr, lines) in disp.view_between(None, None) {
+        for line in lines {
+            println!("{}", line);
         }
     }
+}
+
+#[test]
+fn test_unknown_write_stack_clobber() {
+    // writes to unknown addresses are clobbers of all other memory
+    // TODO: one day `rsp` may have a "noalias" attribute informing an assumption that rdx cannot
+    // alias rsp.
+    let instructions = &[
+        0x48, 0xc7, 0x44, 0x24, 0x04, 0x00, 0x00, 0x00, 0x00,       // mov [rsp + 0x04], 0
+        0x48, 0xc7, 0x42, 0x04, 0x34, 0x12, 0x00, 0x00,             // mov [rdx + 0x04], 0x1234
+        0x48, 0x8b, 0x4c, 0x24, 0x04,                               // mov rcx, [rsp + 4]
+    ];
+
+    let (mut cfg, mut dfg, contexts) = do_memory_analyses(instructions);
+    let instructions = instructions.to_vec();
+
+    println!("=-=-=-=-=-=-=-=-=");
+
+    let disp = yaxpeax_core::arch::x86_64::display::show_function(&instructions, &contexts.contexts, Some(&dfg), &cfg, None);
+    use yaxpeax_core::arch::display::function::FunctionDisplay;
+    for (addr, lines) in disp.view_between(None, None) {
+        for line in lines {
+            println!("{}", line);
+        }
+    }
+}
+
+#[test]
+fn test_known_stack_alias() {
+    // test that pointers are tracked as values through registers
+    let instructions = &[
+        0x48, 0xc7, 0x44, 0x24, 0x04, 0xde, 0xad, 0xbe, 0xef,       // mov [rsp + 0x04], 0xefbeadde
+//        0x48, 0x89, 0x74, 0x24, 0x04,                               // mov [rsp + 4], rsi
+        0x48, 0x89, 0xe2,                                           // mov rdx, rsp
+        0x48, 0x8b, 0x42, 0x04,                                     // mov rax, [rdx + 4]
+        0x48, 0x8b, 0x4c, 0x24, 0x04,                               // mov rcx, [rsp + 4]
+    ];
+
+    let (mut cfg, mut dfg, contexts) = do_memory_analyses(instructions);
+    let instructions = instructions.to_vec();
+
+    use yaxpeax_core::analyses::{Expression, Item, Value, ValueOrImmediate};
+    use yaxpeax_core::arch::x86_64::analyses::data_flow::ANY;
+    let rsp_access = Location::MemoryLocation(
+        ANY,
+        8,
+        Some((
+            Data::Expression(Item::value(ValueOrImmediate::Value(dfg.get_use(0, Location::Register(RegSpec::rsp())).value))),
+            Data::Expression(std::rc::Rc::<Item<ValueOrImmediate<_>>>::from_const(4))
+        ))
+    );
+
+    let initial_const = dfg.get_def(0, rsp_access.clone());
+    assert_eq!(initial_const.value.borrow().data, Some(Data::Concrete(0xffffffff_efbeadde, None)));
+    assert_eq!(initial_const.value.borrow().data.as_ref(), dfg.get_def(12, Location::Register(RegSpec::rax())).value.borrow().data.as_ref().unwrap().underlying().as_ref());
+    assert_eq!(initial_const.value.borrow().data.as_ref(), dfg.get_def(16, Location::Register(RegSpec::rcx())).value.borrow().data.as_ref().unwrap().underlying().as_ref());
 }
 
 fn print_memory_layouts(instvec: &Vec<u8>, cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>, dfg: &SSA<x86_64>, mem_analysis: &MemoryLayout<x86_64>) {
@@ -353,7 +345,7 @@ fn test_stack_inference()  {
         0xe8, 0x22, 0x80, 0xff, 0xff,                                  // call sym.imp.__stack_chk_fail @noreturn
     ];
 
-    let (mut cfg, mut dfg, _) = do_analyses(instructions, None);
+    let (cfg, dfg, _) = do_analyses(instructions, None);
 
     let mut mem_analysis = MemoryLayout {
         ssa: &dfg,
