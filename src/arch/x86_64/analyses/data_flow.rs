@@ -1182,6 +1182,12 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
         if let Some(memory) = self.memory_layout {
             if let Some(Location::Memory(ANY)) = loc.0 {
                 let q = memory.query_at(spec.0);
+                if spec.1 == 0 {
+                    // HACK: effective_address is not appropriate when *the operand to disambiguate
+                    // is implied*. this is the case for movs, cmps, push, and pop's memory
+                    // operands...
+                    return None;
+                }
                 let access = q.effective_address(&instr.operand(spec.1 - 1));
                 use analyses::memory_layout::MemoryAccessBaseInference;
                 use analyses::Expression;
