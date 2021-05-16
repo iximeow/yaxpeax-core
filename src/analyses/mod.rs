@@ -837,6 +837,13 @@ impl<A: SSAValues + Arch> DFGRebase<A> for Rc<Item<ValueOrImmediate<A>>> where A
                                         })
                                         .expect(&format!("corresponding external def exists for location {:?}", v.borrow().location))
                                 }
+                                DefSource::Between(addr) => {
+                                    Rc::clone(new_dfg.control_dependent_values
+                                        .get(&old_def_addr).expect("old def addr is valid")
+                                        .get(&addr).expect("between's prior addr is valid")
+                                        .get(&(v.borrow().location.rebase_references(old_dfg, new_dfg), crate::data::Direction::Write))
+                                        .expect("corresponding def exists in new dfg"))
+                                }
                                 other => {
                                     panic!("aaaa {}", other);
                                 }
