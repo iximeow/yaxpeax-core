@@ -107,7 +107,7 @@ impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a
                 Some(format!("modifier values, but no entry for ({:?}, {:?})", loc.clone(), dir))
             }
         } else {
-            Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
+            Some(format!("no modifier values at ({}, {:?})", self.addr.show(), precedence))
         }
     }
 
@@ -126,7 +126,7 @@ impl<'a, A: Arch + SSAValues> ValueDescriptionQuery<A::Location> for SSAQuery<'a
                 Some(format!("modifier values, but no entry for ({:?}, {:?})", loc.clone(), dir))
             }
         } else {
-            Some(format!("no modifier values at ({:?}, {:?})", self.addr, precedence))
+            Some(format!("no modifier values at ({}, {:?})", self.addr.show(), precedence))
         }
     }
 }
