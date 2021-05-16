@@ -1667,6 +1667,9 @@ fn loc_by_id(idx: u8, usage: Use, op: &Operand) -> Option<(Option<Location>, Dir
         Operand::ImmediateU64(_) => {
             None
         }
+        other => {
+            panic!("unhandled operand type {:?}", other);
+        }
     }
 }
 

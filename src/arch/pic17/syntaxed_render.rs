@@ -10,7 +10,7 @@ use ContextRead;
 
 use std::fmt;
 
-impl <T: fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u16, MergedContextTable, C, T, Y> for Instruction {
+impl <T: fmt::Write, Y: YaxColors> ShowContextual<u16, MergedContextTable, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, address: <PIC17 as Arch>::Address, context: Option<&MergedContextTable>, out: &mut T) -> fmt::Result {
         let operand_replacements: Option<[Option<String>; 2]> = match context {
             Some(context) => {

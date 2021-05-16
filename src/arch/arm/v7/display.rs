@@ -73,7 +73,7 @@ impl <F: FunctionRepr, T: FunctionQuery<<ARMv7 as Arch>::Address, Function=F> + 
     }
 }
 
-impl <'a, T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u32, DisplayCtx<'a>, C, T, Y> for Instruction {
+impl <'a, T: std::fmt::Write, Y: YaxColors> ShowContextual<u32, DisplayCtx<'a>, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, _address: u32, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Some(&yaxpeax_arm::armv7::NoContext), out)
     }
@@ -109,14 +109,13 @@ impl <'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<ARMv7 as Arch>::Address>, Highl
     }
 }
 
-pub struct RegValueDisplay<'a, 'b, 'c, C: fmt::Display, Y: YaxColors<C>> {
+pub struct RegValueDisplay<'a, 'b, 'c, Y: YaxColors> {
     pub reg: &'a u8,
     pub value: &'b Option<DFGRef<ARMv7>>,
     pub colors: &'c Y,
-    _pd: std::marker::PhantomData<C>
 }
 
-impl <'a, 'b, 'c, C: fmt::Display, Y: YaxColors<C>> fmt::Display for RegValueDisplay<'a, 'b, 'c, C, Y> {
+impl <'a, 'b, 'c, Y: YaxColors> fmt::Display for RegValueDisplay<'a, 'b, 'c, Y> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.value {
             Some(value) => {
@@ -134,7 +133,7 @@ impl <'a, 'b, 'c, C: fmt::Display, Y: YaxColors<C>> fmt::Display for RegValueDis
                     )
                 )?;
                 if let Some(data) = value.borrow().data.as_ref() {
-                    write!(fmt, " (= {})", DataDisplay { data: &data, colors: self.colors, _color: std::marker::PhantomData })?;
+                    write!(fmt, " (= {})", DataDisplay { data: &data, colors: self.colors })?;
                 }
                 Ok(())
             },
@@ -145,13 +144,13 @@ impl <'a, 'b, 'c, C: fmt::Display, Y: YaxColors<C>> fmt::Display for RegValueDis
     }
 }
 
-pub enum MemValueDisplay<'a, 'b, 'c, 'd, C: fmt::Display, Y: YaxColors<C>> {
+pub enum MemValueDisplay<'a, 'b, 'c, 'd, Y: YaxColors> {
     Address(u64),
-    Reg(StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd, C, Y>>),
-    RegOffset(StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd, C, Y>>, u64),
+    Reg(StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd, Y>>),
+    RegOffset(StyledDisplay<'a, RegValueDisplay<'b, 'c, 'd, Y>>, u64),
 }
 
-impl <'a, 'b, 'c, 'd, C: fmt::Display, Y: YaxColors<C>> fmt::Display for MemValueDisplay<'a, 'b, 'c, 'd, C, Y> {
+impl <'a, 'b, 'c, 'd, Y: YaxColors> fmt::Display for MemValueDisplay<'a, 'b, 'c, 'd, Y> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MemValueDisplay::Address(disp) => {
@@ -167,13 +166,12 @@ impl <'a, 'b, 'c, 'd, C: fmt::Display, Y: YaxColors<C>> fmt::Display for MemValu
     }
 }
 
-pub struct DataDisplay<'a, 'b, C: fmt::Display, Y: YaxColors<C>> {
+pub struct DataDisplay<'a, 'b, Y: YaxColors> {
     pub data: &'a Data,
     pub colors: &'b Y,
-    _color: std::marker::PhantomData<C>,
 }
 
-impl <'a, 'b, C: fmt::Display, Y: YaxColors<C>> fmt::Display for DataDisplay<'a, 'b, C, Y> {
+impl <'a, 'b, Y: YaxColors> fmt::Display for DataDisplay<'a, 'b, Y> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.data {
             Data::Alias(alias) => {
@@ -182,7 +180,6 @@ impl <'a, 'b, C: fmt::Display, Y: YaxColors<C>> fmt::Display for DataDisplay<'a,
                         reg: &alias_reg,
                         value: &Some(Rc::clone(alias)),
                         colors: self.colors,
-                        _pd: std::marker::PhantomData,
                     })?;
                 } else {
                     unreachable!("Register alias must be another register");
@@ -307,7 +304,6 @@ impl <
                                         reg: reg,
                                         value: &value,
                                         colors: &ctx.colors,
-                                        _pd: std::marker::PhantomData,
                                     }
                                 ))
                             } else {
@@ -325,7 +321,6 @@ impl <
                                     reg: reg,
                                     value: &value,
                                     colors: &ctx.colors,
-                                    _pd: std::marker::PhantomData,
                                 }
                             ))
                         },
@@ -343,7 +338,6 @@ impl <
                                         reg: reg,
                                         value: &read,
                                         colors: &ctx.colors,
-                                        _pd: std::marker::PhantomData,
                                     }
                                 ),
                                 ctx.highlight.location(
@@ -352,7 +346,6 @@ impl <
                                         reg: reg,
                                         value: &write,
                                         colors: &ctx.colors,
-                                        _pd: std::marker::PhantomData,
                                     }
                                 ),
                             )
@@ -371,7 +364,6 @@ impl <
                                     reg: rs,
                                     value: &value,
                                     colors: &ctx.colors,
-                                    _pd: std::marker::PhantomData,
                                 }
                             ))
                         },
@@ -385,7 +377,6 @@ impl <
                                     reg: rd,
                                     value: &value,
                                     colors: &ctx.colors,
-                                    _pd: std::marker::PhantomData,
                                 }
                             ))
                         },
@@ -405,7 +396,6 @@ impl <
                                         reg: reg,
                                         value: &read,
                                         colors: &ctx.colors,
-                                        _pd: std::marker::PhantomData,
                                     }
                                 ),
                                 ctx.highlight.location(
@@ -414,7 +404,6 @@ impl <
                                         reg: reg,
                                         value: &write,
                                         colors: &ctx.colors,
-                                        _pd: std::marker::PhantomData,
                                     }
                                 ),
                             )
@@ -436,7 +425,6 @@ impl <
                                             reg: rd,
                                             value: &value,
                                             colors: &ctx.colors,
-                                            _pd: std::marker::PhantomData,
                                         }
                                     ))
                                 } else {
@@ -455,7 +443,6 @@ impl <
                                             reg: rd,
                                             value: &value,
                                             colors: &ctx.colors,
-                                            _pd: std::marker::PhantomData,
                                         }
                                     ))
                                 } else {
@@ -496,7 +483,6 @@ impl <
                                                 reg: &i,
                                                 value: &value,
                                                 colors: &ctx.colors,
-                                                _pd: std::marker::PhantomData,
                                             }
                                         ))?;
                                     } else {
@@ -515,7 +501,6 @@ impl <
                                                 reg: &i,
                                                 value: &value,
                                                 colors: &ctx.colors,
-                                                _pd: std::marker::PhantomData,
                                             }
                                         ))?;
                                     } else {
@@ -598,7 +583,7 @@ impl <
         }
         */
 
-        ConditionedOpcode(self.instr.opcode, self.instr.s, self.instr.condition).colorize(&self.colors, fmt)?;
+        ConditionedOpcode(self.instr.opcode, self.instr.s(), self.instr.w(), self.instr.condition).colorize(&self.colors, fmt)?;
 
         match self.instr.opcode {
             Opcode::PUSH => {

@@ -4,7 +4,7 @@ use std::hash::Hash;
 use termion::color;
 
 use SyntaxedSSARender;
-use yaxpeax_arch::{Arch, ColorSettings, LengthedInstruction};
+use yaxpeax_arch::{Arch, Colorize, ColorSettings, LengthedInstruction};
 use arch::display::BaseDisplay;
 use arch::CommentQuery;
 use arch::FunctionQuery;
@@ -27,7 +27,7 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
     fn render_with_ssa_values(
         &self,
         address: <PIC17 as Arch>::Address,
-        _colors: Option<&ColorSettings>,
+        colors: Option<&ColorSettings>,
         context: Option<&T>,
         function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
         ssa: &SSA<PIC17>) -> String {
@@ -75,12 +75,8 @@ impl <T> SyntaxedSSARender<PIC17, T, pic17::Function> for yaxpeax_pic17::Instruc
             }
         }
 
-        let start_color = yaxpeax_pic17::opcode_color(self.opcode);
-        let mut result = format!("{}{}{}",
-             start_color,
-             self.opcode,
-             color::Fg(color::Reset)
-         );
+        let mut result = String::new();
+        self.opcode.colorize(&colors, &mut result).expect("can append colorized opcode");
 
         match self.opcode {
             Opcode::LCALL => {

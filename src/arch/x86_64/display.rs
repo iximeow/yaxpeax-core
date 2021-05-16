@@ -40,7 +40,7 @@ use std::fmt::Write;
 use std::marker::PhantomData;
 
 use yaxpeax_arch::ShowContextual;
-impl <'a, T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, DisplayCtx<'a>, C, T, Y> for Instruction {
+impl <'a, T: std::fmt::Write, Y: YaxColors> ShowContextual<u64, DisplayCtx<'a>, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Option::<&[Option<String>]>::None, out)
     }
@@ -1276,6 +1276,9 @@ impl <
                 Operand::Nothing => {
                     Ok(())
                 },
+                other => {
+                    panic!("expected operand type {:?}", other);
+                }
             }?;
 
             Ok(())

@@ -8,12 +8,12 @@ repository = ""
 description = "program analysis for machine code"
 
 [dependencies]
-yaxpeax-arch = { version = "0.0.4", features = ["use-serde"] }
-yaxpeax-arm = { version = "0.0.4", features = ["use-serde"] }
-yaxpeax-x86 = { version = "0.1.4", features = ["use-serde"] }
-yaxpeax-msp430 = { version = "0.0.5", features = ["use-serde"] }
-yaxpeax-pic17 = { version = "0.0.3", features = ["use-serde"] }
-yaxpeax-pic18 = { version = "0.0.3", features = ["use-serde"] }
+yaxpeax-arch = { version = "0.0.5", features = ["use-serde"] }
+yaxpeax-arm = { version = "0.0.7", features = ["use-serde"] }
+yaxpeax-x86 = { version = "0.2.0", features = ["use-serde"] }
+yaxpeax-msp430 = { version = "0.0.6", features = ["use-serde"] }
+yaxpeax-pic17 = { version = "0.0.4", features = ["use-serde"] }
+yaxpeax-pic18 = { version = "0.0.4", features = ["use-serde"] }
 # yaxpeax-pic24 = { version = "0.0.2", features = ["use-serde"] }
 "smallvec" = "1.2.0"
 "goblin" = "0.0.20"

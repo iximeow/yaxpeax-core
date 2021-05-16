@@ -69,7 +69,7 @@ pub struct InstructionContext<'a, 'b, 'c, 'd, 'e, Context: AddressNamer<<ARMv8 a
     _highlight: &'e Highlighter,
 }
 
-impl <'a, T: std::fmt::Write, C: fmt::Display, Y: YaxColors<C>> ShowContextual<u64, DisplayCtx<'a>, C, T, Y> for Instruction {
+impl <'a, T: std::fmt::Write, Y: YaxColors> ShowContextual<u64, DisplayCtx<'a>, T, Y> for Instruction {
     fn contextualize(&self, colors: &Y, _address: u64, _context: Option<&DisplayCtx<'a>>, out: &mut T) -> std::fmt::Result {
         self.contextualize(colors, _address, Some(&yaxpeax_arm::armv8::a64::NoContext), out)
     }
