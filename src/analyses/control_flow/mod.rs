@@ -78,7 +78,7 @@ pub enum Target<Addr: AddressDiffAmount + Debug> {
 }
 
 pub trait Determinant<T, Addr: AddressDiffAmount + Debug> {
-    fn control_flow(&self, Option<&T>) -> Effect<Addr>;
+    fn control_flow(&self, _ctx: Option<&T>) -> Effect<Addr>;
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

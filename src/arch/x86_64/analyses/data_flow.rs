@@ -13,19 +13,19 @@
 
 use arch::Symbol;
 use arch::{AbiDefaults, FunctionAbiReference};
-use analyses::static_single_assignment::{DFGRef, SSAValues, Value};
+use analyses::static_single_assignment::{DFGRef, SSAValues};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec};
 use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;
 use std::fmt;
-use std::cell::RefCell;
+// use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use analyses::static_single_assignment::HashedValue;
-use serialize::Memoable;
+// use serialize::Memoable;
 use serde::{Serialize, Deserialize};
 use serde::de::{self, Deserializer, Visitor, Unexpected};
 use serde::ser::{Serializer};
@@ -113,7 +113,7 @@ impl DFGRebase<yaxpeax_x86::x86_64> for Data {
             },
             Data::Alias(dfg_ref) => {
                 if !new_dfg.defs.contains_key(&HashedValue { value: Rc::clone(dfg_ref) }) {
-                    let (old_ref_addr, old_ref_source) = old_dfg.get_def_site(Rc::clone(dfg_ref));
+                    let (_old_ref_addr, old_ref_source) = old_dfg.get_def_site(Rc::clone(dfg_ref));
                     // "External" might mean f.ex `rsp_input`.
                     match old_ref_source {
                         DefSource::External => {
@@ -251,7 +251,7 @@ impl Serialize for Location {
                 // !!!
                 serialized_loc.push_str(&serde_json::to_string(&region.0).unwrap());
             }
-            Location::MemoryLocation(region, size, access_info) => {
+            Location::MemoryLocation(_region, _size, _access_info) => {
                 panic!("can't serialize or deserialize Location::MemoryLocation yet");
                 /*
                 serialized_loc.push_str("M:");
@@ -609,7 +609,7 @@ impl Typed for SymbolicExpression {
                 }
             }
             SymbolicExpression::Deref(expr) => {
-                if let TypeSpec::PointerTo(ty) = expr.type_of(type_atlas) {
+                if let TypeSpec::PointerTo(_ty) = expr.type_of(type_atlas) {
                     todo!("type_of");
                     // *ty.to_owned()
                 } else {
@@ -1041,13 +1041,13 @@ pub(crate) fn cond_to_flags(cond: ConditionCode) -> &'static [(Option<Location>,
 #[derive(Default)]
 pub struct NoDisambiguation { }
 impl<T> Disambiguator<x86_64, T> for NoDisambiguation {
-    fn disambiguate(&self, instr: &<x86_64 as crate::Arch>::Instruction, _loc: (Option<Location>, Direction), _spec: T) -> Option<Location> {
+    fn disambiguate(&self, _instr: &<x86_64 as crate::Arch>::Instruction, _loc: (Option<Location>, Direction), _spec: T) -> Option<Location> {
         None
     }
 }
 
 impl LocationAliasDescriptions<x86_64> for NoDisambiguation {
-    fn may_alias(&self, left: &Location, right: &Location) -> bool {
+    fn may_alias(&self, _left: &Location, _right: &Location) -> bool {
         false
     }
 
@@ -1064,7 +1064,7 @@ pub struct ContextualDisambiguation<'dfg, 'mem> {
 impl <'dfg, 'mem> LocationAliasDescriptions<x86_64> for ContextualDisambiguation<'dfg, 'mem> {
     fn may_alias(&self, left: &Location, right: &Location) -> bool {
         match (left, right) {
-            (Location::MemoryLocation(_, l_size, Some((l_base, l_addend))), Location::MemoryLocation(_, r_size, Some((r_base, r_addend)))) => {
+            (Location::MemoryLocation(_, _l_size, Some((l_base, l_addend))), Location::MemoryLocation(_, _r_size, Some((r_base, r_addend)))) => {
                 if let Some(memory_layout) = self.memory_layout {
                     let segments = memory_layout.segments.borrow();
 

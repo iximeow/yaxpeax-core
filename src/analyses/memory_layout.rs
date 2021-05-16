@@ -1,16 +1,11 @@
-use yaxpeax_arch::{Arch, AddressBase};
+use yaxpeax_arch::Arch;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use analyses::DFG;
-use analyses::ValueRes;
 use data::ValueLocations;
 use analyses::static_single_assignment::{DFGRef, SSA, SSAValues};
 use std::cell::RefCell;
 use std::rc::Rc;
-use num_traits::Zero;
 use std::fmt;
-
-use analyses::static_single_assignment::HashedValue;
 
 /// some kind of a description of memory usage in a dfg
 #[derive(Debug)]
@@ -167,10 +162,10 @@ impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> w
 //        println!("impl infer_base_and_addend: {:?}", self);
         let res = match &self.value {
             Expression::Unknown => None,
-            Expression::Value(ValueOrImmediate::Value(v)) => {
+            Expression::Value(ValueOrImmediate::Value(_v)) => {
                 None
             }
-            Expression::Value(ValueOrImmediate::Immediate(i)) => None,
+            Expression::Value(ValueOrImmediate::Immediate(_i)) => None,
             Expression::Add { left, right } => {
                 if let Expression::Value(ValueOrImmediate::Immediate(i)) = right.value {
                     if let Some((inner_base, inner_addend)) = left.infer_base_and_addend() {
@@ -242,7 +237,7 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
             // base must be a Value otherwise it's some complex composite, OR unknown, and not
             // eligible for a base of a memory region
             if let Expression::Value(v) = &base.as_ref().value {
-                let mut regions = self.regions_uses.as_ref().expect("indirect load has a corresponding ssa use").borrow();
+                let regions = self.regions_uses.as_ref().expect("indirect load has a corresponding ssa use").borrow();
                 let v: ValueOrImmediate<A> = v.clone();
                 return regions.get(&v)
                     .and_then(|region| region.accesses.get(&addend))
@@ -261,7 +256,7 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
             // base must be a Value otherwise it's some complex composite, OR unknown, and not
             // eligible for a base of a memory region
             if let Expression::Value(v) = &base.as_ref().value {
-                let mut regions = self.regions_defs.as_ref().expect("indirect store has a corresponding ssa def").borrow();
+                let regions = self.regions_defs.as_ref().expect("indirect store has a corresponding ssa def").borrow();
                 let v: ValueOrImmediate<A> = v.clone();
                 return regions.get(&v)
                     .and_then(|region| region.accesses.get(&addend))
@@ -295,7 +290,7 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
         }
         Item::untyped(Expression::Unknown)
     }
-    fn store(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>, value: &Rc<Item<ValueOrImmediate<A>>>) {
+    fn store(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>, _value: &Rc<Item<ValueOrImmediate<A>>>) {
 //        eprintln!("store: {:?}", index);
 //        eprintln!("old: {:?}", self.regions_uses);
 //        eprintln!("new: {:?}", self.regions_defs);
@@ -305,16 +300,17 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
             for (base, region) in &*uses.borrow() {
                 if defs_mut.contains_key(base) {
                     // merge
-                    let mut new_defs = &mut defs_mut.get_mut(base).unwrap().accesses;
+                    let new_defs = &mut defs_mut.get_mut(base).unwrap().accesses;
                     for (old_offset, accesses) in &region.accesses {
                         if new_defs.contains_key(old_offset.as_ref()) {
-                            let mut new_accesses = new_defs.get_mut(old_offset.as_ref()).unwrap();
+                            let new_accesses = new_defs.get_mut(old_offset.as_ref()).unwrap();
                             // again, merge...
                             for (sz, pattern) in accesses {
                                 if new_accesses.contains_key(&sz) {
                                     // merge, somehow
                                     let new_pattern = &new_accesses[&sz];
-                                    new_accesses.insert(*sz, new_pattern.merge(pattern));
+                                    let new_pattern = new_pattern.merge(pattern);
+                                    new_accesses.insert(*sz, new_pattern);
                                 } else {
                                     new_accesses.insert(*sz, pattern.clone());
                                 }

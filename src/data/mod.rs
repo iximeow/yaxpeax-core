@@ -1,7 +1,7 @@
 pub mod modifier;
 pub mod types;
 
-use yaxpeax_arch::{Address, Arch};
+use yaxpeax_arch::Arch;
 
 use arch::{AbiDefaults, FunctionImpl, FunctionQuery};
 

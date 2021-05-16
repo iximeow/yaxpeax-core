@@ -7,7 +7,6 @@
 use yaxpeax_x86::long_mode::{Arch as amd64};
 use yaxpeax_x86::long_mode::{Opcode, Operand, RegSpec};
 use yaxpeax_arch::Arch;
-use yaxpeax_arch::AddressDiff;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
 use analyses::{DFG, Value, DFGLocationQuery, DFGLocationQueryMut};

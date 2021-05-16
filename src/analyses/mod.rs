@@ -914,7 +914,7 @@ impl<A: SSAValues> Value for Rc<Item<ValueOrImmediate<A>>> where A::Data: Hash +
         Item::untyped(Expression::Value(ValueOrImmediate::Immediate(c)))
     }
 
-    fn from_set(xs: &[Self]) -> Self {
+    fn from_set(_xs: &[Self]) -> Self {
         // TODO: tag the information loss here
         Self::unknown()
     }

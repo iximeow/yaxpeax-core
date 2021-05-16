@@ -65,7 +65,7 @@ impl <A: Address> MemoryRepr<A> for [u8] {
 
 impl <A: Address> MemoryRange<A> for Vec<u8> {
     fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
-        if range.start.to_linear() < self.len() && range.end.to_linear() < self.len() && range.start < range.end {
+        if range.start.to_linear() < self.len() && range.end.to_linear() <= self.len() && range.start < range.end {
             Some(ReadCursor::from(self, range))
         } else {
             None

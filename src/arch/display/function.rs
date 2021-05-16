@@ -20,8 +20,6 @@ use std::fmt;
 use std::fmt::Write;
 use std::marker::PhantomData;
 
-use num_traits::Zero;
-
 /// This view in particular takes optionally-present data flow information, which ends up
 /// restricting the usefulness of this struct to architectures that have SSA information defined.
 /// a handy TODO: here is to either figure out how to have a default Location that specifies no

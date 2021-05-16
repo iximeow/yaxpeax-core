@@ -364,7 +364,7 @@ pub fn generate_refined_ssa<
         println!("  - {:?} => {:?}", k, v);
     }
 
-    for (addr, values) in new_dfg.instruction_values.iter_mut() {
+    for (_addr, values) in new_dfg.instruction_values.iter_mut() {
         let mut new_values = values.clone();
         for ((loc, dir), value) in values.iter() {
             if loc_updates.contains_key(loc) {

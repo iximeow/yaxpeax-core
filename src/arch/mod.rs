@@ -674,7 +674,7 @@ pub enum ControlFlowEffect<Addr> {
 }
 
 pub trait ControlFlowDeterminant {
-    fn control_flow<T, Addr>(&self, &T) -> ControlFlowEffect<Addr>;
+    fn control_flow<T, Addr>(&self, _ctx: &T) -> ControlFlowEffect<Addr>;
 }
 
 trait MCU {

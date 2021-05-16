@@ -16,18 +16,17 @@ use arch::CommentQuery;
 use arch::SymbolQuery;
 use arch::AddressNamer;
 use arch::x86_64::{ContextRead, DisplayCtx, MergedContextTable};
-use arch::x86_64::analyses::data_flow::{Data, Location, SymbolicExpression, ValueRange, ANY};
+use arch::x86_64::analyses::data_flow::{Data, Location, ValueRange, ANY};
 use analyses::control_flow::Determinant;
 use analyses::Expression;
 use analyses::Item;
-use analyses::ValueOrImmediate;
 use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand};
 use yaxpeax_x86::long_mode::{RegSpec, Segment};
 use yaxpeax_x86::x86_64 as x86_64Arch;
 use analyses::control_flow::{BasicBlock, ControlFlowGraph};
 use analyses::static_single_assignment::{DFGRef, SSA};
 use data::Direction;
-use data::types::{Typed, TypeAtlas, TypeSpec};
+use data::types::{TypeAtlas, TypeSpec};
 use display::location::{LocationHighlighter, NoHighlights, StyledDisplay};
 use arch::display::function::FunctionInstructionDisplay;
 use arch::display::function::FunctionView;
@@ -212,7 +211,7 @@ pub struct DataDisplay<'a, 'b> {
 
 impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let type_atlas = TypeAtlas::new();
+        let _type_atlas = TypeAtlas::new();
         match self.data {
             Data::Alias(alias) => {
                 if let Location::Register(alias_reg) = alias.borrow().location {

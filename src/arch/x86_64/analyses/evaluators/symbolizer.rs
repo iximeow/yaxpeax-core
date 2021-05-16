@@ -30,7 +30,6 @@ impl Domain for SymbolicDomain {
     }
 }
 
-use analyses::Expression;
 use std::rc::Rc;
 pub(crate) fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, _contexts: &()) -> Option<Rc<Item<ValueOrImmediate<x86_64>>>> {
     match mem_op {
