@@ -85,15 +85,15 @@ pub trait Disambiguator<A: ValueLocations, LocSpec> {
 pub trait LocationAliasDescriptions<A: ValueLocations> {
     /// primarily for memory locations; returns `true` if `left` and `right` may refer to any of
     /// the same state, `false` if `left` and `right` are totally disjoint.
-    /// ```
+    /// ```text
     /// Disambiguator::may_alias(rcx, ch)
     /// ```
     /// should always be true.
-    /// ```
+    /// ```text
     /// Disambiguator::may_alias(any[rsp_input + 4, 4], any[rsp_input + 8, 4])
     /// ```
     /// should always be false.
-    /// ```
+    /// ```text
     /// Disambiguator::may_alias(any[rcx_input + 4, 4], any[rsp_input + 4, 4])
     /// ```
     /// should be true if `rcx` or `rsp` are unknown, or are known to potentially alias.

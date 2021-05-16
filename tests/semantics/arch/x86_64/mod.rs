@@ -175,9 +175,14 @@ fn test_known_stack_alias() {
     );
 
     let initial_const = dfg.get_def(0, rsp_access.clone());
-    assert_eq!(initial_const.value.borrow().data, Some(Data::Concrete(0xffffffff_efbeadde, None)));
-    assert_eq!(initial_const.value.borrow().data.as_ref(), dfg.get_def(12, Location::Register(RegSpec::rax())).value.borrow().data.as_ref().unwrap().underlying().as_ref());
-    assert_eq!(initial_const.value.borrow().data.as_ref(), dfg.get_def(16, Location::Register(RegSpec::rcx())).value.borrow().data.as_ref().unwrap().underlying().as_ref());
+    assert_eq!(&*initial_const.get_data(), &Some(Data::Concrete(0xffffffff_efbeadde, None)));
+    assert_eq!(initial_const.get_data().as_ref(), dfg.get_def(12, Location::Register(RegSpec::rax())).get_data().as_ref().unwrap().underlying().as_ref());
+    assert_eq!(initial_const.get_data().as_ref(), dfg.get_def(16, Location::Register(RegSpec::rcx())).get_data().as_ref().unwrap().underlying().as_ref());
+}
+
+#[test]
+fn test_function_argument_inference() {
+
 }
 
 fn print_memory_layouts(instvec: &Vec<u8>, cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>, dfg: &SSA<x86_64>, mem_analysis: &MemoryLayout<x86_64>) {
