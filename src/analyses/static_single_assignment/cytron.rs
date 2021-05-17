@@ -254,12 +254,15 @@ impl<A: Arch + SSAValues> ValueAllocator<A> {
                         Direction::Write => {
                             // treat writes also as reads of the location they write. this is to
                             // support linking defs with prior values the def overwrites.
+                            // NOTE: do *not* call this a use of the value, in case this would be
+                            // the only use of a value (a clobber of a caller-save register, for
+                            // example). this possibly should be tracked as a `kill` of the value,
+                            // but yaxpeax doesn't have a concept of kills yet.
                             let value = if writelog.contains(&loc) {
                                 self.previous(&loc)
                             } else {
                                 self.current(&loc)
                             };
-                            value.borrow_mut().used = true;
                             insert_entry(ssa, (loc.clone(), Direction::Read), Rc::clone(value));
 
                             // original write logic.
