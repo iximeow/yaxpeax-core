@@ -262,17 +262,20 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                if let Some(read_values) = valueset_deref(values.clone(), data, 1) {
+                            if let Some(Data::ValueSet(value_set)) = referent(instr, &op, addr, dfg, contexts) {
+                                if let Some(read_values) = valueset_deref(value_set.clone(), data, 1) {
+                                    let values = Data::ValueSet(value_set);
+                                    let read_values = Data::ValueSet(read_values);
+
                                     use arch::x86_64::display::DataDisplay;
                                     tracing::info!(
                                         "at {}, derefed value set {} to read {}",
                                         addr.show(),
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                        DataDisplay { data: &values, colors: None },
+                                        DataDisplay { data: &read_values, colors: None }
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
+                                        read_values
                                     );
                                 } else {
                                     // TODO: deref results in all values being invalid
@@ -293,16 +296,19 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                if let Some(read_values) = valueset_deref(values.clone(), data, 2) {
+                            if let Some(Data::ValueSet(value_set)) = referent(instr, &op, addr, dfg, contexts) {
+                                if let Some(read_values) = valueset_deref(value_set.clone(), data, 2) {
+                                    let values = Data::ValueSet(value_set);
+                                    let read_values = Data::ValueSet(read_values);
+
                                     use arch::x86_64::display::DataDisplay;
                                     tracing::info!(
                                         "derefed value set {} to read {}",
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                        DataDisplay { data: &values, colors: None },
+                                        DataDisplay { data: &read_values, colors: None }
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
+                                        read_values
                                     );
                                 } else {
                                     // TODO: deref results in all values being invalid
@@ -322,7 +328,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
+                            if let Some(Data::ValueSet(value_set)) = referent(instr, &op, addr, dfg, contexts) {
                                 let size = match l.class() {
                                     register_class::Q => 8,
                                     register_class::D => 4,
@@ -334,15 +340,18 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                         return;
                                     }
                                 };
-                                if let Some(read_values) = valueset_deref(values.clone(), data, size) {
+                                if let Some(read_values) = valueset_deref(value_set.to_vec(), data, size) {
+                                    let values = Data::ValueSet(value_set);
+                                    let read_values = Data::ValueSet(read_values);
+
                                     use arch::x86_64::display::DataDisplay;
                                     tracing::info!(
                                         "derefed value set {} to read {}",
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                        DataDisplay { data: &values, colors: None },
+                                        DataDisplay { data: &read_values, colors: None }
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
+                                        read_values
                                     );
                                 } else {
                                     // TODO: deref results in all values being invalid
