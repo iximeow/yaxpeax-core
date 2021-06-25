@@ -24,7 +24,7 @@ fn apply_condition_code<
         }
     };
 
-    panic!("TODO");
+    unimplemented!("aarch64 condition codes");
 
     /*
     match code {

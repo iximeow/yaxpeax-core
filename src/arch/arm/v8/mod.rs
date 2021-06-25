@@ -46,12 +46,10 @@ pub struct DisplayCtx<'a> {
 impl FunctionQuery<<ARMv8 as Arch>::Address> for MergedContextTable {
     type Function = Function;
     fn function_at(&self, _addr: <ARMv8 as Arch>::Address) -> Option<&Self::Function> {
-        panic!("TODO")
-//        self.functions.borrow().get(&addr)
+        unimplemented!("FunctionQuery::function_at for MergedContextTable");
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
-        panic!("TODO")
-//        self.functions.borrow().values().collect()
+        unimplemented!("FunctionQuery::all_functions for MergedContextTable");
     }
 }
 impl CommentQuery<<ARMv8 as Arch>::Address> for MergedContextTable {

@@ -225,7 +225,7 @@ pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        panic!("\
+        unimplemented!("\
         arch::display::show_linear(data, ctx, continuation, end, function_table, colors);\
         ");
 
@@ -260,21 +260,12 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
     for blockaddr in blocks.iter() {
         let block = cfg.get_block(*blockaddr);
         if block.start == 0x00 { continue; }
-        /*
-        println!("Basic block --\n  start: {:#x}\n  end:   {:#x}", block.start, block.end);
-        println!("  next:");
-        for neighbor in cfg.graph.neighbors(block.start) {
-            println!("    {:#x}", neighbor);
-        }
-        */
 
         if ssa.phi.contains_key(&block.start) {
-            println!("Phi: {:?}", ssa.phi[&block.start].keys());
+            println!("phi: {:?}", ssa.phi[&block.start].keys());
         }
 
         let mut iter = data.instructions_spanning(<PIC17 as Arch>::Decoder::default(), block.start, block.end);
-//                println!("Block: {:#04x}", next);
-//                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
             let mut instr_string = String::new();
             PIC17::render_frame(
@@ -293,11 +284,6 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
                 function_table,
                 ssa
             );
-            if ssa.instruction_values.contains_key(&address) {
-                // println!("  values: {:?}", ssa.instruction_values[&address]);
-            }
-           //println!("{:#04x}: {}", address, instr);
         }
-//        println!("------------------------------");
     }
 }

@@ -994,7 +994,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             (Some(Location::CF), Direction::Write)
         }
         Opcode::NOT => {
-            panic!();
+            panic!("instruction declared to not have implicit locations");
         }
         Opcode::CMPXCHG => {
             [
@@ -1012,10 +1012,11 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
             ][i as usize]
         }
         Opcode::JMP => {
-            panic!();
+            // for now, ignore the implicit read/write of `rip`
+            panic!("instruction declared to not have implicit locations");
         },
         Opcode::JMPF => { // TODO: this is wrong.
-            panic!();
+            panic!("instruction declared to not have implicit locations");
         },
         Opcode::IRET | // TODO: this is wrong
         Opcode::RETF | // TODO: this is wrong
@@ -1030,7 +1031,9 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::MFENCE |
         Opcode::SFENCE |
         Opcode::NOP |
-        Opcode::WAIT => { panic!() }
+        Opcode::WAIT => {
+            panic!("instruction declared to not have implicit locations");
+        }
         Opcode::CLFLUSH |
         Opcode::FXSAVE |
         Opcode::FXRSTOR |
@@ -1040,20 +1043,20 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::STMXCSR |
         Opcode::SGDT |
         Opcode::SIDT => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         Opcode::LDMXCSR |
         Opcode::LGDT |
         Opcode::LIDT => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         // TODO: this is wrong
         Opcode::SMSW => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         // TODO: this is wrong
         Opcode::LMSW => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         Opcode::SWAPGS => {
             [
@@ -1101,11 +1104,11 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::SLDT |
         Opcode::STR |
         Opcode::INVLPG => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         Opcode::LLDT |
         Opcode::LTR => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         // these are immediate-only or have no operands
         Opcode::JMPE |
@@ -1114,7 +1117,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::INTO |
         Opcode::HLT |
         Opcode::Invalid => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         },
         Opcode::JO |
         Opcode::JNO |
@@ -1192,7 +1195,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::HADDPS |
         Opcode::HSUBPS |
         Opcode::ADDSUBPS => {
-            panic!()
+            panic!("instruction declared to not have implicit locations");
         }
         Opcode::CMPS |
         Opcode::SCAS |
@@ -1212,8 +1215,6 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         o @ Opcode::SYSCALL |
         o => {
             event!(Level::ERROR, opcode = ?o, "missing implicit operand information");
-            /* TODO: these. */
-//            panic!()
 //            assume the worst case, a machine-wide write
             (None, Direction::Write)
         }
@@ -1557,7 +1558,6 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<yaxpea
                     // but we're at the last op, so we're actually done...
                     return None;
                 }
-    //            println!("opc: {}", iter.inst.opcode());
 
                 let op = iter.inst.operand(iter.op_idx - 1);
                 let op_use = use_of(iter.inst, iter.op_idx - 1);

@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-core"
-version = "0.0.1"
+version = "0.0.1-vw-tweaks"
 dependencies = [
  "goblin",
  "nix",

@@ -506,7 +506,9 @@ impl SymbolicExpression {
 
                 format!("*{}", inner_expr)
             },
-            _ => { panic!("aaaadsfasfa"); }
+            other => {
+                unimplemented!("unimplemented symbolic expression show(): {:?}", other);
+            }
         }
     }
 
@@ -623,23 +625,20 @@ impl Data {
                             }
                         }
                         _ => {
-                            println!("{:?} + {:?}", left, right);
-                            panic!("aaa");
+                            panic!("unimplemented value set addition: {:?} + {:?}", left, right);
                         }
                     }
                 }
                 Some(Data::ValueSet(new_values))
             },
             _ => {
-                println!("Adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
+                tracing::debug!("adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
                 return None;
-                // panic!("add!");
             }
         }
     }
 
     pub fn mul(left: &Data, right: &Data) -> Option<Data> {
-        // panic!("mul!");
         match (left, right) {
             (Data::ValueSet(values), Data::Concrete(m, _)) => {
                 let mut out_values: Vec<ValueRange> = Vec::new();

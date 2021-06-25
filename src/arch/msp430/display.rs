@@ -297,7 +297,7 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
         //
         // start at continuation because this linear disassembly
         // might start at the middle of a preexisting block
-        panic!("\
+        unimplemented!("\
         arch::display::show_linear(data, ctx, continuation, end, function_table, colors);\
         ");
 

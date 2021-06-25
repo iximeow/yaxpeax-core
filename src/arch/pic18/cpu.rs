@@ -1454,7 +1454,7 @@ impl MCU for CPU {
                 self.ip += instr.len();
                 Ok(())
             },
-            Err(msg) => { panic!("{}", msg); }
+            Err(msg) => { panic!("pic18 emulator decode error: {}", msg); }
         };
         if skip_next {
             match self.decode() {
@@ -1462,7 +1462,7 @@ impl MCU for CPU {
                     self.ip += next_instr.len();
                     Ok(())
                 },
-                Err(msg) => { panic!("{}", msg); }
+                Err(msg) => { panic!("pic18 emulator decode error: {}", msg); }
             }
         } else {
             eval_result

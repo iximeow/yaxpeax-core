@@ -633,25 +633,12 @@ impl ModuleData {
                     Object::Elf(elf) => elf,
                     _ => panic!()
                 };
-/*
-                println!("Parsed ELF: {:?}", elf);
-
-                for sym in elf.dynsyms.iter() {
-                    println!("dynsym: {:?}", sym);
-                    println!("Name: {}", elf.dynstrtab.get(sym.st_name).unwrap().unwrap());
-                }
-                for sym in elf.syms.iter() {
-                    println!("sym: {:?}", sym);
-                    println!("Name: {}", elf.strtab.get(sym.st_name).unwrap().unwrap());
-                }
-*/
                 for (i, section) in elf.program_headers.iter().enumerate() {
                     // TODO: look into cow handles into the actual data
                     // TODO: actually respect ELF loader behavior w.r.t overlays
                     // TODO: does this do stuff with alignment or what
                     let mut section_data = vec![0; section.p_memsz as usize];
-//                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
-//                    println!("{:?}", section);
+                    tracing::trace!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
                     let physical_copy_end = (section.p_offset as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.p_offset as usize) < data.len() {
@@ -663,8 +650,8 @@ impl ModuleData {
                         std::cmp::min(section.p_filesz as usize, section.p_memsz as usize)
                     };
 
-                    //println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
-                    //println!("virtual size is {:#x}", section_data.len());
+                    tracing::trace!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
+                    tracing::trace!("virtual size is {:#x}", section_data.len());
                     for i in 0..copy_size {
                         section_data[i] = data[(section.p_offset as usize) + i];
                     }
@@ -674,11 +661,11 @@ impl ModuleData {
                         data: section_data,
                         name: elf::program_header::type_to_str(elf.header.e_machine, section.p_type),
                     };
-                    //println!("mapped section {} to [{}, {})",
-                    //    i,
-                    //    new_section.start.show(),
-                    //    (new_section.start as u64 + new_section.data.len() as u64).show()
-                    //);
+                    tracing::trace!("mapped section {} to [{}, {})",
+                        i,
+                        new_section.start.show(),
+                        (new_section.start as u64 + new_section.data.len() as u64).show()
+                    );
                     module.segments.push(new_section);
                 }
                 Some(module)
@@ -694,15 +681,15 @@ impl ModuleData {
                     Object::PE(pe) => pe,
                     _ => { unreachable!(); }
                 };
-//                println!("Parsed PE: {:?}", pe);
+                tracing::trace!("Parsed PE: {:?}", pe);
 
                 for section in pe.sections.iter() {
                     // TODO: look into cow handles into the actual data
                     // TODO: actually respect PE loader behavior w.r.t overlays
                     // TODO: does this do stuff with alignment or what
                     let mut section_data = vec![0; section.virtual_size as usize];
-//                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.virtual_size, section.size_of_raw_data);
-//                    println!("{:?}", section);
+                    tracing::trace!("virtual size: {:#x}, size of raw data: {:#x}", section.virtual_size, section.size_of_raw_data);
+                    tracing::trace!("{:?}", section);
                     let physical_copy_end = (section.pointer_to_raw_data as usize) + std::cmp::min(section.size_of_raw_data as usize, section.virtual_size as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.pointer_to_raw_data as usize) < data.len() {
@@ -714,8 +701,8 @@ impl ModuleData {
                         std::cmp::min(section.size_of_raw_data as usize, section.virtual_size as usize)
                     };
 
-                    println!("mapping section \"{}\" by copying {:#x} bytes starting from {:#x}", std::str::from_utf8(&section.name[..]).unwrap(), copy_size, section.pointer_to_raw_data);
-                    println!("virtual size is {:#x}", section_data.len());
+                    tracing::trace!("mapping section \"{}\" by copying {:#x} bytes starting from {:#x}", std::str::from_utf8(&section.name[..]).unwrap(), copy_size, section.pointer_to_raw_data);
+                    tracing::trace!("virtual size is {:#x}", section_data.len());
                     for i in 0..copy_size {
                         section_data[i] = data[(section.pointer_to_raw_data as usize) + i];
                     }
@@ -725,35 +712,27 @@ impl ModuleData {
                         data: section_data,
                         name: std::str::from_utf8(&section.name[..]).unwrap().to_string()
                     };
-                    println!("mapped {} to [{}, {})",
+                    tracing::trace!("mapped {} to [{}, {})",
                         std::str::from_utf8(&section.name[..]).unwrap(),
                         new_section.start.show(),
                         (new_section.start as u64 + new_section.data.len() as u64).show()
                     );
                     module.segments.push(new_section);
                 }
-                match &module.module_info {
-                    ModuleInfo::PE(_, _, _, _, _, ref imports, ref _exports, _) => {
-                        for _i in imports.iter() {
-//                            println!("import: {:?}", i);
-                        }
-                    }
-                    _ => { }
-                }
                 Some(module)
             },
-            Ok(Object::Mach(_mach)) => {
-                panic!("UHHHHH  IM SCARED");
+            Ok(Object::Mach(mach)) => {
+                panic!("Mach objects are not yet supported: {:?}", mach);
             },
-            Ok(Object::Archive(_archive)) => {
-                panic!("u hhh h h hh h  H H H H H");
+            Ok(Object::Archive(archive)) => {
+                panic!("AR archives are not yet supported: {:?}", archive);
             },
             Ok(Object::Unknown(magic)) => {
-                println!("goblin found unknown magic: {:#x}", magic);
+                tracing::warn!("goblin found unknown magic: {:#x}", magic);
                 None
             },
             Err(e) => {
-                println!("goblin error: {:?}", e);
+                tracing::error!("goblin error: {:?}", e);
                 None
             }
         }

@@ -20,7 +20,6 @@ extern crate yaxpeax_x86;
 extern crate yaxpeax_msp430;
 extern crate yaxpeax_pic17;
 extern crate yaxpeax_pic18;
-// extern crate yaxpeax_pic24;
 
 #[macro_use]
 pub mod analyses;

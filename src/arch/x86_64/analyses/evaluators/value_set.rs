@@ -17,9 +17,7 @@ impl Domain for ValueSetDomain {
     type Value = Vec<ValueRange>;
 
     fn join(_l: Option<Self::Value>, _r: Option<Self::Value>) -> Option<Self::Value> {
-        // TODO ... haha
-        panic!("implement value set domain join");
-        // None
+        unimplemented!("implement value set domain join");
     }
 }
 
@@ -129,8 +127,8 @@ fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRa
                         if let Some(value) = data.read(v + i as u64) {
                             read_value |= (value as u64) << (8 * i);
                         } else {
-                            // TODO: this is ... bad failure mode
-                            println!("Read of {:#x} failed??", v + i as u64);
+                            // TODO: this is a ... bad failure mode
+                            tracing::error!("read of {:#x} failed?", v + i as u64);
                             return None;
                         }
                     }
@@ -153,7 +151,7 @@ fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRa
                                 read_value |= (value as u64) << (8 * i);
                             } else {
                                 // TODO: this is ... bad failure mode
-                                println!("Read of {:#x} failed??", v + i as u64);
+                                tracing::error!("read of {:#x} failed?", v + i as u64);
                                 return None;
                             }
                         }
@@ -246,7 +244,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     }
 
     fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
-        //TODO: handle prefixes like at all
+        //TODO: handle prefixes at all
         match instr.opcode() {
             Opcode::MOVSXD => {
                 match (instr.operand(0), instr.operand(1)) {
@@ -267,8 +265,8 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                             if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
                                 if let Some(read_values) = valueset_deref(values.clone(), data, 1) {
                                     use arch::x86_64::display::DataDisplay;
-                                    println!(
-                                        "at {}, Derefed value set {} to read {}",
+                                    tracing::info!(
+                                        "at {}, derefed value set {} to read {}",
                                         addr.show(),
                                         DataDisplay { data: &Data::ValueSet(values), colors: None },
                                         DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
@@ -298,8 +296,8 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                             if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
                                 if let Some(read_values) = valueset_deref(values.clone(), data, 2) {
                                     use arch::x86_64::display::DataDisplay;
-                                    println!(
-                                        "Derefed value set {} to read {}",
+                                    tracing::info!(
+                                        "derefed value set {} to read {}",
                                         DataDisplay { data: &Data::ValueSet(values), colors: None },
                                         DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
                                     );
@@ -338,8 +336,8 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                 };
                                 if let Some(read_values) = valueset_deref(values.clone(), data, size) {
                                     use arch::x86_64::display::DataDisplay;
-                                    eprintln!(
-                                        "Derefed value set {} to read {}",
+                                    tracing::info!(
+                                        "derefed value set {} to read {}",
                                         DataDisplay { data: &Data::ValueSet(values), colors: None },
                                         DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
                                     );
@@ -363,17 +361,17 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
             Opcode::JMP => {
                 let jmpop = instr.operand(0);
                 if jmpop.is_memory() {
-                    // TODO !!!
-                    // let r = referent(instr, &jmpop, addr, dfg, contexts);
                     if let Some(Data::ValueSet(values)) = referent(instr, &jmpop, addr, dfg, contexts) {
                         if let Some(read_values) = valueset_deref(values.clone(), data, 8) {
-                            eprintln!("    jump table with {} entries:", read_values.len());
+                            tracing::info!("    jump table with {} entries:", read_values.len());
                             for ent in read_values {
                                 match ent {
                                     ValueRange::Precisely(Data::Concrete(ent, _)) => {
-                                        eprintln!("      {:#x}", ent);
+                                        tracing::info!("      {:#x}", ent);
                                     }
-                                    _ => { panic!("uhh"); }
+                                    entry => {
+                                        tracing::warn!("can't process unknown value range entry: {:?}", entry);
+                                    }
                                 }
                             }
                         }

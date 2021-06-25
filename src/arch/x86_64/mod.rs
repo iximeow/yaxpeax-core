@@ -51,13 +51,11 @@ pub struct DisplayCtx<'a> {
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for x86_64Data {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    // TODO: !!!
     fn function_at(&self, _addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
-        panic!("self.contexts.functions.get(&addr)");
+        unimplemented!("FunctionQuery::function_at for x86_64Data");
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
-        panic!("TODO");
-        // self.values().collect::<Vec<_>>()
+        unimplemented!("FunctionQuery::all_functions for x86_64Data");
     }
 }
 
@@ -69,14 +67,11 @@ impl CommentQuery<<x86_64 as Arch>::Address> for MergedContextTable {
 
 impl FunctionQuery<<x86_64 as Arch>::Address> for MergedContextTable {
     type Function = FunctionImpl<<x86_64 as ValueLocations>::Location>;
-    // TODO: !!!
     fn function_at(&self, _addr: <x86_64 as Arch>::Address) -> Option<&Self::Function> {
-        panic!("TODO");
-//        self.get(&addr)
+        unimplemented!("FunctionQuery::function_at for MergedContextTable");
     }
     fn all_functions(&self) -> Vec<&Self::Function> {
-        panic!("TODO");
-        // self.values().collect::<Vec<_>>()
+        unimplemented!("FunctionQuery::all_functions for MergedContextTable");
     }
 }
 

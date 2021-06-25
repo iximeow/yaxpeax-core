@@ -54,74 +54,7 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)> + ?Sized, F: FunctionQuer
 }
 
 fn loc_by_id(_idx: u8, _usage: Use, _op: &Operand) -> Option<(Option<Location>, Direction)> {
-    panic!("bad");
-    /*
-    match op {
-        Operands::RegisterList(list) => {
-            let mut item = 0u8;
-            let mut i = 0u8;
-            while i < 16 {
-                if (*list & (1 << i)) != 0 {
-                    if item == idx {
-                        return Some((Some(Location::Register(item)), usage.first_use()));
-                    } else {
-                        item += 1;
-                    }
-                }
-                i += 1;
-            }
-            None
-        }
-        Operands::OneOperand(reg) => {
-            if idx == 0 {
-                Some((Some(Location::Register(*reg)), usage.first_use()))
-            } else {
-                None
-            }
-        }
-        Operands::TwoOperand(rd, rs) => {
-            if idx == 0 {
-                Some((Some(Location::Register(*rd)), usage.first_use()))
-            } else if idx == 1 {
-                Some((Some(Location::Register(*rs)), usage.first_use()))
-            } else {
-                None
-            }
-        }
-        Operands::RegImm(reg, imm) => {
-            if idx == 0 {
-                Some((Some(Location::Register(*reg)), usage.first_use()))
-            } else {
-                None
-            }
-        }
-        Operands::RegRegList(reg, list) => {
-            if idx == 0 {
-                return Some((Some(Location::Register(*reg)), usage.first_use()));
-            }
-            let mut item = 1u8;
-            let mut i = 0u8;
-            while i < 16 {
-                if (*list & (1 << i)) != 0 {
-                    if item == idx {
-                        return Some((Some(Location::Register(item)), usage.first_use()));
-                    } else {
-                        item += 1;
-                    }
-                }
-                i += 1;
-            }
-            None
-        }
-        Operands::TwoRegImm(_rs, _rd, _imm) => {
-            None
-        }
-        Operands::BranchOffset(_offs) => {
-            None
-        }
-        _ => None
-    }
-    */
+    unimplemented!("data flow analysis for aarch64");
 }
 fn implicit_loc(_op: yaxpeax_arm::armv8::a64::Opcode, _i: u8) -> (Option<Location>, Direction) {
     (None, Direction::Read)
@@ -131,91 +64,12 @@ fn implicit_locs(_op: yaxpeax_arm::armv8::a64::Opcode) -> u8 {
 }
 
 fn locations_in(_op: &yaxpeax_arm::armv8::a64::Operand, _usage: Use) -> u8 {
-    panic!("bad bad");
-    /*
-    match op {
-        Operands::RegisterList(list) => {
-            list.count_ones() as u8
-        }
-        Operands::OneOperand(_) => {
-            1
-        }
-        Operands::TwoOperand(_, _) => {
-            2
-        }
-        Operands::RegImm(_, _) => {
-            1
-        }
-        Operands::RegRegList(_, list) => {
-            1 + (list.count_ones() as u8)
-        }
-        Operands::TwoRegImm(_, _, _) => {
-            2
-        }
-        Operands::ThreeOperand(_, _, _) => {
-            3
-        }
-        Operands::ThreeOperandImm(_, _, _) => {
-            2
-        }
-        Operands::ThreeOperandWithShift(_, _, _, _) => {
-            3
-        }
-        Operands::MulThreeRegs(_, _, _) => {
-            3
-        }
-        Operands::MulFourRegs(_, _, _, _) => {
-            4
-        }
-        Operands::BranchOffset(_) => {
-            0
-        }
-    }
-    */
+    unimplemented!("data flow analysis for aarch64");
 }
 
 fn operands_in(_inst: &yaxpeax_arm::armv8::a64::Instruction) -> u8 {
-    panic!("bad bad bad");
-    /*
-    match inst.operands {
-        Operands::RegisterList(list) => {
-            list.count_ones() as u8
-        }
-        Operands::OneOperand(_) => {
-            1
-        }
-        Operands::TwoOperand(_, _) => {
-            2
-        }
-        Operands::RegImm(_, _) => {
-            1
-        }
-        Operands::RegRegList(_, list) => {
-            1 + (list.count_ones() as u8)
-        }
-        Operands::TwoRegImm(_, _, _) => {
-            2
-        }
-        Operands::ThreeOperand(_, _, _) => {
-            3
-        }
-        Operands::ThreeOperandImm(_, _, _) => {
-            2
-        }
-        Operands::ThreeOperandWithShift(_, _, _, _) => {
-            3
-        }
-        Operands::MulThreeRegs(_, _, _) => {
-            3
-        }
-        Operands::MulFourRegs(_, _, _, _) => {
-            4
-        }
-        Operands::BranchOffset(_) => {
-            0
-        }
-    }
-    */
+
+    unimplemented!("data flow analysis for aarch64");
 }
 
 impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<ARMv8 as yaxpeax_arch::Arch>::Address>> Iterator for LocationIter<'a, 'b, 'c, D, F> {
@@ -230,7 +84,6 @@ impl <'a, 'b, 'c, D: Disambiguator<Location, (u8, u8)>, F: FunctionQuery<<ARMv8 
                     // but we're at the last op, so we're actually done...
                     return None;
                 }
-    //            println!("opc: {}", iter.inst.opcode);
 
                 let op = &iter.inst.operands[0];
                 let op_use = Use::Read; //use_of(iter.inst, iter.op_idx - 1);

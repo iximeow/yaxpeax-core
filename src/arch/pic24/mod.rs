@@ -24,7 +24,7 @@ impl MCU for CPU {
     type Instruction = yaxpeax_pic24::Instruction;
     type Decoder = yaxpeax_pic24::InstDecoder;
     fn emulate(&mut self) -> Result<(), String> {
-        panic!("not implemented yet")
+        unimplemented!("")
     }
     fn decode(&self) -> Result<Self::Instruction, String> {
         Ok(yaxpeax_pic24::Instruction { opcode: Opcode::NOP })
