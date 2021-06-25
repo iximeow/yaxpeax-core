@@ -4,7 +4,7 @@ name = "yaxpeax-core"
 version = "0.0.1-vw-tweaks"
 authors = [ "iximeow <me@iximeow.net>" ]
 license = "0BSD"
-repository = ""
+repository = "https://github.com/iximeow/yaxpeax-core/tree/vw-tweaks"
 description = "program analysis for machine code"
 
 [dependencies]
