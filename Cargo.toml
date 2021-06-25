@@ -1,7 +1,7 @@
 [package]
 
 name = "yaxpeax-core"
-version = "0.0.1-vw-tweaks"
+version = "0.0.2-vw-tweaks"
 authors = [ "iximeow <me@iximeow.net>" ]
 license = "0BSD"
 repository = "https://github.com/iximeow/yaxpeax-core/tree/vw-tweaks"
