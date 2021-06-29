@@ -763,3 +763,57 @@ impl <'a, A, M> InstructionIteratorSpanned<'a, A, M> where
         }*/
     }
 }
+
+impl <'a, A: yaxpeax_arch::Arch + DecodeFrom<M>, M: MemoryRepr<A> + MemoryRange<A>>
+    Iterator for InstructionIteratorSpanned<'a, A, M> where A::Instruction: Copy + Clone {
+    type Item = (A::Address, A::Instruction);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.elem.is_some() {
+            let instr: &mut A::Instruction = self.elem.as_mut().unwrap();
+            //  TODO: check for wrappipng..
+            match Some(self.current + instr.len()) {
+                Some(next) => {
+                    if next <= self.end {
+                        self.current = next;
+                        if let Some(range) = self.data.range_from(self.current) {
+                            match A::decode_with_decoder_into(&self.decoder, &range, instr) {
+                                Ok(()) => {
+                                    Some((self.current, *instr))
+                                },
+                                Err(_) => None
+                            }
+                        } else {
+                            //println!("BUG: No data available for {}", self.current.show());
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                },
+                None => None
+            }
+        } else {
+            if self.current <= self.end {
+                if let Some(range) = self.data.range_from(self.current) {
+                    self.elem = A::decode_with_decoder(&self.decoder, &range).ok();
+                    match self.elem {
+                        Some(ref instr) => {
+                            Some((self.current, *instr))
+                        },
+                        None => None
+                    }
+                } else {
+                    //println!("BUG: No data available for {}", self.current.show());
+                    None
+                }
+            } else {
+                None
+            }
+        }
+        /*
+            None => {
+            }
+        }*/
+    }
+}
