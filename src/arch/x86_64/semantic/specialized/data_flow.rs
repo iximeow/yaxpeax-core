@@ -23,58 +23,58 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU32(_) |
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
-                vec![(Some(Location::Memory(ANY)), Direction::Write)]
+                vec![(Some(Location::UnevalMem(*op)), Direction::Write)]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::Nothing => {
@@ -176,58 +176,58 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU32(_) |
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
-                vec![(Some(Location::Memory(ANY)), Direction::Read)]
+                vec![(Some(Location::UnevalMem(*op)), Direction::Read)]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read)
+                    (Some(Location::UnevalMem(*op)), Direction::Read)
                 ]
             },
             Operand::Nothing => {
@@ -261,68 +261,68 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
                 vec![
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write),
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write),
                 ]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Read),
-                    (Some(Location::Memory(ANY)), Direction::Write)
+                    (Some(Location::UnevalMem(*op)), Direction::Read),
+                    (Some(Location::UnevalMem(*op)), Direction::Write)
                 ]
             },
             Operand::Nothing => {
@@ -505,16 +505,23 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
 
         Opcode::IMUL => {
             // TODO: this.
+            // 1 operand version
             let mut locs = if !instr.operand_present(1) {
-                decompose_read(&instr.operand(0))
+                let mut ls = decompose_read(&instr.operand(0));
+                ls.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
+                ls.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
+                if instr.operand(0).width() != 1 {
+                    ls.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
+                };
+                ls
             } else {
                 let mut ls = decompose_readwrite(&instr.operand(0));
                 ls.append(&mut decompose_read(&instr.operand(1)));
                 ls
             };
-            locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
-            locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
-            locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
+            // locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
+            // locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
+            // locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
             locs.push((Some(Location::SF), Direction::Write));
@@ -528,16 +535,20 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             // TODO: this is lazy and assumes writes of all flags
             // this may not be true
             // TODO: this may not read *dx (if this is idiv r/m 8)
-            let mut locs = if !instr.operand_present(1) {
-                decompose_read(&instr.operand(0))
-            } else {
-                let mut ls = decompose_readwrite(&instr.operand(0));
-                ls.append(&mut decompose_read(&instr.operand(1)));
-                ls
-            };
+            // let mut locs = if !instr.operand_present(1) {
+            //     decompose_read(&instr.operand(0))
+            // } else {
+            //     let mut ls = decompose_readwrite(&instr.operand(0));
+            //     ls.append(&mut decompose_read(&instr.operand(1)));
+            //     ls
+            // };
+            let mut locs = decompose_read(&instr.operand(0));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
-            locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Read));
+            if instr.operand(0).width() != 1 {
+                locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Read));
+                locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
+            }
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
             locs.push((Some(Location::SF), Direction::Write));
@@ -553,6 +564,9 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             let mut locs = decompose_read(&instr.operand(0));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
+            if instr.operand(0).width() != 1 {
+                locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
+            }
             locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));

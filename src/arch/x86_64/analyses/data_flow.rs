@@ -16,7 +16,7 @@ use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues};
 use analyses::static_single_assignment::{DataDisplay as SSADataDisplay};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec};
+use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec, Operand};
 use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;
@@ -75,6 +75,7 @@ pub enum Location {
     Register(RegSpec),
     Memory(MemoryRegion),
     MemoryLocation(MemoryRegion, u8, Option<(Data, Data)>),
+    UnevalMem(Operand),
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL,
     // necessary to have a location to write that is provably not an Operand variant.
@@ -267,6 +268,7 @@ impl Serialize for Location {
                 serialized_loc.push_str(&serde_json::to_string(offset).unwrap());
                 */
             },
+            Location::UnevalMem(_) => todo!(),
             Location::CF => { serialized_loc.push_str("c"); }
             Location::PF => { serialized_loc.push_str("p"); }
             Location::AF => { serialized_loc.push_str("a"); }
@@ -308,6 +310,7 @@ impl fmt::Display for Location {
                     write!(f, "(mem:{}):{}", mem, size)
                 }
             },
+            Location::UnevalMem(op) => write!(f, "{:?}", op),
             Location::CF => write!(f, "cf"),
             Location::PF => write!(f, "pf"),
             Location::AF => write!(f, "af"),
@@ -424,6 +427,9 @@ impl AliasInfo for Location {
             Location::Memory(_) => {
                 vec![]
             }
+            Location::UnevalMem(_) => {
+                vec![]
+            }
             // TODO:
             // this is not precise! it may be the case that for some `i`, `j`, `k`, and `l`,
             // MemoryLocation(R, i, j) and MemoryLocation(R, k, l) overlap!
@@ -452,6 +458,7 @@ impl AliasInfo for Location {
                 Location::Register(RegSpec::rflags())
             },
             Location::Memory(r) => Location::Memory(*r),
+            Location::UnevalMem(op) => Location::UnevalMem(*op),
             Location::MemoryLocation(r, _, _) => Location::Memory(*r),
             Location::RIP => {
                 self.clone()
