@@ -481,6 +481,9 @@ impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Underlying<Target=DF
     }
 }
 
+impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Eq + fmt::Display{
+}
+
 impl<Leaf> Item<Leaf> {
     pub fn untyped(value: Expression<Leaf>) -> Rc<Self> {
         Rc::new(Item {

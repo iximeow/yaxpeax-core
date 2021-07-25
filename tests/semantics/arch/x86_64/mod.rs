@@ -174,15 +174,27 @@ fn test_known_stack_alias() {
         ))
     );
 
-    let initial_const = dfg.get_def(0, rsp_access.clone());
-    assert_eq!(&*initial_const.get_data(), &Some(Data::Concrete(0xffffffff_efbeadde, None)));
-    assert_eq!(initial_const.get_data().as_ref(), dfg.get_def(12, Location::Register(RegSpec::rax())).get_data().as_ref().unwrap().underlying().as_ref());
-    assert_eq!(initial_const.get_data().as_ref(), dfg.get_def(16, Location::Register(RegSpec::rcx())).get_data().as_ref().unwrap().underlying().as_ref());
+    let initial_const_value = dfg.get_def(0, rsp_access.clone()).as_rc();
+    let initial_const_data = initial_const_value.borrow();
+    let initial_const = initial_const_data.data.as_ref();
+    assert_eq!(initial_const, Some(&Data::Concrete(0xffffffff_efbeadde, None)));
+    assert_eq!(initial_const, dfg.get_def(12, Location::Register(RegSpec::rax())).get_data().as_ref().unwrap().underlying().as_ref());
+    assert_eq!(initial_const, dfg.get_def(16, Location::Register(RegSpec::rcx())).get_data().as_ref().unwrap().underlying().as_ref());
 }
 
 #[test]
 fn test_function_argument_inference() {
+    let instructions = &[
+        0x48, 0x8b, 0x07, // mov rax, [rdi]
+        0xc3,             // ret
+    ];
 
+    let (mut cfg, mut dfg, contexts) = do_memory_analyses(instructions);
+
+    let instructions = instructions.to_vec();
+
+    let undefineds = dfg.get_undefineds();
+    println!("{:?}", undefineds);
 }
 
 fn print_memory_layouts(instvec: &Vec<u8>, cfg: &ControlFlowGraph<<x86_64 as Arch>::Address>, dfg: &SSA<x86_64>, mem_analysis: &MemoryLayout<x86_64>) {
