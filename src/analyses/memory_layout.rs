@@ -358,6 +358,86 @@ impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::
         Rc::clone(self.segments.borrow_mut().entry(segment_base)
             .or_insert_with(|| Rc::new(RefCell::new(HashMap::new()))))
     }
+
+    pub fn render(&self) {
+        let segments = self.segments.borrow();
+        let mut regions: Vec<&ValueOrImmediate<A>> = segments.keys().collect();
+        regions.sort_by(|l, r| {
+            l.to_string().cmp(&r.to_string())
+        });
+        for region in regions {
+            let segment = segments.get(region).unwrap();
+            println!("at region {}:", region);
+            for (base, segment) in segment.borrow().iter() {
+                println!("          --- address <{}> ---", base.name());
+                let mut exprs: Vec<Rc<Item<ValueOrImmediate<A>>>> = segment.accesses.keys().cloned().collect();
+                use std::cmp::Ordering;
+                exprs.sort_by(|l, r| {
+                    let lv = &l.value;
+                    let rv = &r.value;
+                    if lv == rv {
+                        Ordering::Equal
+                    } else {
+                        match (lv, rv) {
+                            (Expression::Unknown, _) => {
+                                Ordering::Greater
+                            }
+                            (_, Expression::Unknown) => {
+                                Ordering::Less
+                            },
+                            (Expression::Value(lv), Expression::Value(rv)) => {
+                                use analyses::ValueOrImmediate::*;
+                                match (lv, rv) {
+                                    (Immediate(l), Immediate(r)) => {
+                                        l.cmp(r)
+                                    }
+                                    (Immediate(_), _) => {
+                                        Ordering::Less
+                                    }
+                                    (_, Immediate(_)) => {
+                                        Ordering::Greater
+                                    }
+                                    _ => {
+                                        Ordering::Equal
+                                    }
+                                }
+                            }
+                            (Expression::Value(_), _) => {
+                                Ordering::Less
+                            }
+                            (_, Expression::Value(_)) => {
+                                Ordering::Greater
+                            }
+                            _ => {
+                                Ordering::Equal
+                            }
+                        }
+                    }
+                });
+                for expr in exprs {
+                    let accesses = segment.accesses.get(&expr).unwrap();
+                    assert!(accesses.len() > 0);
+
+                    let mut base_str = expr.to_string();
+                    while base_str.len() < 6 {
+                        base_str = format!(" {}", base_str);
+                    }
+
+                    let mut access_sizes: Vec<&u64> = accesses.keys().collect();
+                    access_sizes.sort();
+                    for size in access_sizes.iter() {
+                        let access = accesses.get(size).unwrap();
+                        let access_str = format!("{}{}-",
+                            if access.is_read() { "r" } else { "-" },
+                            if access.is_write() { "w" } else { "-" },
+                        );
+                        println!("  {}  | {:#06x}:         {}     |", base_str, size, access_str);
+                    }
+                }
+                println!("          ---------------------------");
+            }
+        }
+    }
 }
 
 use yaxpeax_x86::long_mode::{Arch as amd64};

@@ -727,6 +727,25 @@ impl<A: SSAValues> ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
     pub fn immediate(v: u64) -> Expression<Self> {
         Expression::value(ValueOrImmediate::Immediate(v))
     }
+
+    fn name(&self) -> String {
+        match self {
+            ValueOrImmediate::Immediate(v) => {
+                format!("{}", v)
+            }
+            ValueOrImmediate::Value(v) => {
+                let version_string = match v.borrow().version {
+                    Some(v) => { v.to_string() },
+                    None => "input".to_string()
+                };
+                if let Some(data) = v.borrow().data.as_ref() {
+                    format!("{:?}_{}", v.borrow().location, version_string)
+                } else {
+                    format!("{:?}_{}", v.borrow().location, version_string)
+                }
+            }
+        }
+    }
 }
 
 use std::fmt;
