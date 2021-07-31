@@ -27,7 +27,7 @@ use analyses::xrefs;
 use memory::{MemoryRepr, MemoryReprReader};
 use memory::repr::ReadCursor;
 
-impl<M: MemoryRepr<Self>> DecodeFrom<M> for MSP430 {
+impl<M: MemoryRepr<Self> + ?Sized> DecodeFrom<M> for MSP430 {
     fn decode_with_decoder_into<'mem>(
         decoder: &Self::Decoder,
         data: &ReadCursor<'mem, MSP430, M>,

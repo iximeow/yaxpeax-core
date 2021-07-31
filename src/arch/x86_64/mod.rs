@@ -31,7 +31,7 @@ pub mod debug;
 pub mod display;
 pub mod semantic;
 
-impl<M: MemoryRepr<Self>> DecodeFrom<M> for x86_64 {
+impl<M: MemoryRepr<Self> + ?Sized> DecodeFrom<M> for x86_64 {
     fn decode_with_decoder_into<'mem>(
         decoder: &Self::Decoder,
         cursor: &crate::memory::repr::ReadCursor<'mem, Self, M>,

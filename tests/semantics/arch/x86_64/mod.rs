@@ -24,7 +24,7 @@ fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layo
     // TODO: is this necessary? can this be removed from `AnalysisBuilder::new`?
     let mut x86_64_data = x86_64Data::default();
 
-    let cfg = control_flow::AnalysisBuilder::new(&data.to_vec(), &mut x86_64_data.contexts)
+    let cfg = control_flow::AnalysisBuilder::new(data, &mut x86_64_data.contexts)
         .evaluate();
 
     let dfg = if let Some((prior_dfg, layout)) = memory_layout {

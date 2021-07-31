@@ -664,13 +664,13 @@ pub struct InstructionIteratorSpanned<'a, A, M: MemoryRepr<A> + ?Sized> where
     elem: Option<A::Instruction>
 }
 
-pub trait InstructionSpan<M: MemoryRepr<Self>> where
+pub trait InstructionSpan<M: MemoryRepr<Self> + ?Sized> where
     Self: yaxpeax_arch::Arch + DecodeFrom<M>
 {
     fn instructions_spanning<'a>(data: &'a M, start: Self::Address, end: Self::Address) -> InstructionIteratorSpanned<'a, Self, M>;
 }
 
-impl<A, M: MemoryRepr<Self>> InstructionSpan<M> for A where
+impl<A, M: MemoryRepr<Self> + ?Sized> InstructionSpan<M> for A where
     A: yaxpeax_arch::Arch + DecodeFrom<M>
 {
     fn instructions_spanning<'a>(data: &'a M, start: Self::Address, end: Self::Address) -> InstructionIteratorSpanned<'a, Self, M> {
@@ -712,7 +712,7 @@ pub trait SimpleStreamingIterator {
 
 impl <'a, A, M> InstructionIteratorSpanned<'a, A, M> where
     A: yaxpeax_arch::Arch + DecodeFrom<M>,
-    M: MemoryRepr<A> + MemoryRange<A>
+    M: MemoryRepr<A> + MemoryRange<A> + ?Sized
 {
     pub fn next<'b>(&mut self) -> Option<(A::Address, &A::Instruction)> {
         if self.elem.is_some() {

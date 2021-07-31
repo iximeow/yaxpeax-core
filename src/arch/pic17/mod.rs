@@ -31,7 +31,7 @@ pub mod display;
 pub mod syntaxed_render;
 pub mod analyses;
 
-impl<M: MemoryRepr<Self>> DecodeFrom<M> for PIC17 {
+impl<M: MemoryRepr<Self> + ?Sized> DecodeFrom<M> for PIC17 {
     fn decode_with_decoder_into<'mem>(
         decoder: &Self::Decoder,
         cursor: &ReadCursor<'mem, PIC17, M>,

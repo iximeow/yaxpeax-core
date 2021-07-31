@@ -14,7 +14,7 @@ trait FunctionSignatory<A: Arch> {
     type Signature;
     type Data;
 
-    fn signature_of<M: MemoryRepr<A>>(cfg: &ControlFlowGraph<A::Address>, data: &Self::Data, memory: &M) -> SignatureResult<Self::Signature>;
+    fn signature_of<M: MemoryRepr<A> + ?Sized>(cfg: &ControlFlowGraph<A::Address>, data: &Self::Data, memory: &M) -> SignatureResult<Self::Signature>;
 }
 
 pub struct FunctionByteSignatory;
@@ -47,7 +47,7 @@ impl <A: Arch> FunctionSignatory<A> for FunctionMnemonicSignatory {
     /// A signature built from siphash 1-3 over instruction mnemonics, in a BFS traversal
     /// with a particular depth ordered by start address. This, subsequently, is not
     /// robust in the face of basic block reordering.
-    fn signature_of<M: MemoryRepr<A>>(
+    fn signature_of<M: MemoryRepr<A> + ?Sized>(
         _cfg: &ControlFlowGraph<A::Address>,
         _data: &Self::Data,
         _memory: &M
@@ -66,7 +66,7 @@ impl <A: Arch> FunctionSignatory<A> for FunctionBlockSignatory {
     /// A signature in the form of siphash 1-3 signatures of basic blocks in this function
     /// topologically ordered from the function entry point. This should be robust to
     /// basic block reordering, and also permits an edit distance style fuzzy equivalence
-    fn signature_of<M: MemoryRepr<A>>(
+    fn signature_of<M: MemoryRepr<A> + ?Sized>(
         _cfg: &ControlFlowGraph<A::Address>,
         _data: &Self::Data,
         _memory: &M
@@ -113,7 +113,7 @@ impl <A: Arch> FunctionSignatory<A> for FunctionOrderFreeSignatory {
     /// ret
     ///
     /// by virtue of nulling the jb/jae.
-    fn signature_of<M: MemoryRepr<A>>(
+    fn signature_of<M: MemoryRepr<A> + ?Sized>(
         _cfg: &ControlFlowGraph<A::Address>,
         _data: &Self::Data,
         _memory: &M

@@ -463,7 +463,7 @@ pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
     on_instruction_discovered: &InstrCallback
 ) where
     A: Arch + DecodeFrom<M>,
-    M: MemoryRange<A>,
+    M: MemoryRange<A> + ?Sized,
     Contexts: ContextRead<A, U> + ContextWrite<A, Update>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
@@ -499,7 +499,7 @@ pub struct AnalysisBuilder<
     'memory,
     'ctx,
     A: Arch,
-    M: MemoryRange<A>,
+    M: MemoryRange<A> + ?Sized,
     U,
     Update,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
@@ -511,7 +511,7 @@ pub struct AnalysisBuilder<
     _u: std::marker::PhantomData<U>,
 }
 
-impl<'memory, 'ctx, A, M: MemoryRange<A>, U, Update, Contexts> AnalysisBuilder<'memory, 'ctx, A, M, U, Update, Contexts> where
+impl<'memory, 'ctx, A, M: MemoryRange<A> + ?Sized, U, Update, Contexts> AnalysisBuilder<'memory, 'ctx, A, M, U, Update, Contexts> where
     A: Arch + DecodeFrom<M>,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
@@ -570,7 +570,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
     on_instruction_discovered: &InstrCallback
 ) -> SmallVec<[A::Address; 2]> where
     A: Arch + DecodeFrom<M>,
-    M: MemoryRange<A>,
+    M: MemoryRange<A> + ?Sized,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
