@@ -6,8 +6,6 @@ use memory::MemoryRepr;
 use memory::Named;
 use num_traits::Zero;
 
-use std::ops::Range;
-
 #[derive(Clone, Debug)]
 pub struct ReadCursor<'a, A: Arch + ?Sized, T: MemoryRepr<A> + ?Sized> {
     pub data: &'a T,
@@ -50,7 +48,7 @@ impl <'a, A: Arch, T: MemoryRepr<A> + ?Sized> MemoryRepr<A> for ReadCursor<'a, A
         // TODO: why can't i just `self.clone()` here? this is only giving a &ReadCusror? but
         // ReadCursor impls Clone...
         let ReadCursor { data, start, end } = self;
-        let mut cursor: Self = ReadCursor { data, start: *start, end: *end };
+        let cursor: Self = ReadCursor { data, start: *start, end: *end };
         let data: Vec<u8> = Iterator::collect(cursor);
         Some(FlatMemoryRepr::of(data))
     }

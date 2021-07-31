@@ -59,7 +59,6 @@ impl_control_flow!(
 fn test_x86_determinant() {
     use yaxpeax_arch::AddressDiff;
     use yaxpeax_arch::Decoder;
-    use memory::MemoryRepr;
     use memory::MemoryRange;
     use memory::repr::ReadCursor;
     use analyses::control_flow::Determinant;

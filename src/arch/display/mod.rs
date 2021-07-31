@@ -5,7 +5,6 @@ use arch::InstructionSpan;
 use arch::FunctionQuery;
 use arch::DecodeFrom;
 use memory::{MemoryRepr, MemoryRange};
-use memory::repr::ReadCursor;
 use num_traits::Zero;
 
 use std::fmt;

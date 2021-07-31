@@ -24,7 +24,7 @@ use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
 use analyses::static_single_assignment::{DFGRef, HashedValue, Value};
 use analyses::xrefs;
-use memory::{MemoryRepr, MemoryReprReader};
+use memory::MemoryRepr;
 use memory::repr::ReadCursor;
 
 impl<M: MemoryRepr<Self> + ?Sized> DecodeFrom<M> for MSP430 {

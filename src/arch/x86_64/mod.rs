@@ -4,7 +4,7 @@ use arch::DecodeFrom;
 use analyses::control_flow;
 use analyses::static_single_assignment::SSA;
 use analyses::xrefs;
-use memory::{MemoryRepr, MemoryReprReader};
+use memory::MemoryRepr;
 use self::analyses::data_flow::DefaultCallingConvention;
 
 use petgraph::graphmap::GraphMap;

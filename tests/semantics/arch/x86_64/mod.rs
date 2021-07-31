@@ -18,7 +18,6 @@ use yaxpeax_core::analyses::static_single_assignment::SSA;
 use yaxpeax_core::analyses::memory_layout::MemoryLayout;
 use yaxpeax_core::arch::x86_64::analyses::data_flow::{Data, Location};
 use yaxpeax_core::analyses::evaluators::Evaluator;
-use yaxpeax_core::memory::MemoryRange;
 
 fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layout: Option<(&'dfg SSA<x86_64>, &'layout MemoryLayout<'dfg, x86_64>)>) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>, x86_64Data) {
     // TODO: is this necessary? can this be removed from `AnalysisBuilder::new`?
@@ -57,8 +56,6 @@ fn do_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8], memory_layo
 }
 
 fn do_memory_analyses<'memory, 'dfg: 'layout, 'layout>(data: &'memory [u8]) -> (ControlFlowGraph<<x86_64 as Arch>::Address>, SSA<x86_64>, x86_64Data) {
-    use yaxpeax_arch::{AddressBase, AddressDiff};
-
     let (cfg, dfg, _) = do_analyses(data, None);
 
     let mut mem_analysis = MemoryLayout {

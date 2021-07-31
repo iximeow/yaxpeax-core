@@ -69,7 +69,7 @@ impl <A: Arch> MemoryRepr<A> for [u8] {
     fn module_info(&self) -> Option<&ModuleInfo> {
         None
     }
-    fn module_for(&self, addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, _addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         None
     }
     fn size(&self) -> Option<u64> {

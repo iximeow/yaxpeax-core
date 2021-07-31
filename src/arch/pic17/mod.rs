@@ -15,7 +15,7 @@ use arch::FunctionRepr;
 use arch::FunctionQuery;
 use arch::CommentQuery;
 
-use memory::{MemoryRepr, MemoryReprReader};
+use memory::MemoryRepr;
 use memory::repr::ReadCursor;
 
 use std::collections::HashMap;

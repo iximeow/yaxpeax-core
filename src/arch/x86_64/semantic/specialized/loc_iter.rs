@@ -1537,11 +1537,10 @@ fn implicit_locs(op: Opcode) -> u8 {
 }
 #[test]
 fn test_xor_locations() {
-    use yaxpeax_arch::{Arch, Decoder};
     use memory::MemoryRange;
     use arch::DecodeFrom;
-    let inst = yaxpeax_x86::x86_64::decode_from(&[0x33u8, 0xc1].to_vec().range(0..2).unwrap()).unwrap();
-    use data::LocIterator;
+    let _inst = yaxpeax_x86::x86_64::decode_from(&[0x33u8, 0xc1].range(0..2).unwrap()).unwrap();
+//    use data::LocIterator;
 //    let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
 //    panic!("{:?}", locs);
 }
