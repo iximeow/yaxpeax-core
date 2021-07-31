@@ -1,5 +1,6 @@
 use yaxpeax_arch::Arch;
 use memory::MemoryRange;
+use arch::DecodeFrom;
 use arch::FunctionQuery;
 use arch::FunctionImpl;
 use data::Disambiguator;
@@ -61,7 +62,7 @@ impl<
     'disambiguator,
     'modifiers,
     A: Arch + SSAValues,
-    M: MemoryRange<A::Address>,
+    M: MemoryRange<A>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     LocSpec,
     D: Disambiguator<A, LocSpec>,
@@ -89,8 +90,8 @@ impl<
     'functions,
     'disambiguator,
     'modifiers,
-    A: Arch + SSAValues,
-    M: MemoryRange<A::Address>,
+    A: Arch + SSAValues + for<'mem> DecodeFrom<M>,
+    M: MemoryRange<A>,
     F: FunctionQuery<A::Address, Function=FunctionImpl<A::Location>>,
     LocSpec,
     D: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,

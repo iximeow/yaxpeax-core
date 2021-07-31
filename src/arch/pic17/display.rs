@@ -192,7 +192,7 @@ pub fn render_instruction_with_ssa_values<T>(
     println!(" {}", instr.render_with_ssa_values(address, colors, ctx, function_table, ssa))
 }
 
-pub fn show_linear_with_blocks<M: MemoryRange<<PIC17 as Arch>::Address>>(
+pub fn show_linear_with_blocks<M: MemoryRange<PIC17>>(
     _data: &M,
     _ctx: &pic17::MergedContextTable,
     _function_table: &HashMap<<PIC17 as Arch>::Address, pic17::Function>,
@@ -239,7 +239,7 @@ pub fn show_functions(
 
 }
 
-pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
+pub fn show_function_by_ssa<M: MemoryRange<PIC17>>(
     data: &M,
     colors: Option<&ColorSettings>,
     ctx: &pic17::MergedContextTable,
@@ -268,7 +268,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<PIC17 as Arch>::Address>>(
             println!("Phi: {:?}", ssa.phi[&block.start].keys());
         }
 
-        let mut iter = data.instructions_spanning(<PIC17 as Arch>::Decoder::default(), block.start, block.end);
+        let mut iter = PIC17::instructions_spanning(data, block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {

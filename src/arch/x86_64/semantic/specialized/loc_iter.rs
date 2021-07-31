@@ -37,11 +37,8 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
         Opcode::MOVUPS |
@@ -419,11 +416,8 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
         Opcode::MOVUPS |
@@ -759,11 +753,8 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
         Opcode::MOVUPS |
@@ -1249,11 +1240,8 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
         Opcode::MOVUPS |
@@ -1550,7 +1538,9 @@ fn implicit_locs(op: Opcode) -> u8 {
 #[test]
 fn test_xor_locations() {
     use yaxpeax_arch::{Arch, Decoder};
-    let inst = <yaxpeax_x86::x86_64 as Arch>::Decoder::default().decode([0x33u8, 0xc1].iter().map(|x| *x)).unwrap();
+    use memory::MemoryRange;
+    use arch::DecodeFrom;
+    let inst = yaxpeax_x86::x86_64::decode_from(&[0x33u8, 0xc1].to_vec().range(0..2).unwrap()).unwrap();
     use data::LocIterator;
 //    let locs: Vec<(Option<Location>, Direction)> = inst.iter_locs(&mut NoDisambiguation::default()).collect();
 //    panic!("{:?}", locs);

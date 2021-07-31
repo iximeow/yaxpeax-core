@@ -679,9 +679,9 @@ checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "yaxpeax-arch"
-version = "0.0.5"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6d51fa58dc03a872cf25e864c5edeb57a00a0be1e99112fe9b620eed839f035"
+checksum = "b0c90868b68ae34284714134e827062757881ab642e5746ecdcd567ffd582ff7"
 dependencies = [
  "crossterm",
  "num-traits",
@@ -691,9 +691,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-arm"
-version = "0.0.7"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda1e95c1c611f9348b9fe6a482f0abed62bda5bc75e05932668194a3b7bb3f5"
+checksum = "bfde0eac22b9044b4d1f07b9fba1e81114ddb529912035a56b64c5524d411966"
 dependencies = [
  "bitvec",
  "serde",
@@ -728,9 +728,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-msp430"
-version = "0.0.6"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f5ea01451a1766614d88911c648ec3b98db377af51402ded1c6e03cafbbd906"
+checksum = "63962bd68624664aa3a3391785f95388001e9d6107cdf8557e962153e4a854c5"
 dependencies = [
  "serde",
  "serde_derive",
@@ -739,9 +739,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-pic17"
-version = "0.0.4"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744a545b8aa7e370587188e890a1e07c094b52f3b1da21ff0812602a4bd4b75c"
+checksum = "15ca63b323712143e563e146af6a3df21fa3c75976985ee7b157470616c15c1e"
 dependencies = [
  "serde",
  "serde_derive",
@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-pic18"
-version = "0.0.4"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16a979e0519c5de64aadf1bc1484ecf3bef80f2cf15670f2743d57b0506d8562"
+checksum = "f64bb0d36fc65721e5919e9febe316ae62cf0ba2510cddb01d1f182ddcc97f84"
 dependencies = [
  "serde",
  "serde_derive",
@@ -761,9 +761,9 @@ dependencies = [
 
 [[package]]
 name = "yaxpeax-x86"
-version = "0.2.1"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "429b69c99d9da2e4858adf192ba788607d84e50b008a3d607ac326fdc7746cf8"
+checksum = "dcf1fb167a86a30c9592ade2140efe3b396a42a4a429d4b98521b2e2b0ad6fcd"
 dependencies = [
  "num-traits",
  "serde",

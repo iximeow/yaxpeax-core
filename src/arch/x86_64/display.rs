@@ -317,11 +317,8 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
         Opcode::CVTSD2SI |
         Opcode::CVTSD2SS |
         Opcode::LDDQU |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOV => {
             [Use::Write, Use::Read][op_idx as usize]
@@ -1361,11 +1358,8 @@ impl <
             Opcode::CVTSD2SI |
             Opcode::CVTSD2SS |
             Opcode::LDDQU |
-            Opcode::MOVSX_b |
-            Opcode::MOVSX_w |
-            Opcode::MOVZX_b |
-            Opcode::MOVZX_w |
             Opcode::MOVSX |
+            Opcode::MOVZX |
             Opcode::MOVSXD |
             Opcode::MOV => {
                 write!(fmt, " ")?;
@@ -1625,7 +1619,7 @@ impl <
     }
 }
 
-pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
+pub fn show_block<M: MemoryRange<x86_64Arch>>(
     data: &M,
     ctx: &MergedContextTable,
     ssa: Option<&SSA<x86_64Arch>>,
@@ -1638,7 +1632,7 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     for neighbor in cfg.graph.neighbors(block.start) {
         println!("    {}", neighbor.show());
     }
-    let mut iter = data.instructions_spanning(<x86_64Arch as Arch>::Decoder::default(), block.start, block.end);
+    let mut iter = x86_64Arch::instructions_spanning(data, block.start, block.end);
     while let Some((address, instr)) = iter.next() {
         let mut instr_string = String::new();
         x86_64Arch::render_frame(
@@ -1661,13 +1655,13 @@ pub fn show_block<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
     }
 }
 
-pub fn show_instruction<M: MemoryRange<<x86_64Arch as Arch>::Address>>(
+pub fn show_instruction<M: MemoryRange<x86_64Arch>>(
     data: &M,
     ctx: &MergedContextTable,
     address: <x86_64Arch as Arch>::Address,
     colors: Option<&ColorSettings>
 ) {
-    match <x86_64Arch as Arch>::Decoder::default().decode(data.range_from(address).unwrap()) {
+    match <x86_64Arch as Arch>::Decoder::default().decode(&mut data.range_from(address).unwrap().to_reader()) {
         Ok(instr) => {
             let mut instr_text = String::new();
             x86_64Arch::render_frame(
@@ -1787,7 +1781,7 @@ impl <
     }
 }
 
-pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<<x86_64Arch as Arch>::Address> + MemoryRange<<x86_64Arch as Arch>::Address>>(
+pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<x86_64Arch> + MemoryRange<x86_64Arch>>(
     data: &'a M,
     ctx: &'b MergedContextTable,
     ssa: Option<&'d SSA<x86_64Arch>>,

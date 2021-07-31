@@ -22,11 +22,24 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Address, AddressDiff, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, AddressDisplay, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
+use memory::repr::cursor::ReadCursor;
 
 use serde::{Deserialize, Serialize};
+
+pub trait DecodeFrom<T: MemoryRepr<Self> + ?Sized>: yaxpeax_arch::Arch {
+    fn decode_from<'mem>(t: &ReadCursor<'mem, Self, T>) -> Result<Self::Instruction, Self::DecodeError> {
+        Self::decode_with_decoder(&Self::Decoder::default(), t)
+    }
+    fn decode_with_decoder<'mem>(decoder: &Self::Decoder, t: &ReadCursor<'mem, Self, T>) -> Result<Self::Instruction, Self::DecodeError> {
+        let mut inst = Self::Instruction::default();
+        Self::decode_with_decoder_into(decoder, t, &mut inst)?;
+        Ok(inst)
+    }
+    fn decode_with_decoder_into<'mem>(decoder: &Self::Decoder, t: &ReadCursor<'mem, Self, T>, instr: &mut Self::Instruction) -> Result<(), Self::DecodeError>;
+}
 
 pub trait FunctionQuery<A: Address> {
     type Function;
@@ -641,23 +654,29 @@ impl ISA {
     }
 }
 
-pub struct InstructionIteratorSpanned<'a, Addr: Address, M: MemoryRepr<Addr> + ?Sized, Instr: Default, D: Decoder<Instr>> {
+pub struct InstructionIteratorSpanned<'a, A, M: MemoryRepr<A> + ?Sized> where
+    A: ?Sized + yaxpeax_arch::Arch + DecodeFrom<M>
+{
     data: &'a M,
-    decoder: D,
-    current: Addr,
-    end: Addr,
-    elem: Option<Instr>
+    decoder: A::Decoder,
+    current: A::Address,
+    end: A::Address,
+    elem: Option<A::Instruction>
 }
 
-pub trait InstructionSpan<'a, Addr: Address> where Self: MemoryRepr<Addr> {
-    fn instructions_spanning<Instr: Default, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, Self, Instr, D>;
+pub trait InstructionSpan<M: MemoryRepr<Self>> where
+    Self: yaxpeax_arch::Arch + DecodeFrom<M>
+{
+    fn instructions_spanning<'a>(data: &'a M, start: Self::Address, end: Self::Address) -> InstructionIteratorSpanned<'a, Self, M>;
 }
 
-impl <'a, Addr: Address, M: MemoryRepr<Addr>> InstructionSpan<'a, Addr> for M {
-    fn instructions_spanning<Instr: Default, D: Decoder<Instr>>(&'a self, decoder: D, start: Addr, end: Addr) -> InstructionIteratorSpanned<'a, Addr, M, Instr, D> {
+impl<A, M: MemoryRepr<Self>> InstructionSpan<M> for A where
+    A: yaxpeax_arch::Arch + DecodeFrom<M>
+{
+    fn instructions_spanning<'a>(data: &'a M, start: Self::Address, end: Self::Address) -> InstructionIteratorSpanned<'a, Self, M> {
         InstructionIteratorSpanned {
-            data: self,
-            decoder,
+            data,
+            decoder: Self::Decoder::default(),
             current: start,
             end: end,
             elem: None
@@ -679,7 +698,6 @@ pub trait ControlFlowDeterminant {
 
 trait MCU {
     type Addr;
-    type Decoder: Decoder<Self::Instruction>;
     type Instruction: Default;
     fn emulate(&mut self) -> Result<(), String>;
     fn decode(&self) -> Result<Self::Instruction, String>;
@@ -692,17 +710,20 @@ pub trait SimpleStreamingIterator {
     fn next<'b>(&mut self) -> Option<&'b Self::Item>;
 }
 
-impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Decoder<Instr>> InstructionIteratorSpanned<'a, Addr, M, Instr, D> where Instr: LengthedInstruction<Unit=AddressDiff<Addr>> + Default {
-    pub fn next<'b>(&mut self) -> Option<(Addr, &Instr)> {
+impl <'a, A, M> InstructionIteratorSpanned<'a, A, M> where
+    A: yaxpeax_arch::Arch + DecodeFrom<M>,
+    M: MemoryRepr<A> + MemoryRange<A>
+{
+    pub fn next<'b>(&mut self) -> Option<(A::Address, &A::Instruction)> {
         if self.elem.is_some() {
-            let instr: &mut Instr = self.elem.as_mut().unwrap();
+            let instr: &mut A::Instruction = self.elem.as_mut().unwrap();
             //  TODO: check for wrappipng..
-            match Some(self.current.add(instr.len())) {
+            match Some(self.current + instr.len()) {
                 Some(next) => {
                     if next <= self.end {
                         self.current = next;
                         if let Some(range) = self.data.range_from(self.current) {
-                            match self.decoder.decode_into(instr, range) {
+                            match A::decode_with_decoder_into(&self.decoder, &range, instr) {
                                 Ok(()) => {
                                     Some((self.current, instr))
                                 },
@@ -721,7 +742,7 @@ impl <'a, Addr: Address, M: MemoryRepr<Addr> + MemoryRange<Addr>, Instr, D: Deco
         } else {
             if self.current <= self.end {
                 if let Some(range) = self.data.range_from(self.current) {
-                    self.elem = self.decoder.decode(range).ok();
+                    self.elem = A::decode_with_decoder(&self.decoder, &range).ok();
                     match self.elem {
                         Some(ref instr) => {
                             Some((self.current, &instr))

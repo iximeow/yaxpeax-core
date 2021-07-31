@@ -2,6 +2,7 @@ use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressBase;
 use yaxpeax_arch::AddressDisplay;
 use yaxpeax_arch::LengthedInstruction;
+use arch::DecodeFrom;
 use arch::InstructionSpan;
 use arch::display::BaseDisplay;
 use analyses::static_single_assignment::SSAValues;
@@ -33,7 +34,7 @@ pub struct FunctionView<
     F: FunctionRepr,
     Context: FunctionQuery<A::Address>,
     A: Arch + BaseDisplay<F, Context> + SSAValues,
-    M: MemoryRepr<A::Address> + MemoryRange<A::Address>
+    M: MemoryRepr<A> + MemoryRange<A>
 > {
     pub _function_type: PhantomData<F>,
     pub data: &'a M,
@@ -70,11 +71,17 @@ pub trait FunctionInstructionDisplay<A: Arch + SSAValues, Context: SymbolQuery<A
 
 impl <
     'a, 'c, 'd, 'e,
+    A,
     F: FunctionRepr,
     Context: FunctionQuery<A::Address> + SymbolQuery<A::Address>,
-    A: Arch + BaseDisplay<F, Context> + SSAValues,
-    M: MemoryRepr<A::Address> + MemoryRange<A::Address>
-> FunctionDisplay<A> for FunctionView<'a, 'c, 'd, 'e, F, Context, A, M> where A: FunctionInstructionDisplay<A, Context>  {
+    M: MemoryRepr<A> + MemoryRange<A>
+> FunctionDisplay<A> for FunctionView<'a, 'c, 'd, 'e, F, Context, A, M> where
+    A: Arch +
+      SSAValues +
+      FunctionInstructionDisplay<A, Context> +
+      DecodeFrom<M> +
+      BaseDisplay<F, Context>,
+{
     fn entrypoint(&self) -> A::Address {
         self.fn_graph.entrypoint
     }
@@ -112,7 +119,7 @@ impl <
             // this function?
             // if block.start == A::Address::zero() { continue; }
 
-            let mut iter = self.data.instructions_spanning(A::Decoder::default(), block.start, block.end);
+            let mut iter = A::instructions_spanning(self.data, block.start, block.end);
 
             if let Some(ssa) = self.ssa {
                 let start_ok = if let Some(start) = start {

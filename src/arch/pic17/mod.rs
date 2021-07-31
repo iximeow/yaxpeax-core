@@ -2,16 +2,21 @@ use std::rc::Rc;
 
 use yaxpeax_arch::Arch;
 use yaxpeax_arch::AddressDiff;
+use yaxpeax_arch::Decoder;
 use yaxpeax_pic17::PIC17;
 use yaxpeax_pic17::{Opcode, Operand};
 use arch::pic17::deps::{updates_of, dependencies_of};
 
 use analyses::control_flow;
 
+use arch::DecodeFrom;
 use arch::{Symbol, SymbolQuery};
 use arch::FunctionRepr;
 use arch::FunctionQuery;
 use arch::CommentQuery;
+
+use memory::{MemoryRepr, MemoryReprReader};
+use memory::repr::ReadCursor;
 
 use std::collections::HashMap;
 
@@ -25,6 +30,17 @@ pub mod deps;
 pub mod display;
 pub mod syntaxed_render;
 pub mod analyses;
+
+impl<M: MemoryRepr<Self>> DecodeFrom<M> for PIC17 {
+    fn decode_with_decoder_into<'mem>(
+        decoder: &Self::Decoder,
+        cursor: &ReadCursor<'mem, PIC17, M>,
+        instr: &mut Self::Instruction
+    ) -> Result<(), Self::DecodeError> {
+        let mut reader = cursor.to_reader();
+        decoder.decode_into(instr, &mut reader)
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct PIC17Data {

@@ -114,7 +114,7 @@ fn referent(_instr: &Instruction, mem_op: &Operand, addr: <x86_64 as Arch>::Addr
     }
 }
 
-fn valueset_deref<U: MemoryRange<<x86_64 as Arch>::Address>>(values: Vec<ValueRange>, data: &U, size: u8) -> Option<Vec<ValueRange>> {
+fn valueset_deref<U: MemoryRange<x86_64>>(values: Vec<ValueRange>, data: &U, size: u8) -> Option<Vec<ValueRange>> {
     let mut reads: Vec<ValueRange> = Vec::new();
     for value in values {
         match value {
@@ -245,7 +245,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
         }
     }
 
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
+    fn evaluate_instruction<U: MemoryRange<x86_64>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
         //TODO: handle prefixes like at all
         match instr.opcode() {
             Opcode::MOVSXD => {
@@ -259,13 +259,13 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     _ => {}
                 }
             }
-            Opcode::MOVZX_b => {
+            Opcode::MOVZX => {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
                             if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                if let Some(read_values) = valueset_deref(values.clone(), data, 1) {
+                                if let Some(read_values) = valueset_deref(values.clone(), data, instr.mem_size().unwrap().bytes_size().unwrap()) {
                                     use arch::x86_64::display::DataDisplay;
                                     println!(
                                         "at {}, Derefed value set {} to read {}",
@@ -289,35 +289,6 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     _ => {}
                 }
 
-            }
-            Opcode::MOVZX_w => {
-                match (instr.operand(0), instr.operand(1)) {
-                    (Operand::Register(l), op) => {
-                        if op.is_memory() {
-                            // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                if let Some(read_values) = valueset_deref(values.clone(), data, 2) {
-                                    use arch::x86_64::display::DataDisplay;
-                                    println!(
-                                        "Derefed value set {} to read {}",
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
-                                    );
-                                    dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
-                                    );
-                                } else {
-                                    // TODO: deref results in all values being invalid
-                                }
-                            } else {
-                                // this was handled in some other evaluator
-                            }
-                        } else {
-                            // reg-reg mov is handled in another evalator
-                        }
-                    }
-                    _ => {}
-                }
             }
             Opcode::MOV => {
                 println!("DOING MOV for {}", instr);

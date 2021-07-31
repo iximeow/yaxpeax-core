@@ -158,14 +158,14 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
     fn pop(&mut self) -> V {
         let value = self.read_operand(&Operand::RegDeref(RegSpec::rsp()));
         let rsp = Operand::Register(RegSpec::rsp());
-        let adjusted_rsp = self.read_operand(&rsp).add(&V::from_const(rsp.width() as u64)).value();
+        let adjusted_rsp = self.read_operand(&rsp).add(&V::from_const(rsp.width().unwrap() as u64)).value();
         self.write_operand(&rsp, adjusted_rsp);
         value
     }
 
     fn push(&mut self, value: V) {
         let rsp = Operand::Register(RegSpec::rsp());
-        let adjusted_rsp = self.read_operand(&rsp).sub(&V::from_const(rsp.width() as u64)).value();
+        let adjusted_rsp = self.read_operand(&rsp).sub(&V::from_const(rsp.width().unwrap() as u64)).value();
         self.write_operand(&rsp, adjusted_rsp);
         self.write_operand(&Operand::RegDeref(RegSpec::rsp()), value);
     }
@@ -259,19 +259,19 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::SAR => {
             let amt = dfg.read_operand(&instr.operand(1));
             let value = dfg.read_operand(&instr.operand(0));
-            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
             dfg.write_operand(&instr.operand(0), res);
         }
         Opcode::SHR => {
             let amt = dfg.read_operand(&instr.operand(1));
             let value = dfg.read_operand(&instr.operand(0));
-            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
             dfg.write_operand(&instr.operand(0), res);
         }
         Opcode::SHL => {
             let amt = dfg.read_operand(&instr.operand(1));
             let value = dfg.read_operand(&instr.operand(0));
-            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width() as u64 * 8)));
+            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
             dfg.write_operand(&instr.operand(0), res);
         }
         Opcode::CMP => {

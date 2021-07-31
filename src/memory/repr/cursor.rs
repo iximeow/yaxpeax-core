@@ -1,116 +1,95 @@
-use yaxpeax_arch::{Address, AddressDiff};
+use yaxpeax_arch::{Arch, AddressDiff};
+use memory::repr::MemoryReprReader;
 use memory::repr::flat::FlatMemoryRepr;
 use memory::repr::process::ModuleInfo;
 use memory::MemoryRepr;
 use memory::Named;
+use num_traits::Zero;
 
 use std::ops::Range;
 
-#[derive(Debug)]
-pub struct ReadCursor<'a, A: Address, T: MemoryRepr<A> + ?Sized> {
+#[derive(Clone, Debug)]
+pub struct ReadCursor<'a, A: Arch + ?Sized, T: MemoryRepr<A> + ?Sized> {
     pub data: &'a T,
-    pub start: A,
-    pub end: A
-    // TODO: do these need to be pub? used in From<memory::ReadCursor> for
-    // InstructionIteratorSpanned
+    pub start: A::Address,
+    pub end: Option<A::Address>
 }
 
-impl <'a, A: Address, T: MemoryRepr<A> + ?Sized> ReadCursor<'a, A, T> {
-    pub fn from(data: &'a T, range: Range<A>) -> ReadCursor<'a, A, T> {
+impl <'a, A: Arch, T: MemoryRepr<A> + ?Sized> ReadCursor<'a, A, T> {
+    pub fn from(data: &'a T, start: A::Address, end: Option<A::Address>) -> ReadCursor<'a, A, T> {
         ReadCursor {
             data: data,
-            start: range.start,
-            end: range.end
+            start: start,
+            end: end
+        }
+    }
+
+    pub fn to_reader<'data>(&'data self) -> MemoryReprReader<'data, A, Self> {
+        MemoryReprReader {
+            data: self,
+            position: A::Address::zero(),
+            mark: A::Address::zero(),
+            start: A::Address::zero(),
         }
     }
 }
 
-impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for ReadCursor<'a, A, T> {
-    fn read(&self, addr: A) -> Option<u8> {
-        if self.start + addr < self.end {
-            self.data.read(self.start + addr)
+impl <'a, A: Arch, T: MemoryRepr<A> + ?Sized> MemoryRepr<A> for ReadCursor<'a, A, T> {
+    fn read(&self, addr: A::Address) -> Option<u8> {
+        if let Some(end) = self.end {
+            if self.start + addr < end {
+                self.data.read(self.start + addr)
+            } else {
+                None
+            }
         } else {
-            None
+            self.data.read(self.start + addr)
         }
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
-        Some(FlatMemoryRepr::of(self.collect()))
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
+        // TODO: why can't i just `self.clone()` here? this is only giving a &ReadCusror? but
+        // ReadCursor impls Clone...
+        let ReadCursor { data, start, end } = self;
+        let mut cursor: Self = ReadCursor { data, start: *start, end: *end };
+        let data: Vec<u8> = Iterator::collect(cursor);
+        Some(FlatMemoryRepr::of(data))
     }
     fn module_info(&self) -> Option<&ModuleInfo> { self.data.module_info() }
-    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         self.data.module_for(self.start + addr)
     }
     fn size(&self) -> Option<u64> {
         // TODO: should be able to get a `ptrdiff`-style diff type for addresses
-        Some((self.end - self.start).to_linear() as u64)
+        // Some(self.end.diff(self.start).unwrap().to_const() as u64)
+        unimplemented!("ReadCursor::size() (need to be able to convert AddressBase::Diff to a u64...")
     }
 }
 
-impl <'a, A: Address, T: MemoryRepr<A>> Named for ReadCursor<'a, A, T> {
+impl <'a, A: Arch, T: MemoryRepr<A> + ?Sized> Named for ReadCursor<'a, A, T> {
     fn name(&self) -> &str {
         self.data.name()
     }
 }
 
-#[derive(Debug)]
-pub struct UnboundedCursor<'a, A: Address, T: MemoryRepr<A> + ?Sized> {
-    data: &'a T,
-    addr: A
-}
-
-impl <'a, A: Address, T: MemoryRepr<A> + ?Sized> UnboundedCursor<'a, A, T> {
-    pub fn from(data: &'a T, addr: A) -> UnboundedCursor<'a, A, T> {
-        UnboundedCursor {
-            data: data,
-            addr: addr
-        }
-    }
-}
-
-impl <'a, A: Address, T: MemoryRepr<A>> Iterator for UnboundedCursor<'a, A, T> {
+impl <'a, A: Arch, T: MemoryRepr<A> + ?Sized> Iterator for ReadCursor<'a, A, T> {
     type Item = u8;
     fn next(&mut self) -> Option<u8> {
-        let res = self.data.read(self.addr);
-        if res.is_some() {
-            self.addr += AddressDiff::one();
-        }
-        res
-    }
-}
-
-impl <'a, A: Address, T: MemoryRepr<A>> MemoryRepr<A> for UnboundedCursor<'a, A, T> {
-    fn read(&self, addr: A) -> Option<u8> {
-        self.data.read(self.addr + addr)
-    }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
-        Some(FlatMemoryRepr::of(self.collect()))
-    }
-    fn module_info(&self) -> Option<&ModuleInfo> { self.data.module_info() }
-    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
-        self.data.module_for(self.addr + addr)
-    }
-    fn size(&self) -> Option<u64> {
-        None
-    }
-}
-
-impl <'a, A: Address, T: MemoryRepr<A>> Named for UnboundedCursor<'a, A, T> {
-    fn name(&self) -> &str {
-        self.data.name()
-    }
-}
-
-impl <'a, A: Address, T: MemoryRepr<A>> Iterator for ReadCursor<'a, A, T> {
-    type Item = u8;
-    fn next(&mut self) -> Option<u8> {
-        if self.start < self.end {
+        if let Some(end) = self.end {
+            if self.start < end {
+                let res = self.data.read(self.start);
+                if res.is_some() {
+                    self.start += AddressDiff::one();
+                }
+                res
+            } else {
+                None
+            }
+        } else {
             let res = self.data.read(self.start);
             if res.is_some() {
                 self.start += AddressDiff::one();
             }
             res
-        } else {
-            None
         }
     }
 }

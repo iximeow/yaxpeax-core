@@ -6,7 +6,7 @@ use analyses::static_single_assignment::SSA;
 use analyses::static_single_assignment::SSAValues;
 use memory::MemoryRange;
 use analyses::control_flow::ControlFlowGraph;
-use arch::InstructionSpan;
+use arch::{DecodeFrom, InstructionSpan};
 use analyses::evaluators::const_evaluator::ConstEvaluator;
 use arch::x86_64::analyses::evaluators::const_evaluator::ConcreteDomain;
 use arch::x86_64::analyses::evaluators::symbolizer::SymbolicDomain;
@@ -14,13 +14,14 @@ use arch::x86_64::analyses::evaluators::value_set::ValueSetDomain;
 
 pub mod const_evaluator;
 
-pub struct Evaluator<'program, 'function, 'ssa, A: Arch + SSAValues, M: MemoryRange<A::Address>> {
+pub struct Evaluator<'program, 'function, 'ssa, A: Arch + SSAValues, M: MemoryRange<A>> {
     program: &'program M,
     fn_graph: &'function ControlFlowGraph<A::Address>,
     ssa: &'ssa SSA<A>,
 }
 
-impl<'program, 'function, 'ssa, A: Arch + SSAValues, M: MemoryRange<A::Address>> Evaluator<'program, 'function, 'ssa, A, M> where
+impl<'program, 'function, 'ssa, A, M: MemoryRange<A>> Evaluator<'program, 'function, 'ssa, A, M> where
+    A: Arch + SSAValues + DecodeFrom<M>,
     A: ConstEvaluator<A, (), ConcreteDomain>,
     A: ConstEvaluator<A, (), SymbolicDomain>,
     A: ConstEvaluator<A, (), ValueSetDomain>,
@@ -36,7 +37,7 @@ impl<'program, 'function, 'ssa, A: Arch + SSAValues, M: MemoryRange<A::Address>>
 
     pub fn iterate_basic_block(&self, block: A::Address) {
         let block = self.fn_graph.get_block(block);
-        let mut iter = self.program.instructions_spanning(A::Decoder::default(), block.start, block.end);
+        let mut iter = A::instructions_spanning(self.program, block.start, block.end);
         while let Some((address, instr)) = iter.next() {
             use yaxpeax_arch::AddressDisplay;
             println!("evaluating {}: {}", address.show(), instr);

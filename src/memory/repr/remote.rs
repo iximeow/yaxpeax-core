@@ -1,11 +1,11 @@
-use yaxpeax_arch::{Address, AddressBase};
+use yaxpeax_arch::{Arch, AddressBase};
 use std::cell::RefCell;
 use memory::repr::FlatMemoryRepr;
 use memory::{MemoryRange, MemoryRepr, Named};
 use debug::Peek;
 use std::ops::Range;
 use memory::repr::process::ModuleInfo;
-use memory::repr::cursor::{UnboundedCursor, ReadCursor};
+use memory::repr::cursor::ReadCursor;
 
 pub struct RemoteMemoryRepr<T: Peek> {
     pub cache: RefCell<Vec<(usize, Vec<u8>)>>,
@@ -14,17 +14,17 @@ pub struct RemoteMemoryRepr<T: Peek> {
     pub target: T
 }
 
-impl <A: Address, T: Peek> MemoryRange<A> for RemoteMemoryRepr<T> {
-    fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
-        Some(ReadCursor::from(self, range))
+impl <A: Arch, T: Peek> MemoryRange<A> for RemoteMemoryRepr<T> {
+    fn range<'a>(&'a self, range: Range<A::Address>) -> Option<ReadCursor<'a, A, Self>> {
+        Some(ReadCursor::from(self, range.start, Some(range.end)))
     }
-    fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
-        Some(UnboundedCursor::from(self, start))
+    fn range_from<'a>(&'a self, start: A::Address) -> Option<ReadCursor<'a, A, Self>> {
+        Some(ReadCursor::from(self, start, None))
     }
 }
 
-impl <A: Address, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
-    fn read(&self, addr: A) -> Option<u8> {
+impl <A: Arch, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
+    fn read(&self, addr: A::Address) -> Option<u8> {
         let mut cache = self.cache.borrow_mut();
         if *self.last_addr.borrow() + 1 != addr.to_linear() {
             // not linearly scanning anymore, drop the cache
@@ -49,12 +49,12 @@ impl <A: Address, T: Peek> MemoryRepr<A> for RemoteMemoryRepr<T> {
             data[addr - start]
         })
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
         None
     }
     // TODO: read a ModuleInfo out of the remote process
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, _addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, _addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         /*
         for module in self.modules.iter() {
             if module.contains(addr) {

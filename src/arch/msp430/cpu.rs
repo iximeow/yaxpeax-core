@@ -219,9 +219,10 @@ impl CPU {
             Err(e) => println!("[invalid: {}]", e)
         };
     }
-    pub fn program<T: MemoryRepr<<MSP430 as Arch>::Address>>(&mut self, program: Option<T>) -> Result<(), String> {
-        match program.and_then(|x| x.to_flat()) {
-            Some(data) => {
+    pub fn program<T: MemoryRepr<MSP430>>(&mut self, program: Option<T>) -> Result<(), String> {
+        match program.and_then(|x| x.as_flat()) {
+            Some(flat) => {
+                let data = flat.data();
                 if data.len() > self.memory.len() {
                     return Err(
                         format!(
@@ -232,9 +233,7 @@ impl CPU {
                     );
                 }
                 println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
-                for i in 0..data.len() {
-                    self.memory[i] = data.read(i as <yaxpeax_msp430::MSP430 as Arch>::Address).unwrap();
-                }
+                self.memory[0..data.len()].copy_from_slice(data);
             },
             None => {
                 println!("WARN: Provided program includes no code.");
@@ -255,7 +254,6 @@ impl CPU {
 impl MCU for CPU {
     type Addr = u16;
     type Instruction = <MSP430 as Arch>::Instruction;
-    type Decoder = <MSP430 as Arch>::Decoder;
     fn emulate(&mut self) -> Result<(), String> {
         if self.disable {
             return Ok(());
@@ -270,7 +268,8 @@ impl MCU for CPU {
     }
 
     fn decode(&self) -> Result<Self::Instruction, String> {
-        <MSP430 as Arch>::Decoder::default().decode(self.memory.range_from(self.ip()).unwrap())
+        let cursor: crate::memory::repr::cursor::ReadCursor<MSP430, Vec<u8>> = self.memory.range_from(self.ip()).unwrap();
+        <MSP430 as Arch>::Decoder::default().decode(&mut cursor.to_reader())
             .map_err(|_| {
                 format!(
                     "Unable to decode bytes at 0x{:x}: {:x?}",

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use memory::repr::FlatMemoryRepr;
-use memory::PatchyMemoryRepr;
 
 fn read_byte<'a, T: Iterator<Item=&'a u8>>(data: T) -> Result<u8, String> {
     let hex = data.take(2).map(|x| *x).collect::<Vec<u8>>();
@@ -72,7 +71,7 @@ pub fn from_hex(data: &Vec<u8>) -> Result<HashMap<u8, FlatMemoryRepr>, String> {
                     0 => {
                         // data
                         let mem = repr.entry(section).or_insert_with(|| FlatMemoryRepr::empty("from_hex".to_string()));
-                        mem.add(data, address).unwrap();
+                        mem.add(data, address as usize).unwrap();
                         Ok(())
                     },
                     1 => {

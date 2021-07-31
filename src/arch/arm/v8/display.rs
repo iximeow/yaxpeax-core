@@ -85,13 +85,13 @@ impl <
     }
 }
 
-pub fn show_instruction<M: MemoryRange<<ARMv8 as Arch>::Address>>(
+pub fn show_instruction<M: MemoryRange<ARMv8>>(
     data: &M,
     ctx: &MergedContextTable,
     address: <ARMv8 as Arch>::Address,
     colors: Option<&ColorSettings>
 ) {
-    match <ARMv8 as Arch>::Decoder::default().decode(data.range_from(address).unwrap()) {
+    match <ARMv8 as Arch>::Decoder::default().decode(&mut data.range_from(address).unwrap().to_reader()) {
         Ok(instr) => {
             let mut instr_text = String::new();
             ARMv8::render_frame(
@@ -159,7 +159,7 @@ impl <
     }
 }
 
-pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<<ARMv8 as Arch>::Address> + MemoryRange<<ARMv8 as Arch>::Address>>(
+pub fn show_function<'a, 'b, 'c, 'd, 'e, M: MemoryRepr<ARMv8> + MemoryRange<ARMv8>>(
     data: &'a M,
     ctx: &'b MergedContextTable,
     ssa: Option<&'d SSA<ARMv8>>,

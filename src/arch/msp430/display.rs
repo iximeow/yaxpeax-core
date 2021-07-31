@@ -269,7 +269,7 @@ pub fn render_instruction_with_ssa_values<T>(
     println!(" {}", instr.render_with_ssa_values(address, colors, ctx, &function_table, ssa))
 }
 
-pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
+pub fn show_linear_with_blocks<M: MemoryRange<MSP430>>(
     _data: &M,
     _ctx: &msp430::MergedContextTable, //HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
@@ -313,7 +313,7 @@ pub fn show_linear_with_blocks<M: MemoryRange<<MSP430 as Arch>::Address>>(
     }
 }
 
-pub fn show_functions<M: MemoryRange<<MSP430 as Arch>::Address>>(
+pub fn show_functions<M: MemoryRange<MSP430>>(
     _data: &[u8],
     _user_infos: &HashMap<<MSP430 as Arch>::Address, msp430::PartialContext>,
     _cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
@@ -321,7 +321,7 @@ pub fn show_functions<M: MemoryRange<<MSP430 as Arch>::Address>>(
 
 }
 
-pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
+pub fn show_function_by_ssa<M: MemoryRange<MSP430>>(
     data: &M,
     user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
     ssa: &SSA<MSP430>,
@@ -350,7 +350,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
             println!("Phi: {:?}", ssa.phi[&block.start].keys());
         }
 
-        let mut iter = data.instructions_spanning(<MSP430 as Arch>::Decoder::default(), block.start, block.end);
+        let mut iter = MSP430::instructions_spanning(data, block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {
@@ -383,7 +383,7 @@ pub fn show_function_by_ssa<M: MemoryRange<<MSP430 as Arch>::Address>>(
     }
 }
 
-pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>, Y: YaxColors>(
+pub fn show_function<M: MemoryRange<MSP430>, Y: YaxColors>(
     data: &M,
     _user_infos: &HashMap<<MSP430 as Arch>::Address, Rc<msp430::PartialContext>>,
     cfg: &ControlFlowGraph<<MSP430 as Arch>::Address>,
@@ -400,7 +400,7 @@ pub fn show_function<M: MemoryRange<<MSP430 as Arch>::Address>, Y: YaxColors>(
         if block.start == 0x00 { continue; }
 //        println!("Showing block: {:#x}-{:#x} for {:#x}", block.start, block.end, *blockaddr);
 //        continue;
-        let mut iter = data.instructions_spanning(<MSP430 as Arch>::Decoder::default(), block.start, block.end);
+        let mut iter = MSP430::instructions_spanning(data, block.start, block.end);
 //                println!("Block: {:#04x}", next);
 //                println!("{:#04x}", block.start);
         while let Some((address, instr)) = iter.next() {

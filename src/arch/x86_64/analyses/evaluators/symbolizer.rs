@@ -141,7 +141,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
     fn apply_transient(_from: <x86_64 as Arch>::Address, _to: <x86_64 as Arch>::Address, _location: Option<<x86_64 as ValueLocations>::Location>, _exprs: &Vec<<SymbolicDomain as Domain>::Modifier>, _dfg: &SSA<x86_64>, _contexts: &()) {
 
     }
-    fn evaluate_instruction<U: MemoryRange<<x86_64 as Arch>::Address>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
+    fn evaluate_instruction<U: MemoryRange<x86_64>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), _data: &U) {
         //TODO: handle prefixes like at all
         match instr.opcode() {
             Opcode::MOV => {

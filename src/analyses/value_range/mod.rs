@@ -1,4 +1,5 @@
-use yaxpeax_arch::{Arch, Decoder};
+use yaxpeax_arch::Arch;
+use arch::DecodeFrom;
 use memory::MemoryRange;
 use analyses::control_flow::ControlFlowGraph;
 use analyses::static_single_assignment::{DefSource, SSA, SSAValues};
@@ -25,11 +26,13 @@ pub trait ConditionalBoundInference<A: Arch + SSAValues, U> {
     /// Is the instruction in question one that an implementor might want to look at?
     fn inferrable_conditional(conditional_instr: &A::Instruction) -> bool;
 
-    fn add_conditional_bounds<M: MemoryRange<A::Address>>(block_start: A::Address, conditional: A::Address, conditional_instr: &A::Instruction, cfg: &ControlFlowGraph<A::Address>, dfg: &SSA<A>, data: &M, aux_data: &mut U) -> bool {
+    fn add_conditional_bounds<M: MemoryRange<A>>(block_start: A::Address, conditional: A::Address, conditional_instr: &A::Instruction, cfg: &ControlFlowGraph<A::Address>, dfg: &SSA<A>, data: &M, aux_data: &mut U) -> bool
+        where A: DecodeFrom<M>,
+    {
         match Self::conditional_source_for(conditional_instr, conditional, dfg) {
             Some((src_addr, DefSource::Instruction)) => {
                 if let Some(range) = data.range_from(src_addr) {
-                    if let Ok(test_instr) = A::Decoder::default().decode(range) {
+                    if let Ok(test_instr) = A::decode_from(&range) {
                         // and now that we have the instruction...
                         Self::infer_conditional_bounds(block_start, &test_instr, src_addr, conditional_instr, conditional, cfg, dfg, aux_data)
                     } else {

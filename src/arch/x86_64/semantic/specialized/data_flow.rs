@@ -278,11 +278,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
-        Opcode::MOVSX_b |
-        Opcode::MOVSX_w |
-        Opcode::MOVZX_b |
-        Opcode::MOVZX_w |
         Opcode::MOVSX |
+        Opcode::MOVZX |
         Opcode::MOVSXD |
         Opcode::MOVAPS |
         Opcode::MOVUPS |

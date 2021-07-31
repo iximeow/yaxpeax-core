@@ -1,16 +1,18 @@
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::ops::Bound::Included;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 use smallvec::SmallVec;
 
 use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
-use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDiffAmount, AddressDisplay, Arch, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDisplay, Arch, LengthedInstruction};
 
-use num_traits::{Zero, One};
+use arch::DecodeFrom;
+
+use num_traits::Zero;
 
 use ContextRead;
 use ContextWrite;
@@ -25,11 +27,11 @@ use serde::Serialize;
 
 use serde::ser::SerializeStruct;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Effect<Addr: AddressDiffAmount + Debug> {
+pub struct Effect<Addr: Address + Debug> {
     pub(crate) stop_after: bool,
     // the AddressDiffAmount trait fools `Deserialize`'s proc macro, so we have to explicitly write
     // the bound serde should use.
-    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    #[serde(bound(deserialize = "Addr: Address"))]
     pub dest: Option<Target<Addr>>
 }
 
@@ -64,20 +66,48 @@ impl <Addr: Address + Debug> Effect<Addr> {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum Target<Addr: AddressDiffAmount + Debug> {
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum Target<Addr: Address + Debug> {
     // the AddressDiffAmount trait fools `Deserialize`'s proc macro, so we have to explicitly write
     // the bound serde should use.
-    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    #[serde(bound(deserialize = "Addr: Address"))]
     Relative(AddressDiff<Addr>),
-    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    #[serde(bound(deserialize = "Addr: Address"))]
     Absolute(Addr),
-    #[serde(bound(deserialize = "Addr: AddressDiffAmount"))]
+    #[serde(bound(deserialize = "Addr: Address"))]
     Multiple(Vec<Target<Addr>>), // TODO: ?? jump tables?
     Indeterminate       // Unknowns? rets? idk
 }
 
-pub trait Determinant<T, Addr: AddressDiffAmount + Debug> {
+impl<Addr: Address + Debug> Debug for Target<Addr> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Target::Relative(diff) => {
+                write!(f, "Target::Relative($+{:#02x})", Addr::zero().wrapping_offset(*diff).to_linear())
+            }
+            Target::Absolute(addr) => {
+                write!(f, "Target::Absolute({:#02x})", addr.to_linear())
+            }
+            Target::Multiple(targets) => {
+                write!(f, "Target::Multiple(")?;
+                let mut first = true;
+                for target in targets {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{:?}", target)?;
+                }
+                write!(f, ")")
+            }
+            Target::Indeterminate => {
+                write!(f, "Target::Indeterminate")
+            }
+        }
+    }
+}
+
+pub trait Determinant<T, Addr: Address + Debug> {
     fn control_flow(&self, _ctx: Option<&T>) -> Effect<Addr>;
 }
 
@@ -432,12 +462,13 @@ pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
     starts: Vec<A::Address>,
     on_instruction_discovered: &InstrCallback
 ) where
-    A: Arch,
-    M: MemoryRange<A::Address>,
+    A: Arch + DecodeFrom<M>,
+    M: MemoryRange<A>,
     Contexts: ContextRead<A, U> + ContextWrite<A, Update>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
-    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)>
+    InstrCallback: Fn(&A::Instruction, A::Address, &Effect<A::Address>, &Contexts) -> Vec<(A::Address, Update)>,
+    // for<'x, 'y> crate::memory::repr::cursor::UnboundedReader<'x, 'y, A, M>: yaxpeax_arch::Reader<A::Address, A::Word>
 {
     let mut to_explore: VecDeque<A::Address> = VecDeque::new();
     let mut seen: HashSet<A::Address> = HashSet::new();
@@ -449,7 +480,7 @@ pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
         if *addr > A::Address::zero() {
             // we've been told by `starts` that control flow leads here
             // so it must be the start of a basic block.
-            cfg.with_effect(*addr - A::Address::one(), *addr, &Effect::stop());
+            cfg.with_effect(*addr - AddressDiff::one(), *addr, &Effect::stop());
         }
     }
 
@@ -468,7 +499,7 @@ pub struct AnalysisBuilder<
     'memory,
     'ctx,
     A: Arch,
-    M: MemoryRange<A::Address>,
+    M: MemoryRange<A>,
     U,
     Update,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
@@ -480,8 +511,8 @@ pub struct AnalysisBuilder<
     _u: std::marker::PhantomData<U>,
 }
 
-impl<'memory, 'ctx, A, M: MemoryRange<A::Address>, U, Update, Contexts> AnalysisBuilder<'memory, 'ctx, A, M, U, Update, Contexts> where
-    A: Arch,
+impl<'memory, 'ctx, A, M: MemoryRange<A>, U, Update, Contexts> AnalysisBuilder<'memory, 'ctx, A, M, U, Update, Contexts> where
+    A: Arch + DecodeFrom<M>,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
@@ -538,8 +569,8 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
     start: A::Address,
     on_instruction_discovered: &InstrCallback
 ) -> SmallVec<[A::Address; 2]> where
-    A: Arch,
-    M: MemoryRange<A::Address>,
+    A: Arch + DecodeFrom<M>,
+    M: MemoryRange<A>,
     Contexts: ContextWrite<A, Update> + ContextRead<A, U>,
     A::Address: Hash + petgraph::graphmap::NodeTrait + num_traits::WrappingAdd,
     A::Instruction: Debug + Determinant<U, A::Address>,
@@ -567,7 +598,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 return SmallVec::new();
             }
         };
-        match A::Decoder::default().decode(range) {
+        match A::decode_from(&range) {
             Ok(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);
@@ -757,7 +788,7 @@ impl <A: Address + Debug> From<AddressDiff<A>> for control_flow::Effect<A> {
     }
 }
 
-pub trait ToAddrDiff: yaxpeax_arch::AddressDiffAmount {
+pub trait ToAddrDiff: yaxpeax_arch::Address {
     fn translate_offset(from: u64) -> AddressDiff<Self>;
 }
 

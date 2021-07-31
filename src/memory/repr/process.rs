@@ -3,9 +3,9 @@ use goblin::Object;
 
 use arch::ISA;
 
-use yaxpeax_arch::{Address, AddressDisplay};
+use yaxpeax_arch::{Arch, Address, AddressBase, AddressDisplay};
 use memory::repr::FlatMemoryRepr;
-use memory::repr::{ReadCursor, UnboundedCursor};
+use memory::repr::ReadCursor;
 use memory::{LayoutError, MemoryRange, MemoryRepr, Named, PatchyMemoryRepr};
 use std::ops::Range;
 
@@ -151,19 +151,19 @@ impl Named for Segment {
     }
 }
 
-impl <A: Address> MemoryRepr<A> for Segment {
-    fn read(&self, addr: A) -> Option<u8> {
+impl <A: Arch> MemoryRepr<A> for Segment {
+    fn read(&self, addr: A::Address) -> Option<u8> {
         if self.contains(addr) {
             Some(self.data[addr.to_linear() - self.start])
         } else {
             None
         }
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         if self.contains(addr) {
             Some(self)
         } else {
@@ -772,15 +772,15 @@ impl ModuleData {
     }
 }
 
-impl <A: Address> MemoryRepr<A> for ModuleData {
-    fn read(&self, addr: A) -> Option<u8> {
+impl <A: Arch> MemoryRepr<A> for ModuleData where Segment: MemoryRepr<A> {
+    fn read(&self, addr: A::Address) -> Option<u8> {
         self.segment_for(addr).and_then(|segment| segment.read(addr))
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { Some(&self.module_info) }
-    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         if self.segment_for(addr).is_some() {
             Some(self)
         } else {
@@ -809,20 +809,20 @@ impl Named for ModuleData {
     }
 }
 
-impl <A: Address> MemoryRange<A> for ModuleData {
-    fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
+impl <A: Arch> MemoryRange<A> for ModuleData {
+    fn range<'a>(&'a self, range: Range<A::Address>) -> Option<ReadCursor<'a, A, Self>> {
         self.segment_for(range.start).and_then(|section| {
             if section.contains(range.end) {
                 // TODO: return the section itself to avoid double lookups
-                Some(ReadCursor::from(self, range))
+                Some(ReadCursor::from(self, range.start, Some(range.end)))
             } else {
                 // TODO: this range may intersect with multiple sections
                 None
             }
         })
     }
-    fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
-        self.segment_for(start).map(|_segment| UnboundedCursor::from(self, start))
+    fn range_from<'a>(&'a self, start: A::Address) -> Option<ReadCursor<'a, A, Self>> {
+        self.segment_for(start).map(|_segment| ReadCursor::from(self, start, None))
     }
 }
 
@@ -831,8 +831,8 @@ pub struct ProcessMemoryRepr {
     pub modules: Vec<ModuleData>
 }
 
-impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
-    fn read(&self, addr: A) -> Option<u8> {
+impl <A: Arch> MemoryRepr<A> for ProcessMemoryRepr where ModuleData: MemoryRepr<A> {
+    fn read(&self, addr: A::Address) -> Option<u8> {
         // TODO: Overlap is not considered correctly here.
         for module in self.modules.iter() {
             match module.read(addr) {
@@ -842,11 +842,11 @@ impl <A: Address> MemoryRepr<A> for ProcessMemoryRepr {
         }
         return None
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { /* TODO: how to get one specific moduleinfo? or should all of them get merged? */ None }
-    fn module_for(&self, addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         for module in self.modules.iter() {
             if module.segment_for(addr).is_some() {
                 return Some(module)
@@ -865,17 +865,17 @@ impl Named for ProcessMemoryRepr {
     }
 }
 
-impl <A: Address> PatchyMemoryRepr<A> for ProcessMemoryRepr {
-    fn add(&mut self, _data: Vec<u8>, _addr: A) -> Result<(), LayoutError> {
+impl <A: Arch> PatchyMemoryRepr<A> for ProcessMemoryRepr {
+    fn add(&mut self, _data: Vec<u8>, _addr: A::Address) -> Result<(), LayoutError> {
         Err(LayoutError::Unsupported)
     }
 }
 
-impl <A: Address> MemoryRange<A> for ProcessMemoryRepr {
+impl <A: Arch> MemoryRange<A> for ProcessMemoryRepr {
     // TODO:
-    fn range<'a>(&'a self, range: Range<A>) -> Option<ReadCursor<'a, A, Self>> {
+    fn range<'a>(&'a self, range: Range<A::Address>) -> Option<ReadCursor<'a, A, Self>> {
 //        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
-            Some(ReadCursor::from(self, range))
+            Some(ReadCursor::from(self, range.start, Some(range.end)))
                 /*
             Some(ReadCursor {
                 data: self,
@@ -888,9 +888,9 @@ impl <A: Address> MemoryRange<A> for ProcessMemoryRepr {
 //        }
     }
     // TODO:
-    fn range_from<'a>(&'a self, start: A) -> Option<UnboundedCursor<'a, A, Self>> {
+    fn range_from<'a>(&'a self, start: A::Address) -> Option<ReadCursor<'a, A, Self>> {
 //        if range.start.to_linear() < self.data.len() && range.end.to_linear() < self.data.len() && range.start < range.end {
-            Some(UnboundedCursor::from(self, start))
+            Some(ReadCursor::from(self, start, None))
 //        } else {
 //            None
 //        }

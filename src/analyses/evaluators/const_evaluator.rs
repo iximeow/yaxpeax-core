@@ -11,6 +11,6 @@ pub trait Domain {
 }
 
 pub trait ConstEvaluator<A: Arch + SSAValues, Ctxs, D: Domain> {
-    fn evaluate_instruction<U: MemoryRange<A::Address>>(instr: &A::Instruction, addr: A::Address, dfg: &SSA<A>, contexts: &Ctxs, data: &U);
+    fn evaluate_instruction<U: MemoryRange<A>>(instr: &A::Instruction, addr: A::Address, dfg: &SSA<A>, contexts: &Ctxs, data: &U);
     fn apply_transient(from: A::Address, to: A::Address, location: Option<A::Location>, exprs: &Vec<D::Modifier>, dfg: &SSA<A>, contexts: &Ctxs);
 }

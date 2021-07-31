@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use std::ops::Bound::Included;
 
-use yaxpeax_arch::Address;
+use yaxpeax_arch::AddressBase;
 use memory::repr::FlatMemoryRepr;
-use memory::{ModuleInfo, MemoryRepr, Named, PatchyMemoryRepr};
+use memory::{ModuleInfo, MemoryRepr, Named};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SourceInfo {
@@ -53,7 +53,7 @@ impl ProgramSlice {
     }
     pub fn of(data: Vec<u8>) -> FlatMemoryRepr {
         let mut mem = FlatMemoryRepr::empty("anon_flat_repr".to_string());
-        mem.add(data, 0 as u32).unwrap();
+        mem.add(data, 0 as usize).unwrap();
         mem
     }
     pub fn len(&self) -> usize {
@@ -66,8 +66,8 @@ impl ProgramSlice {
     }
 }
 
-impl <A: Address> MemoryRepr<A> for ProgramSlice {
-    fn read(&self, addr: A) -> Option<u8> {
+impl <A: yaxpeax_arch::Arch> MemoryRepr<A> for ProgramSlice {
+    fn read(&self, addr: A::Address) -> Option<u8> {
         let (start, data) = if let Some((start, data)) = self.chunks.range((Included(&0), Included(&(addr.to_linear() as u64)))).rev().next() {
             (start, data)
         } else {
@@ -88,11 +88,11 @@ impl <A: Address> MemoryRepr<A> for ProgramSlice {
             None
         }
     }
-    fn to_flat(self) -> Option<FlatMemoryRepr> {
+    fn as_flat(&self) -> Option<FlatMemoryRepr> {
         None
     }
     fn module_info(&self) -> Option<&ModuleInfo> { None }
-    fn module_for(&self, _addr: A) -> Option<&dyn MemoryRepr<A>> {
+    fn module_for(&self, _addr: A::Address) -> Option<&dyn MemoryRepr<A>> {
         None
     }
     fn size(&self) -> Option<u64> {

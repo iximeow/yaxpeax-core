@@ -23,7 +23,7 @@ use data::ValueLocations;
 use data::modifier::ModifierCollection;
 use data::modifier;
 
-use arch::{AbiDefaults, FunctionImpl, FunctionQuery, InstructionSpan};
+use arch::{AbiDefaults, DecodeFrom, FunctionImpl, FunctionQuery, InstructionSpan};
 
 #[test]
 fn test_immediate_dominators_construction() {
@@ -315,8 +315,8 @@ pub fn generate_refined_ssa<
     'disambiguator,
     'dfg,
     'location_disambiguator,
-    A: SSAValues,
-    M: MemoryRange<A::Address>,
+    A: SSAValues + for<'mem> DecodeFrom<M>,
+    M: MemoryRange<A>,
     U: ModifierCollection<A>,
     LocSpec,
     Disam: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,
@@ -397,8 +397,8 @@ pub fn generate_refined_ssa<
 pub fn generate_ssa<
     'functions,
     'disambiguator,
-    A: SSAValues,
-    M: MemoryRange<A::Address>,
+    A: SSAValues + for<'mem> DecodeFrom<M>,
+    M: MemoryRange<A>,
     U: ModifierCollection<A>,
     LocSpec,
     Disam: Disambiguator<A, LocSpec> + LocationAliasDescriptions<A>,
@@ -431,7 +431,7 @@ pub fn generate_ssa<
         let block = basic_blocks.get_block(k);
         has_already.insert(k, 0);
         work.insert(k, 0);
-        let mut iter = data.instructions_spanning(A::Decoder::default(), block.start, block.end);
+        let mut iter = A::instructions_spanning(data, block.start, block.end);
         while let Some((address, instr)) = iter.next() {
             for (maybeloc, direction) in value_modifiers.before(address).iter().cloned().chain(instr.iter_locs(address, disambiguator, functions)).chain(value_modifiers.after(address).iter().cloned()) {
                 use_tracker.track(block.start, maybeloc, direction);
@@ -529,8 +529,8 @@ pub fn generate_ssa<
     fn search<
         'functions,
         'disambiguator,
-        A: Arch + SSAValues,
-        M: MemoryRange<A::Address>,
+        A: Arch + SSAValues + for<'mem> DecodeFrom<M>,
+        M: MemoryRange<A>,
         U: ModifierCollection<A>,
         LocSpec,
         Disam: Disambiguator<A, LocSpec>,
@@ -571,7 +571,7 @@ pub fn generate_ssa<
             }
         }
 
-        let mut iter = data.instructions_spanning(A::Decoder::default(), block.start, block.end);
+        let mut iter = A::instructions_spanning(data, block.start, block.end);
         while let Some((address, instr)) = iter.next() {
             let before_fn = |ssa: &mut SSA<A>, pos, value| {
                 ssa.modifier_values.entry((address, modifier::Precedence::Before)).or_insert_with(|| HashMap::new()).insert(pos, value);
