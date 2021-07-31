@@ -348,6 +348,14 @@ impl <A: SSAValues> SSA<A> where A::Address: Hash + Eq, A::Location: Hash + Eq {
         for (loc, value) in self.external_defs.iter() {
             println!("  {:?} -> {:?}", loc, value);
         }
+        println!("indirect_values:");
+        for (addr, values) in self.indirect_values.iter() {
+            println!("  {:?} -> {{", addr);
+            for (loc, value) in values.iter() {
+                println!("  {:?} = {:?}", loc, value);
+            }
+            println!("  }}");
+        }
     }
 
     /// collect all locations that have uses of undefined data
