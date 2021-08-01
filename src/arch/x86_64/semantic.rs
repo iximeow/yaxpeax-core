@@ -5,7 +5,7 @@
  */
 
 use yaxpeax_x86::long_mode::{Arch as amd64};
-use yaxpeax_x86::long_mode::{Opcode, Operand, RegSpec};
+use yaxpeax_x86::long_mode::{Instruction, Opcode, Operand, RegSpec};
 use yaxpeax_arch::Arch;
 use arch::x86_64::analyses::data_flow::Location;
 use arch::x86_64::analyses::data_flow::ANY;
@@ -22,25 +22,25 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64>, V: std:
     fn effective_address(&self, operand: &Operand) -> V {
         match *operand {
             Operand::DisplacementU32(disp) => {
-                V::from_const(disp as u64)
+                V::from_const(disp as i64)
             },
             Operand::DisplacementU64(disp) => {
-                V::from_const(disp as u64)
+                V::from_const(disp as i64)
             },
             Operand::RegDeref(reg) => {
                 self.read(&Location::Register(reg))
             }
             Operand::RegDisp(base, offset) => {
                 let base = self.read(&Location::Register(base));
-                base.add(&V::from_const(offset as i64 as u64)).value()
+                base.add(&V::from_const(offset as i64)).value()
             }
             Operand::RegScale(base, scale) => {
                 let base = self.read(&Location::Register(base));
-                base.mul(&V::from_const(scale as u64)).value()
+                base.mul(&V::from_const(scale as i64)).value()
             }
             Operand::RegScaleDisp(base, scale, disp) => {
                 let base = self.read(&Location::Register(base));
-                base.mul(&V::from_const(scale as u64)).value().add(&V::from_const(disp as i64 as u64)).value()
+                base.mul(&V::from_const(scale as i64)).value().add(&V::from_const(disp as i64)).value()
             }
             Operand::RegIndexBase(base, index) => {
                 let base = self.read(&Location::Register(base));
@@ -50,17 +50,17 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64>, V: std:
             Operand::RegIndexBaseDisp(base, index, disp) => {
                 let base = self.read(&Location::Register(base));
                 let index = self.read(&Location::Register(index));
-                base.add(&index).value().add(&V::from_const(disp as i64 as u64)).value()
+                base.add(&index).value().add(&V::from_const(disp as i64)).value()
             }
             Operand::RegIndexBaseScale(base, index, scale) => {
                 let base = self.read(&Location::Register(base));
                 let index = self.read(&Location::Register(index));
-                base.add(&index.mul(&V::from_const(scale as u64)).value()).value()
+                base.add(&index.mul(&V::from_const(scale as i64)).value()).value()
             }
             Operand::RegIndexBaseScaleDisp(base, index, scale, disp) => {
                 let base = self.read(&Location::Register(base));
                 let index = self.read(&Location::Register(index));
-                base.add(&index.mul(&V::from_const(scale as u64)).value()).value().add(&V::from_const(disp as i64 as u64)).value()
+                base.add(&index.mul(&V::from_const(scale as i64)).value()).value().add(&V::from_const(disp as i64)).value()
             }
             _ => {
                 unreachable!("effective address of an immediate is an error: {:?}", operand);
@@ -73,47 +73,54 @@ pub trait DFGAccessExt<V: Value> where Self: DFGLocationQuery<V, amd64>, V: std:
 
     // TODO: get a disambiguator somehow
     #[inline(always)]
-    fn read_operand(&self, operand: &Operand) -> V {
+    fn read_operand(&self, instr: &Instruction, operand: &Operand) -> V {
         match operand {
             Operand::Register(reg) => {
                 self.read(&Location::Register(*reg))
             },
             Operand::ImmediateI8(imm) => {
-                V::from_const(*imm as i64 as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateU8(imm) => {
-                V::from_const(*imm as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateI16(imm) => {
-                V::from_const(*imm as i64 as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateU16(imm) => {
-                V::from_const(*imm as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateI32(imm) => {
-                V::from_const(*imm as i64 as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateU32(imm) => {
-                V::from_const(*imm as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateI64(imm) => {
-                V::from_const(*imm as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateU64(imm) => {
-                V::from_const(*imm)
+                V::from_const(*imm as i64)
             }
             op => {
                 let ea = self.effective_address(op);
-                self.indirect(&Location::Memory(ANY)).load(ea.qword())
+                // TODO: this will panic if the memory access is non-constant (as it might be for
+                // instructions like xsave)
+                self.indirect(&Location::Memory(ANY)).load(ea.width(instr.mem_size().unwrap().bytes_size().unwrap() as usize))
             }
         }
+    }
+
+    #[inline(always)]
+    fn load(&self, addr: &V, width: usize) -> V {
+        self.indirect(&Location::Memory(ANY)).load(addr.width(width))
     }
 }
 
 pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQueryMut<V, amd64> {
     // TODO: get a disambiguator somehow
     #[inline(always)]
-    fn write_operand(&mut self, operand: &Operand, value: V) {
+    fn write_operand(&mut self, instr: &Instruction, operand: &Operand, value: V) {
         match operand {
             Operand::Register(reg) => {
                 self.write(&Location::Register(*reg), value)
@@ -133,19 +140,26 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
             }
             op => {
                 let ea = self.effective_address(op);
-                self.indirect(&Location::Memory(ANY)).store(ea.qword(), &value)
+                // TODO: this will panic if the memory access is non-constant (as it might be for
+                // instructions like xsave)
+                self.indirect(&Location::Memory(ANY)).store(ea.width(instr.mem_size().unwrap().bytes_size().unwrap() as usize), &value)
             }
         }
+    }
+
+    #[inline(always)]
+    fn store(&self, addr: &V, width: usize, value: V) {
+        self.indirect(&Location::Memory(ANY)).store(addr.width(width), &value)
     }
 
     #[inline(always)]
     fn read_jump_rel_operand(&self, operand: &Operand) -> V {
         match operand {
             Operand::ImmediateI8(imm) => {
-                V::from_const(*imm as i64 as u64)
+                V::from_const(*imm as i64)
             }
             Operand::ImmediateI32(imm) => {
-                V::from_const(*imm as i64 as u64)
+                V::from_const(*imm as i64)
             }
             _ => {
                 unsafe {
@@ -156,23 +170,27 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
     }
 
     fn pop(&mut self) -> V {
-        let value = self.read_operand(&Operand::RegDeref(RegSpec::rsp()));
-        let rsp = Operand::Register(RegSpec::rsp());
-        let adjusted_rsp = self.read_operand(&rsp).add(&V::from_const(rsp.width().unwrap() as u64)).value();
-        self.write_operand(&rsp, adjusted_rsp);
+        let rsp = Location::Register(RegSpec::rsp());
+        // TODO: x86_64 pops are all 8 bytes but x86_32 is 4, x86_16 might be 2 (verify
+        // this.....???)
+        let value = self.load(&self.read(&rsp), 8);
+        let adjusted_rsp = self.read(&rsp).add(&V::from_const(RegSpec::rsp().width() as i64)).value();
+        self.write(&rsp, adjusted_rsp);
         value
     }
 
     fn push(&mut self, value: V) {
-        let rsp = Operand::Register(RegSpec::rsp());
-        let adjusted_rsp = self.read_operand(&rsp).sub(&V::from_const(rsp.width().unwrap() as u64)).value();
-        self.write_operand(&rsp, adjusted_rsp);
-        self.write_operand(&Operand::RegDeref(RegSpec::rsp()), value);
+        let rsp = Location::Register(RegSpec::rsp());
+        let adjusted_rsp = self.read(&rsp).sub(&V::from_const(RegSpec::rsp().width() as i64)).value();
+        self.store(&adjusted_rsp, 8, value);
+        self.write(&rsp, adjusted_rsp);
+        // TODO: x86_64 pushes are all 8 bytes but x86_32 is 4, x86_16 might be 2 (verify
+        // this....???)
     }
 
-    fn write_alu_result(&mut self, dest_op: Operand, value: ValueRes<V>) {
+    fn write_alu_result(&mut self, instr: &Instruction, dest_op: Operand, value: ValueRes<V>) {
         let value = self.write_alu_flags(value);
-        self.write_operand(&dest_op, value);
+        self.write_operand(instr, &dest_op, value);
     }
 
     fn write_alu_flags(&mut self, value: ValueRes<V>) -> V {
@@ -186,9 +204,9 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
         value
     }
 
-    fn write_bitwise_result(&mut self, dest_op: Operand, value: ValueRes<V>) {
+    fn write_bitwise_result(&mut self, instr: &Instruction, dest_op: Operand, value: ValueRes<V>) {
         let value = self.write_bitwise_flags(value);
-        self.write_operand(&dest_op, value);
+        self.write_operand(instr, &dest_op, value);
     }
 
     fn write_bitwise_flags(&mut self, value: ValueRes<V>) -> V {
@@ -226,7 +244,7 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
         DestFn: FnOnce() -> Operand,
         R: FnOnce(&mut Self) -> V,
         AR: FnOnce(&mut Self) -> V
-    >(&mut self, condition: V, dest: DestFn, result: R, antiresult: AR) {
+    >(&mut self, instr: &Instruction, condition: V, dest: DestFn, result: R, antiresult: AR) {
         let res = match condition.as_bool() {
             Some(true) => {
                 result(self)
@@ -238,7 +256,7 @@ pub trait DFGAccessExtMut<V: Value + std::fmt::Debug> where Self: DFGLocationQue
                 V::from_set(&[result(self), antiresult(self)])
             }
         };
-        self.write_operand(&dest(), res);
+        self.write_operand(instr, &dest(), res);
     }
 }
 
@@ -254,46 +272,46 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::NOP => {},
         Opcode::LEA => {
             let ea = dfg.effective_address(&instr.operand(1));
-            dfg.write_operand(&instr.operand(0), ea);
+            dfg.write_operand(instr, &instr.operand(0), ea);
         }
         Opcode::SAR => {
-            let amt = dfg.read_operand(&instr.operand(1));
-            let value = dfg.read_operand(&instr.operand(0));
-            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
-            dfg.write_operand(&instr.operand(0), res);
+            let amt = dfg.read_operand(instr, &instr.operand(1));
+            let value = dfg.read_operand(instr, &instr.operand(0));
+            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::SHR => {
-            let amt = dfg.read_operand(&instr.operand(1));
-            let value = dfg.read_operand(&instr.operand(0));
-            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
-            dfg.write_operand(&instr.operand(0), res);
+            let amt = dfg.read_operand(instr, &instr.operand(1));
+            let value = dfg.read_operand(instr, &instr.operand(0));
+            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::SHL => {
-            let amt = dfg.read_operand(&instr.operand(1));
-            let value = dfg.read_operand(&instr.operand(0));
-            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as u64 * 8)));
-            dfg.write_operand(&instr.operand(0), res);
+            let amt = dfg.read_operand(instr, &instr.operand(1));
+            let value = dfg.read_operand(instr, &instr.operand(0));
+            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::CMP => {
             if instr.operand(0) == instr.operand(1) {
                 dfg.write_alu_flags(ValueRes::from_zero());
             } else {
-                let dest = dfg.read_operand(&instr.operand(0));
-                let src = dfg.read_operand(&instr.operand(1));
+                let dest = dfg.read_operand(instr, &instr.operand(0));
+                let src = dfg.read_operand(instr, &instr.operand(1));
                 dfg.write_alu_flags(dest.sub(&src));
             }
         }
         Opcode::TEST => {
-            let dest = dfg.read_operand(&instr.operand(0));
-            let src = dfg.read_operand(&instr.operand(1));
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(1));
             dfg.write_bitwise_flags(dest.and(&src));
         }
         Opcode::MOV => {
-            let value = dfg.read_operand(&instr.operand(1));
-            dfg.write_operand(&instr.operand(0), value);
+            let value = dfg.read_operand(instr, &instr.operand(1));
+            dfg.write_operand(instr, &instr.operand(0), value);
         }
         Opcode::INC => {
-            let src = dfg.read_operand(&instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(0));
             let one = V::from_const(1);
             let value = src.add(&one);
             dfg.write(&Location::OF, V::unknown());
@@ -302,10 +320,10 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             dfg.write(&Location::SF, value.sign());
             dfg.write(&Location::ZF, value.zero());
             let value = value.value();
-            dfg.write_operand(&instr.operand(0), value);
+            dfg.write_operand(instr, &instr.operand(0), value);
         }
         Opcode::DEC => {
-            let src = dfg.read_operand(&instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(0));
             let one = V::from_const(1);
             let value = src.sub(&one);
             dfg.write(&Location::OF, V::unknown());
@@ -314,16 +332,16 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             dfg.write(&Location::SF, value.sign());
             dfg.write(&Location::ZF, value.zero());
             let value = value.value();
-            dfg.write_operand(&instr.operand(0), value);
+            dfg.write_operand(instr, &instr.operand(0), value);
         }
         Opcode::NEG => {
-            let src = dfg.read_operand(&instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(0));
             let zero = V::from_const(0);
             let value = zero.sub(&src);
             // from docs:
             // if (src == 0) CF = 0; else CF = 1;
             // but i think the current implementation upholds those semantics?
-            dfg.write_alu_result(instr.operand(0), value);
+            dfg.write_alu_result(instr, instr.operand(0), value);
         }
         Opcode::UD2 => {
             dfg.write(&Location::RIP, V::unknown());
@@ -349,40 +367,40 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::MUL => {}
         Opcode::SUB => {
             if instr.operand(0) == instr.operand(1) {
-                dfg.write_alu_result(instr.operand(0), ValueRes::from_zero());
+                dfg.write_alu_result(instr, instr.operand(0), ValueRes::from_zero());
             } else {
-                let dest = dfg.read_operand(&instr.operand(0));
-                let src = dfg.read_operand(&instr.operand(1));
-                dfg.write_alu_result(instr.operand(0), dest.sub(&src));
+                let dest = dfg.read_operand(instr, &instr.operand(0));
+                let src = dfg.read_operand(instr, &instr.operand(1));
+                dfg.write_alu_result(instr, instr.operand(0), dest.sub(&src));
             }
         }
         Opcode::ADD => {
-            let dest = dfg.read_operand(&instr.operand(0));
-            let src = dfg.read_operand(&instr.operand(1));
-            dfg.write_alu_result(instr.operand(0), src.add(&dest));
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(1));
+            dfg.write_alu_result(instr, instr.operand(0), src.add(&dest));
         }
         Opcode::XOR => {
             if instr.operand(0) == instr.operand(1) {
-                dfg.write_bitwise_result(instr.operand(0), ValueRes::from_zero());
+                dfg.write_bitwise_result(instr, instr.operand(0), ValueRes::from_zero());
             } else {
-                let dest = dfg.read_operand(&instr.operand(0));
-                let src = dfg.read_operand(&instr.operand(1));
-                dfg.write_bitwise_result(instr.operand(0), src.xor(&dest));
+                let dest = dfg.read_operand(instr, &instr.operand(0));
+                let src = dfg.read_operand(instr, &instr.operand(1));
+                dfg.write_bitwise_result(instr, instr.operand(0), src.xor(&dest));
             }
         }
         Opcode::AND => {
-            let dest = dfg.read_operand(&instr.operand(0));
-            let src = dfg.read_operand(&instr.operand(1));
-            dfg.write_bitwise_result(instr.operand(0), src.and(&dest));
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(1));
+            dfg.write_bitwise_result(instr, instr.operand(0), src.and(&dest));
         }
         Opcode::OR => {
-            let dest = dfg.read_operand(&instr.operand(0));
-            let src = dfg.read_operand(&instr.operand(1));
-            dfg.write_bitwise_result(instr.operand(0), src.or(&dest));
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(1));
+            dfg.write_bitwise_result(instr, instr.operand(0), src.or(&dest));
         }
         Opcode::NOT => {
-            let dest = dfg.read_operand(&instr.operand(0));
-            dfg.write_operand(&instr.operand(0), dest.not());
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            dfg.write_operand(&instr, &instr.operand(0), dest.not());
         }
         Opcode::RETURN => {
             let ra = dfg.pop();
@@ -395,7 +413,7 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::CALL => {
             let ra = dfg.read(&Location::RIP);
             dfg.push(ra);
-            let jump_target = dfg.read_operand(&instr.operand(0));
+            let jump_target = dfg.read_operand(instr, &instr.operand(0));
             dfg.write(&Location::RIP, jump_target);
         },
         Opcode::CALLF => {
@@ -403,7 +421,7 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             return CompletionStatus::Incomplete;
         },
         Opcode::JMP => {
-            let jump_target = dfg.read_operand(&instr.operand(0));
+            let jump_target = dfg.read_operand(instr, &instr.operand(0));
             dfg.write(&Location::RIP, jump_target);
         },
         Opcode::JMPF => {
