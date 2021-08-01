@@ -406,6 +406,14 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             let ra = dfg.pop();
             dfg.write(&Location::RIP, ra);
         },
+        Opcode::PUSH => {
+            let value = dfg.read_operand(&instr, &instr.operand(0));
+            dfg.push(value);
+        }
+        Opcode::POP => {
+            let value = dfg.pop();
+            dfg.write_operand(&instr, &instr.operand(0), value);
+        }
         Opcode::HLT => {
             dfg.write(&Location::RIP, V::unknown());
             return CompletionStatus::Incomplete;
