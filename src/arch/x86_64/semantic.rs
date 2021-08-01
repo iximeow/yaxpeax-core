@@ -301,6 +301,11 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
                 dfg.write_alu_flags(dest.sub(&src));
             }
         }
+        Opcode::BTS => {
+            let dest = dfg.read_operand(instr, &instr.operand(0));
+            let src = dfg.read_operand(instr, &instr.operand(1));
+            dfg.write_operand(instr, &instr.operand(0), V::unknown());
+        }
         Opcode::TEST => {
             let dest = dfg.read_operand(instr, &instr.operand(0));
             let src = dfg.read_operand(instr, &instr.operand(1));
@@ -309,6 +314,9 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::MOV => {
             let value = dfg.read_operand(instr, &instr.operand(1));
             dfg.write_operand(instr, &instr.operand(0), value);
+        }
+        Opcode::PREFETCHW => {
+            dfg.read_operand(instr, &instr.operand(0));
         }
         Opcode::INC => {
             let src = dfg.read_operand(instr, &instr.operand(0));
@@ -377,7 +385,7 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::ADD => {
             let dest = dfg.read_operand(instr, &instr.operand(0));
             let src = dfg.read_operand(instr, &instr.operand(1));
-            dfg.write_alu_result(instr, instr.operand(0), src.add(&dest));
+            dfg.write_alu_result(instr, instr.operand(0), dest.add(&src));
         }
         Opcode::XOR => {
             if instr.operand(0) == instr.operand(1) {

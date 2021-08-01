@@ -226,7 +226,7 @@ impl<'a, T: Clone> ToDFGLoc<T> for &'a T {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ValueIndex<'v, V: ?Sized> {
     pub base: &'v V,
     pub size: usize,

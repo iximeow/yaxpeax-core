@@ -1194,6 +1194,9 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                 let q = memory.query_at(spec.0);
                 let access = if spec.1 == 0 {
                     match instr.opcode() {
+                        Opcode::RETURN => {
+                            q.effective_address(&Operand::RegDeref(RegSpec::rsp()))
+                        }
                         Opcode::PUSH => {
                             q.effective_address(&Operand::RegDeref(RegSpec::rsp()))
                         }
@@ -1201,7 +1204,7 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                             q.effective_address(&Operand::RegDeref(RegSpec::rsp()))
                         }
                         _ => {
-                            tracing::error!("FIXME: bailing out for implied memory operand");
+                            tracing::error!("FIXME: bailing out for implied memory operand in {}", instr);
                             // HACK: effective_address is not appropriate when *the operand to disambiguate
                             // is implied*. this is the case for movs, cmps, push, and pop's memory
                             // operands...

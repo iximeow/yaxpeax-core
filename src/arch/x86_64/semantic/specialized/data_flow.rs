@@ -317,13 +317,18 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             ]
         }
         Opcode::BT |
-        Opcode::BTS |
-        Opcode::BTR |
-        Opcode::BTC |
-        Opcode::BSR |
         Opcode::BSF |
         Opcode::TZCNT => {
             let mut locs = decompose_read(&instr.operand(0));
+            locs.append(&mut decompose_read(&instr.operand(1)));
+            locs.push((Some(Location::ZF), Direction::Write));
+            locs
+        }
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR => {
+            let mut locs = decompose_readwrite(&instr.operand(0));
             locs.append(&mut decompose_read(&instr.operand(1)));
             locs.push((Some(Location::ZF), Direction::Write));
             locs

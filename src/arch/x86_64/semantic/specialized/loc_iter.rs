@@ -53,6 +53,9 @@ fn operands_in(instr: &Instruction) -> u8 {
         Opcode::XCHG => {
             3
         }
+        Opcode::PREFETCHW => {
+            2
+        }
         Opcode::STI |
         Opcode::CLI |
         Opcode::STD |
@@ -428,6 +431,9 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
         Opcode::MOV => {
             [Use::Write, Use::Read][idx as usize]
         }
+        Opcode::PREFETCHW => {
+            Use::Read
+        }
         Opcode::XADD |
         Opcode::XCHG => {
             [Use::ReadWrite, Use::ReadWrite][idx as usize]
@@ -441,13 +447,15 @@ fn use_of(instr: &Instruction, idx: u8) -> Use {
             Use::Read
         }
         Opcode::BT |
-        Opcode::BTS |
-        Opcode::BTR |
-        Opcode::BTC |
-        Opcode::BSR |
         Opcode::BSF |
         Opcode::TZCNT => {
             Use::Read
+        }
+        Opcode::BTS |
+        Opcode::BTR |
+        Opcode::BTC |
+        Opcode::BSR => {
+            [Use::ReadWrite, Use::Read][idx as usize]
         }
         Opcode::SAR |
         Opcode::SAL |
@@ -763,6 +771,7 @@ fn implicit_loc(op: Opcode, i: u8) -> (Option<Location>, Direction) {
         Opcode::MOVAPD |
         Opcode::MOVQ |
         Opcode::MOV |
+        Opcode::PREFETCHW |
         Opcode::XADD |
         Opcode::XCHG => {
             unreachable!();
@@ -1240,6 +1249,7 @@ fn implicit_locs(op: Opcode) -> u8 {
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
         Opcode::LEA |
+        Opcode::PREFETCHW |
         Opcode::MOVSX |
         Opcode::MOVZX |
         Opcode::MOVSXD |
