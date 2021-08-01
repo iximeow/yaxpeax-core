@@ -1220,20 +1220,25 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                         let indirect = self.memory_layout.expect("mem layout").indirect_loc(spec.0, loc.0.unwrap());
                         //println!("  {:?}", indirect);
                         match loc.1 {
+                            // TODO: fix panic for non-const memory width accesses (like xsave etc)
                             Direction::Read => {
                                 if indirect.try_get_load(access.qword()).is_some() {
-                                    // TODO: 8 is the access width. should be inferred from the operand.
-                                    // ... one day :)
                                     println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
-                                    return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                                    let size_hack = match instr.mem_size().and_then(|sz| sz.bytes_size()) {
+                                        Some(sz) => sz,
+                                        None => 8,
+                                    };
+                                    return Some(Location::MemoryLocation(ANY, size_hack, Some((Data::Expression(base), Data::Expression(addend)))));
                                 }
                             }
                             Direction::Write => {
                                 if indirect.try_get_store(access.qword()).is_some() {
-                                    // TODO: 8 is the access width. should be inferred from the operand.
-                                    // ... one day :)
                                     println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
-                                    return Some(Location::MemoryLocation(ANY, 8, Some((Data::Expression(base), Data::Expression(addend)))));
+                                    let size_hack = match instr.mem_size().and_then(|sz| sz.bytes_size()) {
+                                        Some(sz) => sz,
+                                        None => 8,
+                                    };
+                                    return Some(Location::MemoryLocation(ANY, size_hack, Some((Data::Expression(base), Data::Expression(addend)))));
                                 }
                             }
                         }
