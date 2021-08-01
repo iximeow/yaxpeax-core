@@ -1080,7 +1080,7 @@ impl <
                         match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
                                 let type_atlas = TypeAtlas::new();
-                                if let Expression::Add { left: base, right: offset } = &expr.clone().add(&Item::immediate(*disp as i64 as u64)).as_ref().value {
+                                if let Expression::Add { left: base, right: offset } = &expr.clone().add(&Item::immediate(*disp as i64)).as_ref().value {
                                     if let Some(offset) = offset.value.as_immediate() {
                                         if let Some(field) = base.ty.as_ref().and_then(|spec| type_atlas.get_field(spec, offset as u32)) {
                                             drawn = true;

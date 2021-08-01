@@ -191,12 +191,20 @@ impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> w
                 if let Expression::Value(ValueOrImmediate::Immediate(i)) = right.value {
                     if let Some((inner_base, inner_addend)) = left.infer_base_and_addend() {
                         if let Expression::Value(ValueOrImmediate::Immediate(j)) = inner_addend.value {
-                            Some((inner_base.dealiased(), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(i.wrapping_sub(j))))))
+                            Some((inner_base.dealiased(), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(j.wrapping_sub(i))))))
                         } else {
-                            Some((left.dealiased(), right.dealiased()))
+                            let negated_right = Item {
+                                ty: right.ty.clone(),
+                                value: Expression::Value(ValueOrImmediate::Immediate(-i))
+                            };
+                            Some((left.dealiased(), Rc::new(negated_right)))
                         }
                     } else {
-                        Some((left.dealiased(), right.dealiased()))
+                        let negated_right = Item {
+                            ty: right.ty.clone(),
+                            value: Expression::Value(ValueOrImmediate::Immediate(-i))
+                        };
+                        Some((left.dealiased(), Rc::new(negated_right)))
                     }
                 } else {
                     None

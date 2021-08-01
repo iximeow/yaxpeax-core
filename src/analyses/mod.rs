@@ -344,13 +344,13 @@ pub trait Value: Sized {
 
     fn unknown() -> Self;
 
-    fn from_const(_c: u64) -> Self {
+    fn from_const(_c: i64) -> Self {
         Self::unknown()
     }
 
     fn from_set(xs: &[Self]) -> Self;
 
-    fn to_const(&self) -> Option<u64>;
+    fn to_const(&self) -> Option<i64>;
 
     fn as_bool(&self) -> Option<bool> {
         self.ne(&Value::from_const(0)).to_const().map(|x| x != 0)
@@ -622,7 +622,7 @@ impl<Leaf: fmt::Display> fmt::Display for Expression<Leaf> {
 }
 
 impl<T: SSAValues> Expression<ValueOrImmediate<T>> where T::Data: Eq + fmt::Display {
-    pub fn as_immediate(&self) -> Option<u64> {
+    pub fn as_immediate(&self) -> Option<i64> {
         if let Expression::Value(ValueOrImmediate::Immediate(i)) = self {
             Some(*i)
         } else {
@@ -719,12 +719,12 @@ impl<Leaf> Expression<Leaf> {
 use std::hash::Hash;
 use std::hash::Hasher;
 pub enum ValueOrImmediate<A: SSAValues> where A::Data: Eq + fmt::Display {
-    Immediate(u64),
+    Immediate(i64),
     Value(DFGRef<A>),
 }
 
 impl<A: SSAValues> ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
-    pub fn immediate(v: u64) -> Expression<Self> {
+    pub fn immediate(v: i64) -> Expression<Self> {
         Expression::value(ValueOrImmediate::Immediate(v))
     }
 
@@ -818,7 +818,7 @@ impl<A: SSAValues> Hash for ValueOrImmediate<A> where A::Data: Eq + fmt::Display
         match self {
             ValueOrImmediate::Immediate(v) => {
                 state.write_u8(1);
-                state.write_u64(*v);
+                state.write_i64(*v);
             }
             ValueOrImmediate::Value(value) => {
                 state.write_u8(2);
@@ -939,7 +939,7 @@ impl<A: SSAValues> Value for Rc<Item<ValueOrImmediate<A>>> where A::Data: Hash +
         Item::untyped(Expression::Unknown)
     }
 
-    fn from_const(c: u64) -> Self {
+    fn from_const(c: i64) -> Self {
         Item::untyped(Expression::Value(ValueOrImmediate::Immediate(c)))
     }
 
@@ -948,7 +948,7 @@ impl<A: SSAValues> Value for Rc<Item<ValueOrImmediate<A>>> where A::Data: Hash +
         Self::unknown()
     }
 
-    fn to_const(&self) -> Option<u64> {
+    fn to_const(&self) -> Option<i64> {
         if let Expression::Value(ValueOrImmediate::Immediate(c)) = self.as_ref().value {
             Some(c)
         } else {

@@ -37,7 +37,7 @@ pub(crate) fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as A
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
                     Some(
-                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp as u64))
+                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp as i64))
                     )
                 } else {
                 // TODO
@@ -52,7 +52,7 @@ pub(crate) fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as A
             if instr.prefixes.gs() {
                 if *disp < 0x10000 {
                     Some(
-                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp))
+                        Item::opaque(TypeSpec::struct_pointer(data::types::KPCR)).add(&Item::immediate(*disp as i64))
                     )
                 } else {
                 // TODO
@@ -95,7 +95,7 @@ pub(crate) fn referent(instr: &Instruction, mem_op: &Operand, addr: <x86_64 as A
         },
         Operand::RegDisp(reg, disp) => {
             let reg = dfg.get_use(addr, Location::Register(*reg));
-            Some(Item::value(ValueOrImmediate::Value(reg.value)).add(&Item::immediate(*disp as i64 as u64)))
+            Some(Item::value(ValueOrImmediate::Value(reg.value)).add(&Item::immediate(*disp as i64)))
             /*
             match .get_data().as_ref() {
                 Some(Data::Concrete(_v, None)) => {
@@ -226,7 +226,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                         match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
         //                        println!("  = {:?}", expr.clone().offset(*i as i64 as u64));
-                                def_val.update(Data::Expression(expr.add(&Item::immediate(offset as u64))));
+                                def_val.update(Data::Expression(expr.add(&Item::immediate(offset))));
                             }
                             _ => { }
                         };

@@ -789,18 +789,18 @@ impl <A: Address + Debug> From<AddressDiff<A>> for control_flow::Effect<A> {
 }
 
 pub trait ToAddrDiff: yaxpeax_arch::Address {
-    fn translate_offset(from: u64) -> AddressDiff<Self>;
+    fn translate_offset(from: i64) -> AddressDiff<Self>;
 }
 
 impl ToAddrDiff for u64 {
-    fn translate_offset(from: u64) -> AddressDiff<Self> {
-        AddressDiff::from_const(from)
+    fn translate_offset(from: i64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from as u64)
     }
 }
 
 impl ToAddrDiff for u32 {
-    fn translate_offset(from: u64) -> AddressDiff<Self> {
-        AddressDiff::from_const(from as u32)
+    fn translate_offset(from: i64) -> AddressDiff<Self> {
+        AddressDiff::from_const(from as u64 as u32)
     }
 }
 
@@ -809,7 +809,7 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
         control_flow::Effect::stop()
     }
 
-    fn from_const(c: u64) -> Self {
+    fn from_const(c: i64) -> Self {
         control_flow::Effect::stop_and(
             control_flow::Target::Relative(A::translate_offset(c))
         )
@@ -866,7 +866,7 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
         }
     }
 
-    fn to_const(&self) -> Option<u64> {
+    fn to_const(&self) -> Option<i64> {
         None
     }
 
