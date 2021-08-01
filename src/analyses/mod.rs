@@ -467,13 +467,13 @@ impl<Leaf: fmt::Display> fmt::Display for Item<Leaf> {
 }
 
 impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Eq + fmt::Display {
-    pub fn immediate(v: u64) -> Rc<Self> {
+    pub fn immediate(v: i64) -> Rc<Self> {
         Self::untyped(Expression::value(ValueOrImmediate::Immediate(v)))
     }
 }
 
 use analyses::memory_layout::Underlying;
-impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+impl<A: SSAValues> Item<ValueOrImmediate<A>> where A::Data: Underlying<Arch=A> + Eq + fmt::Display {
     pub fn dealiased(&self) -> Rc<Self> {
         let ty = self.ty.clone();
         let value = self.value.dealiased();
@@ -631,7 +631,7 @@ impl<T: SSAValues> Expression<ValueOrImmediate<T>> where T::Data: Eq + fmt::Disp
     }
 }
 
-impl<A: SSAValues> Expression<ValueOrImmediate<A>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+impl<A: SSAValues> Expression<ValueOrImmediate<A>> where A::Data: Underlying<Arch=A> + Eq + fmt::Display {
     pub fn dealiased(&self) -> Self {
         match self {
             Expression::Unknown => Expression::Unknown,

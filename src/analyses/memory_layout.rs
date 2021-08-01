@@ -149,21 +149,27 @@ pub trait MemoryAccessBaseInference {
 /// than display reasoning, these values should be operated on as if they were the underlying
 /// aliased location.
 pub trait Underlying {
-    type Target;
+    type Arch: yaxpeax_arch::Arch + SSAValues;
 
-    fn underlying(&self) -> Option<Self::Target>;
+    fn underlying(&self) -> Option<DFGRef<Self::Arch>>;
+
+    fn expression(&self) -> Option<Rc<Item<ValueOrImmediate<Self::Arch>>>> where <<Self as Underlying>::Arch as SSAValues>::Data: Eq + fmt::Display;
 }
 
-impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+impl<A: SSAValues> MemoryAccessBaseInference for Rc<Item<ValueOrImmediate<A>>> where A::Data: Underlying<Arch=A> + Eq + fmt::Display {
     type Base = Self;
     type Addend = Self;
 
     fn infer_base_and_addend(&self) -> Option<(Self::Base, Self::Addend)> {
 //        println!("impl infer_base_and_addend: {:?}", self);
-        let res = match &self.value {
+        let res = match &self.value.dealiased() {
             Expression::Unknown => None,
-            Expression::Value(ValueOrImmediate::Value(_v)) => {
-                None
+            Expression::Value(ValueOrImmediate::Value(v)) => {
+                if let Some(expr) = v.borrow().data.as_ref().and_then(|x| x.expression()) {
+                    expr.infer_base_and_addend()
+                } else {
+                    Some((Item::value(ValueOrImmediate::Value(Rc::clone(v))), Item::untyped(Expression::Value(ValueOrImmediate::Immediate(0)))))
+                }
             }
             Expression::Value(ValueOrImmediate::Immediate(_i)) => None,
             Expression::Add { left, right } => {
@@ -231,7 +237,7 @@ impl From<AddressDiff<u64>> for LocationAccess<amd64> {
 
 use analyses::{IndirectQuery, ValueIndex};
 
-impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediate<A>>>> for IndirectLayout<A> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediate<A>>>> for IndirectLayout<A> where A::Data: Underlying<Arch=A> + Eq + fmt::Display {
     fn try_get_load(&self, index: ValueIndex<Rc<Item<ValueOrImmediate<A>>>>) -> Option<Rc<Item<ValueOrImmediate<A>>>> {
         if let Some((base, addend)) = index.base.infer_base_and_addend() {
             // base must be a Value otherwise it's some complex composite, OR unknown, and not
@@ -347,7 +353,7 @@ impl<A: Arch + ValueLocations + SSAValues> IndirectQuery<Rc<Item<ValueOrImmediat
     }
 }
 
-impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::Data: Underlying<Target=DFGRef<A>> + Eq + fmt::Display {
+impl<'ssa, A: Arch + ValueLocations + SSAValues> MemoryLayout<'ssa, A> where A::Data: Underlying<Arch=A> + Eq + fmt::Display {
     fn get_segment(&self, indirection_value: DFGRef<A>) -> Rc<RefCell<HashMap<ValueOrImmediate<A>, MemoryRegion<A>>>> {
         let mut underlying = Rc::clone(&indirection_value);
         if let Some(inner) = indirection_value.borrow().data.as_ref().and_then(|x| x.underlying()) {

@@ -655,9 +655,9 @@ pub enum Data {
 }
 
 impl crate::analyses::memory_layout::Underlying for Data {
-    type Target = DFGRef<x86_64>;
+    type Arch = x86_64;
 
-    fn underlying(&self) -> Option<Self::Target> {
+    fn underlying(&self) -> Option<DFGRef<Self::Arch>> {
         match self {
             Data::Alias(alias) => {
                 let mut underlying = Rc::clone(alias);
@@ -672,6 +672,14 @@ impl crate::analyses::memory_layout::Underlying for Data {
                 Some(underlying)
             }
             _ => None,
+        }
+    }
+
+    fn expression(&self) -> Option<Rc<crate::analyses::Item<crate::analyses::ValueOrImmediate<x86_64>>>> {
+        if let Data::Expression(expr) = self {
+            Some(Rc::clone(expr))
+        } else {
+            None
         }
     }
 }
