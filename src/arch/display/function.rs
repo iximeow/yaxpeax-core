@@ -5,6 +5,7 @@ use yaxpeax_arch::LengthedInstruction;
 use arch::DecodeFrom;
 use arch::InstructionSpan;
 use arch::display::BaseDisplay;
+use analyses::static_single_assignment::DataDisplay;
 use analyses::static_single_assignment::SSAValues;
 use analyses::static_single_assignment::SSA;
 use analyses::control_flow::ControlFlowGraph;
@@ -142,11 +143,11 @@ impl <
                             for ((_loc, dir), value) in modifications.iter() {
                                 match dir {
                                     Direction::Read => {
-                                        strings.push(format!("read: {}", value.borrow().display()));
+                                        strings.push(format!("read: {}", value.borrow().display(false, None)));
                                         strings.push(format!("  via edge {} -> {}", source.show(), block.start.show()));
                                     }
                                     Direction::Write => {
-                                        strings.push(format!("write: {}", value.borrow().display()));
+                                        strings.push(format!("write: {}", value.borrow().display(false, None)));
                                         strings.push(format!("  via edge {} -> {}", source.show(), block.start.show()));
                                     }
                                 }
@@ -164,13 +165,13 @@ impl <
                                 hiddens.push(out.location.clone());
                                 continue;
                             }
-                            let mut phi_line = format!("{} {} <- phi(", frame, phi_op.out.borrow().display());
+                            let mut phi_line = format!("{} {} <- phi(", frame, phi_op.out.borrow().display(false, None));
                             let mut in_iter = phi_op.ins.iter();
                             if let Some(phi_in) = in_iter.next() {
-                                write!(phi_line, "{}", phi_in.borrow().display()).unwrap();
+                                write!(phi_line, "{}", phi_in.borrow().display(false, None)).unwrap();
                             }
                             while let Some(phi_in) = in_iter.next() {
-                                write!(phi_line, ", {}", phi_in.borrow().display()).unwrap();
+                                write!(phi_line, ", {}", phi_in.borrow().display(false, None)).unwrap();
                             }
                             phi_line.push(')');
                             strings.push(phi_line);

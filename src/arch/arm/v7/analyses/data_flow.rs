@@ -160,6 +160,14 @@ pub enum Data {
     Alias(Rc<RefCell<Value<ARMv7>>>),
 }
 
+use crate::ColorSettings;
+impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
+    type Displayer = &'static str;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+        unimplemented!()
+    }
+}
+
 impl Hash for Data {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {

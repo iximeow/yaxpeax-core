@@ -509,16 +509,29 @@ impl AliasInfo for Dependence {
 }
 
 use data::types::{Typed, TypeAtlas, TypeSpec};
-impl Typed for u8 {
+impl Typed for Data {
     fn type_of(&self, _: &TypeAtlas) -> TypeSpec {
         TypeSpec::Unknown
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Data {
+    Constant(u8)
+}
+
 use analyses::static_single_assignment::{SSAValues};
 use arch::pic17::{Dependence, Update};
 impl SSAValues for PIC17 {
-    type Data = u8; // TODO: either some id of something interesting or a value?
+    type Data = Data; // TODO: either some id of something interesting or a value?
+}
+
+use crate::ColorSettings;
+impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
+    type Displayer = &'static str;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+        unimplemented!()
+    }
 }
 
 use data::Direction;

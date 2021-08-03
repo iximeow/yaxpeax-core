@@ -379,9 +379,29 @@ impl Memoable for HashedValue<DFGRef<MSP430>> {
     }
 }
 
+use data::types::{Typed, TypeAtlas, TypeSpec};
+impl Typed for Data {
+    fn type_of(&self, _: &TypeAtlas) -> TypeSpec {
+        TypeSpec::Unknown
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Data {
+    Constant(u8)
+}
+
 use analyses::static_single_assignment::SSAValues;
 impl SSAValues for MSP430 {
-    type Data = u8;
+    type Data = Data;
+}
+
+use crate::ColorSettings;
+impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
+    type Displayer = &'static str;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+        unimplemented!()
+    }
 }
 
 use data::ValueLocations;

@@ -30,6 +30,7 @@ use data::types::{TypeAtlas, TypeSpec};
 use display::location::{LocationHighlighter, NoHighlights, StyledDisplay};
 use arch::display::function::FunctionInstructionDisplay;
 use arch::display::function::FunctionView;
+use analyses::static_single_assignment::{DataDisplay as SSADataDisplay};
 
 use memory::MemoryRange;
 
@@ -144,7 +145,7 @@ impl <'a, 'b, 'c> fmt::Display for RegValueDisplay<'a, 'b, 'c> {
                     )
                 )?;
                 if let Some(data) = value.borrow().data.as_ref() {
-                    write!(fmt, " (= {})", data.display(self.colors))?;
+                    write!(fmt, " (= {})", data.display(false, self.colors))?;
                 }
                 Ok(())
             },
@@ -195,10 +196,10 @@ impl <'a, 'b> fmt::Display for ValueRangeDisplay<'a, 'b> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self.range {
             ValueRange::Between(start, end) => {
-                write!(fmt, "[{}, {}]", DataDisplay { data: &start, colors: self.colors }, DataDisplay { data: &end, colors: self.colors })
+                write!(fmt, "[{}, {}]", start.display(false, self.colors), end.display(false, self.colors))
             },
             ValueRange::Precisely(v) => {
-                write!(fmt, "{}", DataDisplay { data: &v, colors: self.colors })
+                write!(fmt, "{}", v.display(false, self.colors))
             }
         }
     }
@@ -206,6 +207,7 @@ impl <'a, 'b> fmt::Display for ValueRangeDisplay<'a, 'b> {
 
 pub struct DataDisplay<'a, 'b> {
     pub data: &'a Data,
+    pub detailed: bool,
     pub colors: Option<&'b ColorSettings>,
 }
 
@@ -222,7 +224,7 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
                     })?;
                 } else if let Location::MemoryLocation(region, size, Some((base, addend))) = &alias.borrow().location {
                     if let Some(data) = &alias.borrow().data {
-                        write!(fmt, "{}[{} + {}, {}] (= {})", region, base, addend, size, DataDisplay { data: data, colors: self.colors })?;
+                        write!(fmt, "{}[{} + {}, {}] (= {})", region, base, addend, size, data.display(false, self.colors))?;
                     } else {
                         write!(fmt, "{}[{} + {}, {}] (= unknown)", region, base, addend, size)?;
                     }
@@ -233,7 +235,7 @@ impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
             Data::Str(string) => { write!(fmt, "\"{}\"", string)?; }
             Data::Expression(expr) => {
                 let real_ty = expr.ty.as_ref().unwrap_or(&TypeSpec::Bottom);
-                write!(fmt, "{}", expr)?;
+                write!(fmt, "{}", expr.display(self.detailed, self.colors))?;
 //                panic!("display expr?");
                 if real_ty != &TypeSpec::Unknown {
                     // write!(fmt, "{}", expr.show(&type_atlas))?;

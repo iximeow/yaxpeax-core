@@ -164,7 +164,7 @@ impl <A: SSAValues> fmt::Debug for Value<A> {
 
 impl <A: SSAValues> fmt::Display for Value<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.location)?;
+        write!(f, "{{ {:?}", self.location)?;
         if let Some(v) = self.version {
             write!(f, "_{}", v)?;
         } else {
@@ -174,9 +174,10 @@ impl <A: SSAValues> fmt::Display for Value<A> {
             write!(f, ", \"{}\"", name)?;
         }
         if let Some(data) = self.data.as_ref() {
-            write!(f, ", data: {:?}", data)?;
-        } else {
-            write!(f, ", data: None")?;
+            write!(f, ": {}", data.display(false, None))?;
+            // {}", data)?;
+//        } else {
+//            write!(f, "")?;
         }
         write!(f, " }}")
     }
@@ -243,22 +244,38 @@ impl <A: SSAValues> PartialEq for Value<A> {
 }
 impl <A: SSAValues> Eq for Value<A> {}
 
-pub struct ValueDisplay<'a, A: SSAValues> {
-    value: &'a Value<A>,
+pub struct ValueDisplay<'data, 'colors, A: SSAValues> {
+    value: &'data Value<A>,
     show_location: bool,
+    detailed: bool,
+    colors: Option<&'colors crate::ColorSettings>,
 }
 
-impl <'a, A: SSAValues> ValueDisplay<'a, A> {
+impl <'data, 'colors, A: SSAValues> ValueDisplay<'data, 'colors, A> {
     pub fn with_location(self) -> Self {
         ValueDisplay {
-            value: self.value,
             show_location: true,
+            ..self
         }
     }
 }
 
-impl <'a, A: SSAValues> fmt::Display for ValueDisplay<'a, A> {
+impl <'data, 'colors, A: SSAValues> fmt::Display for ValueDisplay<'data, 'colors, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if !self.detailed {
+            if let Some(name) = self.value.name.as_ref() {
+                return write!(f, "{}", name);
+            } else if let Some(data) = self.value.data.as_ref() {
+                return fmt::Display::fmt(&data.display(self.detailed, self.colors), f);
+            } else {
+                if let Some(v) = self.value.version {
+                    return write!(f, "{:?}_{}", self.value.location, v);
+                } else {
+                    return write!(f, "{:?}_input", self.value.location);
+                }
+            }
+        }
+
         if self.show_location {
             if let Some(name) = self.value.name.as_ref() {
                 write!(f, "{}", name)?;
@@ -294,11 +311,16 @@ impl <A> Value<A> where A: SSAValues {
     pub fn version(&self) -> Option<u32> {
         self.version
     }
+}
 
-    pub fn display(&self) -> ValueDisplay<A> {
+impl <'data, 'colors, A: 'data + SSAValues> DataDisplay<'data, 'colors> for Value<A> {
+    type Displayer = ValueDisplay<'data, 'colors, A>;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors crate::ColorSettings>) -> Self::Displayer {
         ValueDisplay {
             value: self,
+            detailed,
             show_location: false,
+            colors,
         }
     }
 }
@@ -315,8 +337,13 @@ impl <A: SSAValues + Arch> Value<A> {
     }
 }
 
+pub trait DataDisplay<'data, 'colors> {
+    type Displayer: fmt::Display;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors crate::ColorSettings>) -> Self::Displayer;
+}
+
 pub trait SSAValues where Self: Arch + ValueLocations {
-    type Data: Debug + Hash + Clone + Typed;
+    type Data: for<'data, 'colors> DataDisplay<'data, 'colors> + Debug + Hash + Clone + Typed;
 }
 
 pub trait DFGRebase<A: SSAValues + Arch> {

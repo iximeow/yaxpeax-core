@@ -232,6 +232,12 @@ pub struct ValueIndex<'v, V: ?Sized> {
     pub size: usize,
 }
 
+impl<'v, V: ?Sized + crate::analyses::static_single_assignment::DataDisplay<'v, 'static>> fmt::Display for ValueIndex<'v, V> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[{}, width: {}]", self.base.display(false, None), self.size)
+    }
+}
+
 pub trait IntoValueIndex {
     fn byte(&self) -> ValueIndex<Self> {
         ValueIndex {
@@ -380,8 +386,15 @@ pub trait Value: Sized {
         ValueRes::unknown()
     }
 
-    fn modulo(&self, _other: &Self) -> Self {
-        Self::unknown()
+    fn modulo(&self, other: &Self) -> Self {
+        match (self.to_const(), other.to_const()) {
+            (Some(x), Some(y)) => {
+                Value::from_const(x % y)
+            }
+            _ => {
+                Self::unknown()
+            }
+        }
     }
 
     fn ne(&self, _other: &Self) -> Self {
@@ -451,7 +464,8 @@ pub trait Value: Sized {
 
 use SSAValues;
 use std::rc::Rc;
-use analyses::static_single_assignment::DFGRef;
+use analyses::static_single_assignment::{DataDisplay, DFGRef};
+use crate::ColorSettings;
 use data::types::TypeSpec;
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -460,9 +474,36 @@ pub struct Item<Leaf> {
     pub value: Expression<Leaf>,
 }
 
+pub struct ItemDisplay<'data, 'colors, Leaf> where Leaf: DataDisplay<'data, 'colors> {
+    data: &'data Rc<Item<Leaf>>,
+    detailed: bool,
+    colors: Option<&'colors ColorSettings>,
+}
+
+impl<'data, 'colors, Leaf: 'data + DataDisplay<'data, 'colors>> DataDisplay<'data, 'colors> for Rc<Item<Leaf>> {
+    type Displayer = ItemDisplay<'data, 'colors, Leaf>;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> Self::Displayer {
+        ItemDisplay {
+            data: self,
+            detailed,
+            colors
+        }
+    }
+}
+
+impl<'data, 'colors, Leaf: 'data + DataDisplay<'data, 'colors>> fmt::Display for ItemDisplay<'data, 'colors, Leaf> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ty) = self.data.ty.as_ref() {
+            write!(f, "({}: {:?})", self.data.value.display(self.detailed, self.colors), ty)
+        } else {
+            write!(f, "{}", self.data.value.display(self.detailed, self.colors))
+        }
+    }
+}
+
 impl<Leaf: fmt::Display> fmt::Display for Item<Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.value)
+        fmt::Display::fmt(&self.value, f)
     }
 }
 
@@ -581,6 +622,63 @@ pub enum Expression<Leaf> {
     Shr { value: Rc<Item<Leaf>>, amount: Rc<Item<Leaf>> },
 }
 
+pub struct ExpressionDisplay<'data, 'colors, Leaf: DataDisplay<'data, 'colors>> {
+    data: &'data Expression<Leaf>,
+    detailed: bool,
+    colors: Option<&'colors ColorSettings>,
+}
+
+impl<'data, 'colors, Leaf: 'data + DataDisplay<'data, 'colors>> DataDisplay<'data, 'colors> for Expression<Leaf> {
+    type Displayer = ExpressionDisplay<'data, 'colors, Leaf>;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> Self::Displayer {
+        ExpressionDisplay {
+            data: self,
+            detailed,
+            colors
+        }
+    }
+}
+
+impl<'data, 'colors, Leaf: 'data + DataDisplay<'data, 'colors>> fmt::Display for ExpressionDisplay<'data, 'colors, Leaf> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.data {
+            Expression::Unknown => {
+                write!(f, "<unknown>")
+            }
+            Expression::Value(l) => {
+                write!(f, "{}", l.display(self.detailed, self.colors))
+            }
+            Expression::Load { address, size } => {
+                write!(f, "[{}:{}]", address.display(self.detailed, self.colors), size)
+            }
+            Expression::Add { left, right } => {
+                write!(f, "({} + {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::Sub { left, right } => {
+                write!(f, "({} - {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::Mul { left, right } => {
+                write!(f, "({} * {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::Or { left, right } => {
+                write!(f, "({} | {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::And { left, right } => {
+                write!(f, "({} & {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::Xor { left, right } => {
+                write!(f, "({} ^ {})", left.display(self.detailed, self.colors), right.display(self.detailed, self.colors))
+            }
+            Expression::Shl { value, amount } => {
+                write!(f, "({} << {})", value.display(self.detailed, self.colors), amount.display(self.detailed, self.colors))
+            }
+            Expression::Shr { value, amount } => {
+                write!(f, "({} >> {})", value.display(self.detailed, self.colors), amount.display(self.detailed, self.colors))
+            }
+        }
+    }
+}
+
 impl<Leaf: fmt::Display> fmt::Display for Expression<Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -597,25 +695,25 @@ impl<Leaf: fmt::Display> fmt::Display for Expression<Leaf> {
                 write!(f, "({} + {})", left, right)
             }
             Expression::Sub { left, right } => {
-                write!(f, "({} + {})", left, right)
+                write!(f, "({} - {})", left, right)
             }
             Expression::Mul { left, right } => {
-                write!(f, "({} + {})", left, right)
+                write!(f, "({} * {})", left, right)
             }
             Expression::Or { left, right } => {
-                write!(f, "({} + {})", left, right)
+                write!(f, "({} | {})", left, right)
             }
             Expression::And { left, right } => {
-                write!(f, "({} + {})", left, right)
+                write!(f, "({} & {})", left, right)
             }
             Expression::Xor { left, right } => {
-                write!(f, "({} + {})", left, right)
+                write!(f, "({} ^ {})", left, right)
             }
             Expression::Shl { value, amount } => {
-                write!(f, "({} + {})", value, amount)
+                write!(f, "({} << {})", value, amount)
             }
             Expression::Shr { value, amount } => {
-                write!(f, "({} + {})", value, amount)
+                write!(f, "({} >> {})", value, amount)
             }
         }
     }
@@ -782,6 +880,38 @@ impl<A: SSAValues> fmt::Display for ValueOrImmediate<A> where A::Data: Eq + fmt:
         }
     }
 }
+
+pub struct LeafDisplay<'data, 'colors, A: SSAValues> where A::Data: Eq + fmt::Display {
+    data: &'data ValueOrImmediate<A>,
+    detailed: bool,
+    colors: Option<&'colors ColorSettings>,
+}
+
+impl<'data, 'colors, A: 'data + SSAValues> DataDisplay<'data, 'colors> for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
+    type Displayer = LeafDisplay<'data, 'colors, A>;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> Self::Displayer {
+        LeafDisplay {
+            data: self,
+            detailed,
+            colors
+        }
+    }
+}
+
+impl<'data, 'colors, A: SSAValues> fmt::Display for LeafDisplay<'data, 'colors, A> where A::Data: Eq + fmt::Display {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.data {
+            ValueOrImmediate::Immediate(i) => {
+                // TODO: signed hex
+                write!(f, "{:#x}", i)
+            }
+            ValueOrImmediate::Value(v) => {
+                fmt::Display::fmt(&v.borrow().display(self.detailed, self.colors), f)
+            }
+        }
+    }
+}
+
 
 impl<A: SSAValues> Eq for ValueOrImmediate<A> where A::Data: Eq + fmt::Display { }
 impl<A: SSAValues> PartialEq for ValueOrImmediate<A> where A::Data: Eq + fmt::Display {

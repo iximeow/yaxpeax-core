@@ -346,9 +346,9 @@ pub fn generate_refined_ssa<
             println!("location for {:?}, {:?}", loc, dir);
             if let Some(old_value) = old_dfg.get_value(*addr, loc.to_owned(), *dir) {
                 if dfg_ref.borrow().location != old_value.borrow().location || dfg_ref.borrow().version != old_value.borrow().version {
-                    println!("{:?} -> {:?}", old_value, dfg_ref);
+                    println!("{} -> {}", old_value.borrow(), dfg_ref.borrow());
                 } else {
-                    println!("{:?} == {:?}", old_value, dfg_ref);
+                    println!("{} == {}", old_value.borrow(), dfg_ref.borrow());
                 }
             } else {
                 // okay this is some kinda location that didn't exist before. maybe this is a new

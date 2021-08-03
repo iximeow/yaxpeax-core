@@ -14,6 +14,7 @@
 use arch::Symbol;
 use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues};
+use analyses::static_single_assignment::{DataDisplay as SSADataDisplay};
 use data::types::{Typed, TypeSpec, TypeAtlas};
 use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec};
 use yaxpeax_x86::x86_64;
@@ -686,18 +687,22 @@ impl crate::analyses::memory_layout::Underlying for Data {
 
 impl fmt::Display for Data {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display(None))
+        write!(f, "{}", self.display(true, None))
+    }
+}
+
+impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
+    type Displayer = DataDisplay<'data, 'colors>;
+    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> Self::Displayer {
+        DataDisplay {
+            data: self,
+            detailed,
+            colors,
+        }
     }
 }
 
 impl Data {
-    pub fn display<'a, 'b>(&'a self, colors: Option<&'b ColorSettings>) -> DataDisplay<'a, 'b> {
-        DataDisplay {
-            data: self,
-            colors,
-        }
-    }
-
     pub fn underlying(&self) -> Option<Data> {
         let mut curr = self.to_owned();
         while let Data::Alias(alias) = &curr {
@@ -746,7 +751,7 @@ impl Data {
                 Some(Data::ValueSet(new_values))
             },
             _ => {
-                println!("Adding {} and {}", DataDisplay { data: left, colors: None }, DataDisplay { data: right, colors: None });
+                println!("Adding {} and {}", left.display(false, None), right.display(false, None));
                 return None;
                 // panic!("add!");
             }
@@ -1236,7 +1241,7 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                                     println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
                                     return Some(Location::MemoryLocation(ANY, size_hack as u8, Some((Data::Expression(base), Data::Expression(addend)))));
                                 } else {
-                                    eprintln!("could not get load for access {:?} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
+                                    eprintln!("could not get load for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
                                 }
                             }
                             Direction::Write => {
@@ -1244,7 +1249,7 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                                     println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
                                     return Some(Location::MemoryLocation(ANY, size_hack as u8, Some((Data::Expression(base), Data::Expression(addend)))));
                                 } else {
-                                    eprintln!("could not get store for access {:?} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
+                                    eprintln!("could not get store for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
                                 }
                             }
                         }

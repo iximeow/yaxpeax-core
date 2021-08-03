@@ -4,6 +4,7 @@ use yaxpeax_x86::x86_64;
 use arch::x86_64::analyses::data_flow::{Data, Location, ValueRange};
 use analyses::evaluators::const_evaluator::{Domain, ConstEvaluator};
 use analyses::static_single_assignment::SSA;
+use analyses::static_single_assignment::{DataDisplay as SSADataDisplay};
 use data::Direction;
 use data::modifier::ModifierExpression;
 use data::ValueLocations;
@@ -266,12 +267,11 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                             // might be a pointer deref or somesuch.
                             if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
                                 if let Some(read_values) = valueset_deref(values.clone(), data, instr.mem_size().unwrap().bytes_size().unwrap()) {
-                                    use arch::x86_64::display::DataDisplay;
                                     println!(
                                         "at {}, Derefed value set {} to read {}",
                                         addr.show(),
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                        Data::ValueSet(values).display(false, None),
+                                        Data::ValueSet(read_values.clone()).display(false, None),
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
                                         Data::ValueSet(read_values)
@@ -309,11 +309,10 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                     }
                                 };
                                 if let Some(read_values) = valueset_deref(values.clone(), data, size) {
-                                    use arch::x86_64::display::DataDisplay;
                                     eprintln!(
                                         "Derefed value set {} to read {}",
-                                        DataDisplay { data: &Data::ValueSet(values), colors: None },
-                                        DataDisplay { data: &Data::ValueSet(read_values.clone()), colors: None }
+                                        Data::ValueSet(values).display(false, None),
+                                        Data::ValueSet(read_values.clone()).display(false, None),
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
                                         Data::ValueSet(read_values)
