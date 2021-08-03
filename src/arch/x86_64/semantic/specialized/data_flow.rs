@@ -85,6 +85,79 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             }
         }
     }
+    // for LEA
+    fn decompose_read_nonmem(op: &Operand) -> Vec<(Option<Location>, Direction)> {
+        match op {
+            Operand::ImmediateI8(_) |
+            Operand::ImmediateU8(_) |
+            Operand::ImmediateI16(_) |
+            Operand::ImmediateU16(_) |
+            Operand::ImmediateI32(_) |
+            Operand::ImmediateU32(_) |
+            Operand::ImmediateI64(_) |
+            Operand::ImmediateU64(_) => {
+                vec![]
+            }
+            Operand::Register(spec) => {
+                vec![(Some(Location::Register(*spec)), Direction::Read)]
+            },
+            Operand::DisplacementU32(_) |
+            Operand::DisplacementU64(_) => {
+                // TODO: lazy - how to describe the offset?
+                vec![]
+            },
+            Operand::RegDeref(spec) => {
+                vec![
+                    (Some(Location::Register(*spec)), Direction::Read),
+                ]
+            },
+            Operand::RegDisp(spec, _) => {
+                vec![
+                    (Some(Location::Register(*spec)), Direction::Read),
+                ]
+            },
+            Operand::RegScale(spec, _) => {
+                vec![
+                    (Some(Location::Register(*spec)), Direction::Read),
+                ]
+            },
+            Operand::RegIndexBase(base, index) => {
+                vec![
+                    (Some(Location::Register(*base)), Direction::Read),
+                    (Some(Location::Register(*index)), Direction::Read),
+                ]
+            },
+            Operand::RegIndexBaseDisp(base, index, _) => {
+                vec![
+                    (Some(Location::Register(*base)), Direction::Read),
+                    (Some(Location::Register(*index)), Direction::Read),
+                ]
+            },
+            Operand::RegScaleDisp(base, _, _) => {
+                vec![
+                    (Some(Location::Register(*base)), Direction::Read),
+                ]
+            },
+            Operand::RegIndexBaseScale(base, index, _) => {
+                vec![
+                    (Some(Location::Register(*base)), Direction::Read),
+                    (Some(Location::Register(*index)), Direction::Read),
+                ]
+            },
+            Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
+                vec![
+                    (Some(Location::Register(*base)), Direction::Read),
+                    (Some(Location::Register(*index)), Direction::Read),
+                ]
+            },
+            Operand::Nothing => {
+                vec![]
+            }
+            other => {
+                panic!("unhandled operand type {:?}", other);
+            }
+        }
+    }
     fn decompose_read(op: &Operand) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
@@ -277,7 +350,6 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::CVTSD2SS |
         Opcode::CVTPS2PD |
         Opcode::LDDQU |
-        Opcode::LEA |
         Opcode::MOVSX |
         Opcode::MOVZX |
         Opcode::MOVSXD |
@@ -289,6 +361,11 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::MOVQ |
         Opcode::MOV => {
             let mut locs = decompose_read(&instr.operand(1));
+            locs.append(&mut decompose_write(&instr.operand(0)));
+            locs
+        }
+        Opcode::LEA => {
+            let mut locs = decompose_read_nonmem(&instr.operand(1));
             locs.append(&mut decompose_write(&instr.operand(0)));
             locs
         }

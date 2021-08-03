@@ -1584,7 +1584,14 @@ impl <'a, 'b, 'c, D: Disambiguator<yaxpeax_x86::x86_64, (<yaxpeax_x86::x86_64 as
 
             if let Some(op) = &iter.curr_op {
                 iter.loc_idx += 1;
-                loc_by_id(iter.loc_idx - 1, iter.curr_use.unwrap(), op)
+                let res = loc_by_id(iter.loc_idx - 1, iter.curr_use.unwrap(), op);
+                if iter.inst.opcode() == Opcode::LEA &&
+                    res == Some((Some(Location::Memory(ANY)), Direction::Read)) {
+
+                    next_loc(iter)
+                } else {
+                    res
+                }
             } else {
                 unreachable!()
             }
