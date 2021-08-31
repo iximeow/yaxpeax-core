@@ -118,7 +118,8 @@ impl <
             // hack to avoid looking at the "basic block" over [0, ... first real basic block)
             // shouldn't be necessary anymore here since `fn_graph` is by definition blocks only in
             // this function?
-            // if block.start == A::Address::zero() { continue; }
+            use num_traits::Zero;
+            if block.start == A::Address::zero() { continue; }
 
             let mut iter = A::instructions_spanning(self.data, block.start, block.end);
 
