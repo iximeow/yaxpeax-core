@@ -132,6 +132,9 @@ impl <
                 } else { true };
 
                 if start_ok && end_ok {
+                    if self.fn_graph.sources(block.start).len() == 0 {
+                        continue;
+                    }
                     let mut strings: Vec<String> = Vec::new();
 
                     // this is the start of the block, so also check for Between's and phis
