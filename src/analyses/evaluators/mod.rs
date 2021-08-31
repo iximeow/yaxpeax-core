@@ -40,7 +40,7 @@ impl<'program, 'function, 'ssa, A, M: MemoryRange<A>> Evaluator<'program, 'funct
         let mut iter = A::instructions_spanning(self.program, block.start, block.end);
         while let Some((address, instr)) = iter.next() {
             use yaxpeax_arch::AddressDisplay;
-            println!("evaluating {}: {}", address.show(), instr);
+            // println!("evaluating {}: {}", address.show(), instr);
             <A as ConstEvaluator<A, (), ConcreteDomain>>::evaluate_instruction(&instr, address, self.ssa, &(), self.program);
             <A as ConstEvaluator<A, (), SymbolicDomain>>::evaluate_instruction(&instr, address, self.ssa, &(), self.program);
             <A as ConstEvaluator<A, (), ValueSetDomain>>::evaluate_instruction(&instr, address, self.ssa, &(), self.program);

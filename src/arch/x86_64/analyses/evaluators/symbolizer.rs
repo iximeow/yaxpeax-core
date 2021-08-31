@@ -148,7 +148,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                 match (instr.operand(0), instr.operand(1)) {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
-                            println!("DOING MOV for {}", instr);
+//                            println!("DOING MOV for {}", instr);
                             // `referent` is also called `effective_address` in other circumstances
                             // - either we can find an access expression known to `dfg` (in which
                             // case we might be able to just alias an existing value), otherwise
@@ -159,12 +159,12 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                                 let def = dfg.get_def(addr, Location::Register(l));
 
                                 if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&src) {
-                                    println!("inferred base and addend {:?}, {:?}", base, addend);
-                                    println!("  def is {:?}={:p}", def.value, def.value.as_ptr());
+//                                    println!("inferred base and addend {:?}, {:?}", base, addend);
+//                                    println!("  def is {:?}={:p}", def.value, def.value.as_ptr());
                                     if let Some(memory) = dfg.try_get_use(addr, Location::MemoryLocation(ANY, 8 /* l.width() */, Some((Data::Expression(base), Data::Expression(addend))))) {
-                                        println!("    AND aliasing to {:?}, was {:?}", memory, def.get_data());
+//                                        println!("    AND aliasing to {:?}, was {:?}", memory, def.get_data());
                                         def.update(Data::Alias(Rc::clone(&memory)));
-                                        println!("    DONE aliasing to {:?}, is {:?}", memory, dfg.get_def(addr, Location::Register(l)).value);
+//                                        println!("    DONE aliasing to {:?}, is {:?}", memory, dfg.get_def(addr, Location::Register(l)).value);
                                         return;
                                     } else {
                                         if def.get_data().is_none() {
@@ -195,7 +195,7 @@ impl ConstEvaluator<x86_64, (), SymbolicDomain> for x86_64 {
                                 let usage = dfg.get_use(addr, Location::Register(r));
 
                                 if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&src) {
-                                    println!("inferred base and addend {:?}, {:?}", base, addend);
+//                                    println!("inferred base and addend {:?}, {:?}", base, addend);
                                     if let Some(def) = dfg.try_get_def(addr, Location::MemoryLocation(ANY, 8 /* l.width() */, Some((Data::Expression(base), Data::Expression(addend))))) {
                                         def.borrow_mut().data.replace(Data::Alias(Rc::clone(&usage.value)));
                                     }

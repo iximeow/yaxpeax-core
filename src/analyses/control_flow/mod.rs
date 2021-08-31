@@ -602,7 +602,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
             Ok(instr) => {
                 let effect = {
                     let ctx = contexts.at(&addr);
-                    println!("computing control flow at {}", addr.show());
+                    //println!("computing control flow at {}", addr.show());
                     instr.control_flow(Some(&ctx))
                 };
                 let results = on_instruction_discovered(&instr, addr, &effect, contexts);

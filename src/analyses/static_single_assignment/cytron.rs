@@ -338,17 +338,17 @@ pub fn generate_refined_ssa<
     let mut new_dfg = generate_ssa(data, entry, basic_blocks, cfg, value_modifiers, disambiguator, functions);
 
     // iterate `new_dfg` values and replace any `DFGRef` in `old_dfg` with corresponding `DFGRef` in `new_dfg`.
-    println!("{:?}", &new_dfg.instruction_values);
+    // println!("{:?}", &new_dfg.instruction_values);
     let mut loc_updates = HashMap::new();
     for (addr, v) in &new_dfg.instruction_values {
-        println!("{:?}", addr);
+        // println!("{:?}", addr);
         for ((loc, dir), dfg_ref) in v {
-            println!("location for {:?}, {:?}", loc, dir);
+            // println!("location for {:?}, {:?}", loc, dir);
             if let Some(old_value) = old_dfg.get_value(*addr, loc.to_owned(), *dir) {
                 if dfg_ref.borrow().location != old_value.borrow().location || dfg_ref.borrow().version != old_value.borrow().version {
-                    println!("{} -> {}", old_value.borrow(), dfg_ref.borrow());
+                    // println!("{} -> {}", old_value.borrow(), dfg_ref.borrow());
                 } else {
-                    println!("{} == {}", old_value.borrow(), dfg_ref.borrow());
+                    // println!("{} == {}", old_value.borrow(), dfg_ref.borrow());
                 }
             } else {
                 // okay this is some kinda location that didn't exist before. maybe this is a new
@@ -362,9 +362,9 @@ pub fn generate_refined_ssa<
         }
         // every value has a location, 
     }
-    println!("{} locations to update", loc_updates.len());
+    // println!("{} locations to update", loc_updates.len());
     for (k, v) in loc_updates.iter() {
-        println!("  - {:?} => {:?}", k, v);
+        // println!("  - {:?} => {:?}", k, v);
     }
 
     for (_addr, values) in new_dfg.instruction_values.iter_mut() {
@@ -379,7 +379,7 @@ pub fn generate_refined_ssa<
         *values = new_values;
     }
 
-    if true {
+    if false {
         println!("instruction values {:?}", &new_dfg.instruction_values);
         println!("modifier values {:?}", &new_dfg.modifier_values);
         println!("defs {:?}", &new_dfg.defs);

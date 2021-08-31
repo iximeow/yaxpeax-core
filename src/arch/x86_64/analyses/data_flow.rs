@@ -1188,7 +1188,7 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
     fn disambiguate(&self, instr: &<x86_64 as crate::Arch>::Instruction, loc: (Option<Location>, Direction), spec: (<x86_64 as crate::Arch>::Address, u8, u8)) -> Option<Location> {
         // figure out if the location is sp-relative or rip-relative
         // .. or, has a relocation?
-//        println!("so you'd like me to disambiguate {}, {:?}", instr, spec);
+        // println!("so you'd like me to disambiguate {}, {:?}, loc={:?}", instr, spec, loc);
         use analyses::DFG;
         use analyses::IndirectQuery;
         use arch::x86_64::semantic::DFGAccessExt;
@@ -1224,13 +1224,13 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                 if let Some((base, addend)) = MemoryAccessBaseInference::infer_base_and_addend(&access) {
                     if base.value != Expression::Unknown && addend.value != Expression::Unknown {
                         use analyses::IntoValueIndex;
-                        println!("base {}, addend {}, instr {}", base, addend, instr);
+                        // println!("base {}, addend {}, instr {}", base, addend, instr);
                         let indirect = self.memory_layout.expect("mem layout").indirect_loc(spec.0, loc.0.unwrap());
                         //println!("  {:?}", indirect);
                         let size_hack = match instr.mem_size().and_then(|sz| sz.bytes_size()) {
                             Some(sz) => sz as usize,
                             None => {
-                                eprintln!("instruction '{}' at {:?} does not have a memory size even though it has a memory operand. this is yaxpeax-x86 bug. assuming 8 bytes.", instr, spec);
+//                                eprintln!("instruction '{}' at {:?} does not have a memory size even though it has a memory operand. this is yaxpeax-x86 bug. assuming 8 bytes.", instr, spec);
                                 8 as usize
                             }
                         };
@@ -1238,24 +1238,24 @@ impl <'dfg, 'mem> Disambiguator<x86_64, (<x86_64 as crate::Arch>::Address, u8, u
                             // TODO: fix panic for non-const memory width accesses (like xsave etc)
                             Direction::Read => {
                                 if indirect.try_get_load(access.width(size_hack)).is_some() {
-                                    println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
+                                    // println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
                                     return Some(Location::MemoryLocation(ANY, size_hack as u8, Some((Data::Expression(base), Data::Expression(addend)))));
                                 } else {
-                                    eprintln!("could not get load for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
+//                                    eprintln!("could not get load for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
                                 }
                             }
                             Direction::Write => {
                                 if indirect.try_get_store(access.width(size_hack)).is_some() {
-                                    println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
+                                    // println!("disambiguated {}, {:?} to {}+{}", instr, spec, base, addend);
                                     return Some(Location::MemoryLocation(ANY, size_hack as u8, Some((Data::Expression(base), Data::Expression(addend)))));
                                 } else {
-                                    eprintln!("could not get store for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
+//                                    eprintln!("could not get store for access {} in instruction '{}' at {:?}", access.width(size_hack), instr, spec);
                                 }
                             }
                         }
                     }
                 } else {
-                    eprintln!("could not infer base/addend for {}, operand={}", instr, access);
+//                    eprintln!("could not infer base/addend for {}, operand={}", instr, access);
                 }
             }
         }

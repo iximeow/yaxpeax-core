@@ -465,10 +465,10 @@ impl<'ssa> DFG<Rc<Item<ValueOrImmediate<amd64>>>, amd64, <amd64 as Arch>::Addres
         let ssa_def = self.ssa.try_get_def(when, loc.clone());
         let ssa_use = self.ssa.try_get_use(when, loc.clone());
         if ssa_def.is_none() {
-            println!("no ssa def for {} at {}", loc, when);
+//            println!("no ssa def for {} at {}", loc, when);
         }
         if ssa_use.is_none() {
-            println!("no ssa use for {} at {}", loc, when);
+//            println!("no ssa use for {} at {}", loc, when);
         }
         let regions_defs = ssa_def.as_ref().map(|value| {
             self.get_segment(Rc::clone(value))

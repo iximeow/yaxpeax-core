@@ -167,7 +167,7 @@ impl ConstEvaluator<x86_64, (), ConcreteDomain> for x86_64 {
                 }
             },
             Opcode::MOV => {
-                println!("DOING MOV for {}", instr);
+                // println!("DOING MOV for {}", instr);
                 let def_site = if let Operand::Register(l) = instr.operand(0) {
                     if l.class() == register_class::D {
                         // this assigns to Q instead of D
