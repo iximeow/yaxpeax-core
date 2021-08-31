@@ -127,7 +127,7 @@ pub struct Segment {
 }
 
 impl Segment {
-    fn contains<A: Address>(&self, addr: A) -> bool {
+    pub fn contains<A: Address>(&self, addr: A) -> bool {
         let linear = addr.to_linear();
         if linear < self.start {
             false
@@ -806,6 +806,21 @@ impl <A: Arch> MemoryRepr<A> for ModuleData where Segment: MemoryRepr<A> {
 impl Named for ModuleData {
     fn name(&self) -> &str {
         &self.name
+    }
+}
+
+impl <A: Arch> MemoryRange<A> for Segment {
+    fn range<'a>(&'a self, range: Range<A::Address>) -> Option<ReadCursor<'a, A, Self>> {
+        if self.contains(range.start) && self.contains(range.end) {
+            // TODO: return the section itself to avoid double lookups
+            Some(ReadCursor::from(self, range.start, Some(range.end)))
+        } else {
+            // TODO: this range may intersect with multiple sections
+            None
+        }
+    }
+    fn range_from<'a>(&'a self, start: A::Address) -> Option<ReadCursor<'a, A, Self>> {
+        Some(ReadCursor::from(self, start, None))
     }
 }
 
