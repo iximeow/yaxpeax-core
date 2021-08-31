@@ -834,7 +834,11 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::JLE |
         Opcode::JGE |
         Opcode::JL => {
-            cond_to_flags(instr.opcode().condition().unwrap()).to_vec()
+            let mut ops = Vec::new();
+//            ops.push((Some(Location::Register(RegSpec::rip())), Direction::Read));
+            ops.append(&mut cond_to_flags(instr.opcode().condition().unwrap()).to_vec());
+//            panic!("ops :{:?}", ops);
+            ops
         }
 
         Opcode::CMOVO |

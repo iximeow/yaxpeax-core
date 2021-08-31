@@ -277,19 +277,31 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
         Opcode::SAR => {
             let amt = dfg.read_operand(instr, &instr.operand(1));
             let value = dfg.read_operand(instr, &instr.operand(0));
-            let res = value.sar(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            let shift_width = match instr.operand(0).width() {
+                Some(w) => w,
+                None => instr.mem_size().unwrap().bytes_size().unwrap()
+            };
+            let res = value.sar(&amt.modulo(&V::from_const(shift_width as i64 * 8)));
             dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::SHR => {
             let amt = dfg.read_operand(instr, &instr.operand(1));
             let value = dfg.read_operand(instr, &instr.operand(0));
-            let res = value.shr(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            let shift_width = match instr.operand(0).width() {
+                Some(w) => w,
+                None => instr.mem_size().unwrap().bytes_size().unwrap()
+            };
+            let res = value.shr(&amt.modulo(&V::from_const(shift_width as i64 * 8)));
             dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::SHL => {
             let amt = dfg.read_operand(instr, &instr.operand(1));
             let value = dfg.read_operand(instr, &instr.operand(0));
-            let res = value.shl(&amt.modulo(&V::from_const(instr.operand(0).width().unwrap() as i64 * 8)));
+            let shift_width = match instr.operand(0).width() {
+                Some(w) => w,
+                None => instr.mem_size().unwrap().bytes_size().unwrap()
+            };
+            let res = value.shl(&amt.modulo(&V::from_const(shift_width as i64 * 8)));
             dfg.write_operand(instr, &instr.operand(0), res);
         }
         Opcode::CMP => {
