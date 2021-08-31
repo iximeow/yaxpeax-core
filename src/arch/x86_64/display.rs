@@ -213,7 +213,6 @@ pub struct DataDisplay<'a, 'b> {
 
 impl <'a, 'b> fmt::Display for DataDisplay<'a, 'b> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let _type_atlas = TypeAtlas::new();
         match self.data {
             Data::Alias(alias) => {
                 if let Location::Register(alias_reg) = alias.borrow().location {
@@ -749,12 +748,19 @@ impl <'a> OperandScroll<(<x86_64Arch as Arch>::Instruction, Option<&'a SSA<x86_6
     }
 }
 
+static mut TYPE_ATLAS: Option<TypeAtlas> = None;
+
 impl <
     'a, 'b, 'c, 'd, 'e,
     Context: SymbolQuery<<x86_64Arch as Arch>::Address> + FunctionQuery<<x86_64Arch as Arch>::Address, Function=FunctionImpl<<x86_64Arch as ValueLocations>::Location>>,
     Highlighter: LocationHighlighter<<x86_64Arch as ValueLocations>::Location>
 > Display for InstructionContext<'a, 'b, 'c, 'd, 'e, Context, Highlighter> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        unsafe {
+            if TYPE_ATLAS.is_none() {
+                TYPE_ATLAS = Some(TypeAtlas::new());
+            }
+        }
         fn colorize_i8(num: i8, colors: Option<&ColorSettings>) -> String {
             match num {
                 0 => format!("{}", colors.zero("0")),
@@ -1081,7 +1087,7 @@ impl <
                         let use_val = ssa.get_use(ctx.addr, Location::Register(*spec));
                         match use_val.get_data().as_ref() {
                             Some(Data::Expression(expr)) => {
-                                let type_atlas = TypeAtlas::new();
+                                let type_atlas = unsafe { TYPE_ATLAS.as_ref().unwrap() };
                                 if let Expression::Add { left: base, right: offset } = &expr.clone().add(&Item::immediate(*disp as i64)).as_ref().value {
                                     if let Some(offset) = offset.value.as_immediate() {
                                         if let Some(field) = base.ty.as_ref().and_then(|spec| type_atlas.get_field(spec, offset as u32)) {
