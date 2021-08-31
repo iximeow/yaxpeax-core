@@ -112,7 +112,7 @@ pub struct ELFImport {
     pub section_index: usize,
     pub value: u64
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ELFExport {
     pub name: String,
     pub section_index: usize,
