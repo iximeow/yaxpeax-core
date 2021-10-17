@@ -51,14 +51,15 @@ impl <A: yaxpeax_arch::AddressDisplay> fmt::Display for DefSource<A> {
     }
 }
 
-// Look. Just rewrite this as a graph (one day). Vertices are DFGRef, edges ae data
-// dependences. Secondary graph with vertices (DFGRef | Address) where edges are Address -> DFGRef
+unsafe impl<A: Arch + SSAValues> Send for SSA<A> {}
+// look. just rewrite this as a graph (one day). vertices are DFGRef, edges are data
+// dependences. secondary graph with vertices (DFGRef | Address) where edges are Address -> DFGRef
 // (define) -> Address (use of DFGRef)
 //
 // in the mean time, DFGRef are growing an (Address, Location) field lol
 #[derive(Debug)]
 pub struct SSA<A: Arch + SSAValues> where A::Location: Hash + Eq, A::Address: Hash + Eq {
-    // TODO: Fairly sure these Rc<RefCell<...>> could all just be raw pointers
+    // TODO: fairly sure these Rc<RefCell<...>> could all just be raw pointers
     // these aren't individually freed so Rc shouldn't be necessary?
     pub instruction_values: HashMap<A::Address, RWMap<A>>,
     pub modifier_values: HashMap<(A::Address, modifier::Precedence), RWMap<A>>,
