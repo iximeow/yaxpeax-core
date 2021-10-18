@@ -22,7 +22,7 @@ use data::modifier::Precedence;
 
 use analyses::static_single_assignment::{NoValueDescriptions, ValueDescriptionQuery};
 
-use yaxpeax_arch::{Address, AddressDisplay, Decoder, LengthedInstruction};
+use yaxpeax_arch::{Address, Decoder, LengthedInstruction};
 
 use memory::{MemoryRange, MemoryRepr};
 use memory::repr::cursor::ReadCursor;
@@ -730,7 +730,7 @@ impl <'a, A, M> InstructionIteratorSpanned<'a, A, M> where
                                 Err(_) => None
                             }
                         } else {
-                            println!("BUG: No data available for {}", self.current.show());
+//                            tracing::warn!("BUG: No data available for {}", self.current.show());
                             None
                         }
                     } else {
@@ -750,7 +750,7 @@ impl <'a, A, M> InstructionIteratorSpanned<'a, A, M> where
                         None => None
                     }
                 } else {
-                    println!("BUG: No data available for {}", self.current.show());
+//                    tracing::warn!("BUG: No data available for {}", self.current.show());
                     None
                 }
             } else {

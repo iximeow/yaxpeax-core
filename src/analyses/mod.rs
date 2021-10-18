@@ -836,7 +836,7 @@ impl<A: SSAValues> ValueOrImmediate<A> where A::Data: Eq + fmt::Display {
                     Some(v) => { v.to_string() },
                     None => "input".to_string()
                 };
-                if let Some(data) = v.borrow().data.as_ref() {
+                if let Some(_data) = v.borrow().data.as_ref() {
                     format!("{:?}_{}", v.borrow().location, version_string)
                 } else {
                     format!("{:?}_{}", v.borrow().location, version_string)

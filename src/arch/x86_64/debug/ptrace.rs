@@ -72,12 +72,12 @@ impl ProcessX86_64 {
                             thread_ids.push(tid);
                         },
                         Err(_) => {
-                            panic!("Junk data in thread id {} for pid {}", s, self.pid);
+                            panic!("junk data in thread id {} for pid {}", s, self.pid);
                         }
                     }
                 },
                 Err(_) => {
-                    panic!("Junk data in thread id path for pid {}", self.pid);
+                    panic!("junk data in thread id path for pid {}", self.pid);
                 }
             }
         }
@@ -164,7 +164,7 @@ impl ProcessMemory {
 use std::fmt;
 impl fmt::Display for DebugeeX86_64 {
     fn fmt(&self, _fmt: &mut fmt::Formatter) -> fmt::Result {
-        panic!("formatting rc.refcell.debugeex86_64");
+        unimplemented!("formatting rc.refcell.debugeex86_64");
     }
 }
 
@@ -212,7 +212,7 @@ impl DebugeeX86_64 {
                 Ok(_) => {
                     Ok(regs.assume_init())
                 },
-                Err(e) => { panic!("{:?}", e); }
+                Err(e) => { panic!("ptrace(getregs) failed: {:?}", e); }
             }
         }
     }
@@ -237,16 +237,16 @@ impl DebugeeX86_64 {
 //
 //impl Drop for DebugeeX86_64 {
     pub fn detach(&mut self) {
-        ptrace::detach(self.pid).expect("well this isn't good");
+        ptrace::detach(self.pid).expect("ptrace detach succeeds");
     }
 
     fn wait(&mut self) -> Result<(), String> {
         match nix::sys::wait::waitpid(self.pid, None) {
             Ok(WaitStatus::Signaled(_, signal, _core_dumped)) => {
-                panic!("The thing stopped. :(\n{:?}", signal);
+                unimplemented!("the debugee stopped. graceful handling of debugee issues is not yet supported. signal: {:?}", signal);
             },
             Ok(WaitStatus::Stopped(_, signal)) => {
-                println!("Signalled: {:?}", signal);
+                tracing::debug!("signalled: {:?}", signal);
                 self.pending_signal = Some((false, signal));
                 Ok(())
             },
@@ -255,10 +255,10 @@ impl DebugeeX86_64 {
                 Ok(())
             }
             Ok(WaitStatus::Exited(_, code)) => {
-                panic!("Debugee exited with code {:?}", code);
+                unimplemented!("graceful handling for debugee issues: debugee exited with code {:?}", code);
             },
             Err(nix::Error::Sys(err)) => {
-                panic!("waitpid error: {:?}", err);
+                unimplemented!("handling waitpid errors: got {:?}", err);
             },
             Err(nix::Error::InvalidPath)
                 | Err(nix::Error::InvalidUtf8)
@@ -266,8 +266,7 @@ impl DebugeeX86_64 {
                 unreachable!();
             },
             x => {
-                // TODO: uhhh hh h h   hh h
-                panic!("Unhandled waitpid result: {:?}", x);
+                panic!("unhandled waitpid result: {:?}", x);
             }
         }
     }
@@ -288,7 +287,7 @@ impl <'a> DebugTarget<'a, ProcessX86_64> for DebugeeX86_64 {
                 }
             },
             Err(e) => {
-                panic!("{}", e);
+                unimplemented!("graceful handling for ptrace attach issues: {}", e);
             }
         }
     }
@@ -304,7 +303,7 @@ impl <'a> DebugTarget<'a, ProcessX86_64> for DebugeeX86_64 {
                 self.wait()
             }
             Err(e) => {
-                panic!("{}", e);
+                unimplemented!("graceful handling for ptrace step issues: {}", e);
             }
         }
     }
@@ -317,16 +316,16 @@ impl <'a> DebugTarget<'a, ProcessX86_64> for DebugeeX86_64 {
         match ptrace::step(self.pid, signal) {
             Ok(()) => { RunResult::Ok },
             Err(e) => {
-                panic!("{}", e);
+                unimplemented!("graceful handling for ptrace step issues: {}", e);
             }
         }
     }
 
     fn add_watch(&mut self, _target: Self::WatchTarget) -> Result<(), String> {
-        panic!("uhhh");
+        unimplemented!("ptrace-based debugging doesn't support watch targets yet");
     }
 
     fn add_break_condition(&mut self, _target: Self::BreakCondition) -> Result<(), String> {
-        panic!("UHHH");
+        unimplemented!("ptrace-based debugging doesn't support break conditions yet");
     }
 }

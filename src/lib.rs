@@ -1,6 +1,6 @@
 extern crate smallvec;
 extern crate siphasher;
-extern crate goblin;
+pub extern crate goblin;
 #[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
@@ -18,7 +18,6 @@ extern crate yaxpeax_x86;
 extern crate yaxpeax_msp430;
 extern crate yaxpeax_pic17;
 extern crate yaxpeax_pic18;
-// extern crate yaxpeax_pic24;
 
 #[macro_use]
 pub mod analyses;

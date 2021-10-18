@@ -363,7 +363,7 @@ pub fn generate_refined_ssa<
         // every value has a location, 
     }
     // println!("{} locations to update", loc_updates.len());
-    for (k, v) in loc_updates.iter() {
+    for (_k, _v) in loc_updates.iter() {
         // println!("  - {:?} => {:?}", k, v);
     }
 

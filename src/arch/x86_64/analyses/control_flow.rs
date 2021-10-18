@@ -49,6 +49,9 @@ impl_control_flow!(
                     // instr_control_flow.with_effect(control_flow::Effect::cont());
                 }
             }
+            // TODO: double-check that this is necessary (and if so, why? error in default x86
+            // semantics?)
+            Opcode::UD2 => { return Some(control_flow::Effect::stop()); }
             _ => {}
         }
         None
@@ -57,7 +60,6 @@ impl_control_flow!(
 
 #[test]
 fn test_x86_determinant() {
-    use yaxpeax_arch::AddressDiff;
     use yaxpeax_arch::Decoder;
     use memory::MemoryRange;
     use memory::repr::ReadCursor;

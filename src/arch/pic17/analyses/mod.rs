@@ -30,31 +30,22 @@ pub fn compute_next_state(
     //
     // this is permitted because blocks are Copy and the version that's updated
     // is in the cfg where we have a potentially out of date one.
-/*
-    let mut ctx = pic17::compute_state(&instr, &ctx_table.at(&address));
-
-    if address < block.end {
-        ctx_table.computed_contexts.insert(address + instr.len(), ctx);
-    }
-    */
     let ctx = pic17::compute_state(&instr, &ctxs.at(&address));
 
     if !effect.is_stop() {
         vec![(address + instr.len(), pic17::StateUpdate::FullContext(ctx))]
-//                    ctxs.computed_contexts[(address + instr.len()) as usize] = Some(ctx);
     } else {
         vec![]
     }
 }
 
-// TODO: unbreak this
 pub fn collect_function_hint(
     _instr: &<PIC17 as Arch>::Instruction,
     _address: <PIC17 as Arch>::Address,
     _effect: &Effect<<PIC17 as Arch>::Address>,
     _ctxs: &pic17::MergedContextTable
 ) -> Vec<(<PIC17 as Arch>::Address, StateUpdate)> {
-    vec![]
+    unimplemented!("function hints for pic17 analyses");
     /*
     if instr.is_call() {
         match effect.dest {
@@ -108,7 +99,6 @@ pub fn compute_bit_name(
                 _ => unreachable!()
             };
 
-//                        match try_debank(file_value, Some(&ctx_table.at(&address))) {
             match try_debank(file_value, Some(&ctxs.at(&address))) {
                 Some(file) => {
                     pic17::bit_name(file, bit_num)

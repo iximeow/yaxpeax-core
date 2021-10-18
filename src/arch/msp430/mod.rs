@@ -399,7 +399,7 @@ impl SSAValues for MSP430 {
 use crate::ColorSettings;
 impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
     type Displayer = &'static str;
-    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+    fn display(&'data self, _detailed: bool, _colors: Option<&'colors ColorSettings>) -> &'static str {
         unimplemented!()
     }
 }

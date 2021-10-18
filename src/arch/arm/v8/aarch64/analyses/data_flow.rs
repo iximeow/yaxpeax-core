@@ -54,7 +54,7 @@ impl <'a, 'b, 'c, D: Disambiguator<ARMv8, (u8, u8)> + ?Sized, F: FunctionQuery<<
 }
 
 fn loc_by_id(_idx: u8, _usage: Use, _op: &Operand) -> Option<(Option<Location>, Direction)> {
-    panic!("bad");
+    unimplemented!("data flow analysis for aarch64");
     /*
     match op {
         Operands::RegisterList(list) => {
@@ -131,7 +131,7 @@ fn implicit_locs(_op: yaxpeax_arm::armv8::a64::Opcode) -> u8 {
 }
 
 fn locations_in(_op: &yaxpeax_arm::armv8::a64::Operand, _usage: Use) -> u8 {
-    panic!("bad bad");
+    unimplemented!("data flow analysis for aarch64");
     /*
     match op {
         Operands::RegisterList(list) => {
@@ -175,7 +175,7 @@ fn locations_in(_op: &yaxpeax_arm::armv8::a64::Operand, _usage: Use) -> u8 {
 }
 
 fn operands_in(_inst: &yaxpeax_arm::armv8::a64::Instruction) -> u8 {
-    panic!("bad bad bad");
+    unimplemented!("data flow analysis for aarch64");
     /*
     match inst.operands {
         Operands::RegisterList(list) => {
@@ -230,7 +230,7 @@ impl <'a, 'b, 'c, D: Disambiguator<ARMv8, (u8, u8)>, F: FunctionQuery<<ARMv8 as 
                     // but we're at the last op, so we're actually done...
                     return None;
                 }
-    //            println!("opc: {}", iter.inst.opcode);
+                // tracing::trace!("opc: {}", iter.inst.opcode);
 
                 let op = &iter.inst.operands[0];
                 let op_use = Use::Read; //use_of(iter.inst, iter.op_idx - 1);
@@ -351,7 +351,7 @@ pub enum Data {
 use crate::ColorSettings;
 impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
     type Displayer = &'static str;
-    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+    fn display(&'data self, _detailed: bool, _colors: Option<&'colors ColorSettings>) -> &'static str {
         unimplemented!()
     }
 }

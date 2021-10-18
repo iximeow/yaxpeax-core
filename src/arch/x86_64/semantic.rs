@@ -314,8 +314,8 @@ pub fn evaluate<K: Copy, V: Value + std::fmt::Debug, D: DFG<V, amd64, K>>(when: 
             }
         }
         Opcode::BTS => {
-            let dest = dfg.read_operand(instr, &instr.operand(0));
-            let src = dfg.read_operand(instr, &instr.operand(1));
+            let _dest = dfg.read_operand(instr, &instr.operand(0));
+            let _src = dfg.read_operand(instr, &instr.operand(1));
             dfg.write_operand(instr, &instr.operand(0), V::unknown());
         }
         Opcode::TEST => {

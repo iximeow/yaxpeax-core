@@ -23,10 +23,10 @@ impl <'a> MSP430DebugTarget<'a> {
                     if f(&self.target) { return true; }
                 },
                 BreakCondition::MemoryAccess(_dest) => {
-                    panic!("Memory access breakpoints not yet supported for MSP430");
+                    unimplemented!("memory access breakpoints not yet supported for MSP430");
                 },
                 BreakCondition::IO => {
-                    panic!("IO breakpoints not yet supported for MSP430");
+                    unimplemented!("IO breakpoints not yet supported for MSP430");
                 }
             }
         }
@@ -34,7 +34,7 @@ impl <'a> MSP430DebugTarget<'a> {
     }
     fn show_watches(&self) {
         for watch in &self.watch_targets {
-            println!("WATCH: {}", watch.reify(&self.target));
+            tracing::info!("WATCH: {}", watch.reify(&self.target));
         }
     }
 }
@@ -45,10 +45,10 @@ impl WatchTarget {
     fn pointee(&self, _cpu: &msp430::cpu::CPU) -> Option<u16> {
         match self {
             WatchTarget::Pointee(_target) => {
-                panic!("MSP430 watches not yet supported");
+                unimplemented!("MSP430 watches not yet supported");
             },
             WatchTarget::MemoryLocation(_addr) => {
-                panic!("MSP430 watches not yet supported");
+                unimplemented!("MSP430 watches not yet supported");
             }
         }
     }
@@ -56,10 +56,10 @@ impl WatchTarget {
     fn reify(&self, _cpu: &msp430::cpu::CPU) -> String {
         match self {
             WatchTarget::Pointee(_target) => {
-                panic!("MSP430 watches not yet supported");
+                unimplemented!("MSP430 watches not yet supported");
             }
             WatchTarget::MemoryLocation(_addr) => {
-                panic!("MSP430 watches not yet supported");
+                unimplemented!("MSP430 watches not yet supported");
             },
         }
     }
@@ -81,7 +81,7 @@ impl <T> Contextual<T> for yaxpeax_msp430::Instruction
 {
     fn contextualize(&self, ctx: &T) -> String {
         fn contextualize_op<T: InstructionContext>(_op: yaxpeax_msp430::Operand, _ctx: &T) -> String {
-            panic!("unimplemented");
+            unimplemented!("unimplemented");
         }
 
         let mut result = format!("{}", self.opcode);
@@ -187,11 +187,11 @@ impl CPU {
     }
     #[allow(dead_code)]
     fn push(&mut self, _value: u32) -> Result<(), String> {
-        panic!("push??? you think we can push????");
+        unimplemented!("msp430 push");
     }
     #[allow(dead_code)]
     fn pop(&mut self) -> Result<u32, String> {
-        panic!("pop??? you think we can pop????");
+        unimplemented!("msp430 pop");
     }
 
     /*
@@ -203,10 +203,10 @@ impl CPU {
         self.get_byte_noupdate(addr)
     }
     pub fn get_byte_noupdate(&self, _addr: u16) -> Result<u8, String> {
-        panic!("MSP430 memory not emulated yet");
+        unimplemented!("msp430 memory access");
     }
     pub fn set_byte_noupdate(&mut self, _addr: u16, _what: u8) -> Result<(), String> {
-        panic!("MSP430 memory not emulated yet");
+        unimplemented!("msp430 memory access");
     }
     pub fn set_byte(&mut self, addr: u16, what: u8) -> Result<(), String> {
         self.set_byte_noupdate(addr, what)
@@ -232,11 +232,11 @@ impl CPU {
                         )
                     );
                 }
-                println!("DEBUG: writing 0x{:x} bytes of program...", data.len());
+                tracing::debug!("writing 0x{:x} bytes of program...", data.len());
                 self.memory[0..data.len()].copy_from_slice(data);
             },
             None => {
-                println!("WARN: Provided program includes no code.");
+                tracing::warn!("provided program includes no code.");
             }
         };
 
@@ -261,7 +261,7 @@ impl MCU for CPU {
 
         match self.decode() {
             Ok(_instr) => {
-                panic!("MSP430 emulation not yet supported");
+                unimplemented!("msp430 emulation not yet supported");
             },
             Err(msg) => { std::panic::panic_any(msg); }
         };

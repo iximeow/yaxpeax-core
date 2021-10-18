@@ -288,7 +288,7 @@ impl <
             _fmt: &mut fmt::Formatter
         ) -> fmt::Result {
             let _op_highlight = ctx.highlight.operand(op_idx, "TODO");
-            panic!("oh no");
+            unimplemented!("contextualize_operand for armv7");
             /*
             match op {
                 Operands::OneOperand(reg) => {
@@ -381,7 +381,7 @@ impl <
                             ))
                         },
                         Use::ReadWrite => {
-                            panic!("asdlfjkasldfkjaslfkd");
+                            unimplemented!();
                             /*
                             let read = ctx.ssa.map(|ssa| {
                                 ssa.get_use(ctx.addr, Location::Register(*reg)).as_rc()
@@ -509,7 +509,7 @@ impl <
                                     }
                                 },
                                 Use::ReadWrite => {
-                                    panic!("no thank you");
+                                    unimplemented!();
                                 }
                             }
                         }
@@ -534,7 +534,7 @@ impl <
          * }
          */
 
-        panic!("oh no ooo");
+        unimplemented!("display for armv7");
         /*
         match self.instr.opcode {
             Opcode::LDR(true, false, false) => {
@@ -612,7 +612,7 @@ impl <
                 };
                 */
 
-                panic!("aa");
+                unimplemented!("display for armv7");
                 /*
                 match &self.instr.operands {
                     Operands::BranchOffset(offs) => {

@@ -420,7 +420,7 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
             Use::Write
         }
         Opcode::NOP => {
-            panic!("Logic error: requested operands of nop");
+            panic!("instruction has no operands");
         }
         Opcode::RETURN => {
             // this is either not called (no-arg return) or called for the first operand in return
@@ -456,7 +456,6 @@ fn operand_use(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Use {
         Opcode::JMPE |
         Opcode::INS |
         Opcode::OUTS => {
-            // this is... wrong? ?? TODO: ????
             Use::Read
         },
         Opcode::INVLPG |
@@ -589,10 +588,22 @@ pub fn locations_of(inst: &<x86_64Arch as Arch>::Instruction, op_idx: u8) -> Vec
                 locs.push((Location::Register(*index), Direction::Read));
             }
             Operand::Nothing => {
-                panic!("Logical error: requested locations present in a Nothing operand");
+                panic!("`Operand::Nothing` contains no locations");
             }
-            _ => {
+            Operand::ImmediateI8(_) |
+            Operand::ImmediateU8(_) |
+            Operand::ImmediateI16(_) |
+            Operand::ImmediateU16(_) |
+            Operand::ImmediateI32(_) |
+            Operand::ImmediateU32(_) |
+            Operand::ImmediateI64(_) |
+            Operand::ImmediateU64(_) |
+            Operand::DisplacementU32(_) |
+            Operand::DisplacementU64(_) => {
                 // this is an immediate, displacement, or Nothing. no locations.
+            }
+            op => {
+                panic!("{:?} has unknown locations", op);
             }
         }
     }
@@ -1288,11 +1299,7 @@ impl <
 
             Ok(())
         }
-        /*
-         * if self.ssa.is_some() {
-         *     ... ...
-         * }
-         */
+
         self.instr.opcode().colorize(&self.colors, fmt)?;
 
         match self.instr.opcode() {

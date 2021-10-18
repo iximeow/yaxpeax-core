@@ -163,7 +163,7 @@ pub enum Data {
 use crate::ColorSettings;
 impl<'data, 'colors> crate::analyses::static_single_assignment::DataDisplay<'data, 'colors> for Data {
     type Displayer = &'static str;
-    fn display(&'data self, detailed: bool, colors: Option<&'colors ColorSettings>) -> &'static str {
+    fn display(&'data self, _detailed: bool, _colors: Option<&'colors ColorSettings>) -> &'static str {
         unimplemented!()
     }
 }
@@ -288,7 +288,7 @@ impl <'a, 'b, 'c, D: Disambiguator<yaxpeax_arm::armv7::ARMv7, (u8, u8)> + ?Sized
 }
 
 fn loc_by_id(_idx: u8, _usage: Use, _op: &Operand) -> Option<(Option<Location>, Direction)> {
-    panic!("bad");
+    unimplemented!("data flow analysis for armv7");
     /*
     match op {
         Operands::RegisterList(list) => {
@@ -365,7 +365,7 @@ fn implicit_locs(_op: yaxpeax_arm::armv7::Opcode) -> u8 {
 }
 
 fn locations_in(_op: &yaxpeax_arm::armv7::Operand, _usage: Use) -> u8 {
-    panic!("bad bad");
+    unimplemented!("data flow analysis for armv7");
     /*
     match op {
         Operands::RegisterList(list) => {
@@ -410,7 +410,7 @@ fn locations_in(_op: &yaxpeax_arm::armv7::Operand, _usage: Use) -> u8 {
 }
 
 fn operands_in(_inst: &yaxpeax_arm::armv7::Instruction) -> u8 {
-    panic!("bad bad bad");
+    unimplemented!("data flow analysis for armv7");
     /*
     match inst.operands {
         Operands::RegisterList(list) => {
@@ -552,7 +552,7 @@ impl ValueLocations for ARMv7 {
     type Location = Location;
 
     fn decompose(_instr: &Self::Instruction) -> Vec<(Option<Self::Location>, Direction)> {
-        panic!("value locations");
+        unimplemented!("value locations for armv7");
         /*
         fn decompose_write(op: &Operands) -> Vec<(Option<Location>, Direction)> {
             match op {

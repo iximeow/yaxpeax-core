@@ -121,9 +121,9 @@ pub struct ELFExport {
 
 #[derive(Debug)]
 pub struct Segment {
-    start: usize,
-    data: Vec<u8>,
-    name: String
+    pub start: usize,
+    pub data: Vec<u8>,
+    pub name: String
 }
 
 impl Segment {
@@ -650,8 +650,8 @@ impl ModuleData {
                     // TODO: actually respect ELF loader behavior w.r.t overlays
                     // TODO: does this do stuff with alignment or what
                     let mut section_data = vec![0; section.p_memsz as usize];
-//                    println!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
-//                    println!("{:?}", section);
+                    tracing::trace!("virtual size: {:#x}, size of raw data: {:#x}", section.p_memsz, section.p_filesz);
+                    tracing::trace!("{:?}", section);
                     let physical_copy_end = (section.p_offset as usize) + std::cmp::min(section.p_filesz as usize, section.p_memsz as usize);
                     let copy_size = if physical_copy_end > data.len() {
                         if (section.p_offset as usize) < data.len() {
@@ -663,8 +663,8 @@ impl ModuleData {
                         std::cmp::min(section.p_filesz as usize, section.p_memsz as usize)
                     };
 
-                    println!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
-                    println!("virtual size is {:#x}", section_data.len());
+                    tracing::trace!("mapping section {} by copying {:#x} bytes starting from {:#x}", i, copy_size, section.p_offset);
+                    tracing::trace!("virtual size is {:#x}", section_data.len());
                     for i in 0..copy_size {
                         section_data[i] = data[(section.p_offset as usize) + i];
                     }
@@ -674,7 +674,7 @@ impl ModuleData {
                         data: section_data,
                         name: elf::program_header::type_to_str(elf.header.e_machine, section.p_type),
                     };
-                    println!("mapped section {} to [{}, {})",
+                    tracing::trace!("mapped section {} to [{}, {})",
                         i,
                         new_section.start.show(),
                         (new_section.start as u64 + new_section.data.len() as u64).show()
@@ -725,7 +725,7 @@ impl ModuleData {
                         data: section_data,
                         name: std::str::from_utf8(&section.name[..]).unwrap().to_string()
                     };
-                    println!("mapped {} to [{}, {})",
+                    tracing::trace!("mapped {} to [{}, {})",
                         std::str::from_utf8(&section.name[..]).unwrap(),
                         new_section.start.show(),
                         (new_section.start as u64 + new_section.data.len() as u64).show()
@@ -742,18 +742,18 @@ impl ModuleData {
                 }
                 Some(module)
             },
-            Ok(Object::Mach(_mach)) => {
-                panic!("UHHHHH  IM SCARED");
+            Ok(Object::Mach(mach)) => {
+                panic!("Mach objects are not yet supported: {:?}", mach);
             },
-            Ok(Object::Archive(_archive)) => {
-                panic!("u hhh h h hh h  H H H H H");
+            Ok(Object::Archive(archive)) => {
+                panic!("AR archives are not yet supported: {:?}", archive);
             },
             Ok(Object::Unknown(magic)) => {
-                println!("goblin found unknown magic: {:#x}", magic);
+                tracing::warn!("goblin found unknown magic: {:#x}", magic);
                 None
             },
             Err(e) => {
-                println!("goblin error: {:?}", e);
+                tracing::error!("goblin error: {:?}", e);
                 None
             }
         }

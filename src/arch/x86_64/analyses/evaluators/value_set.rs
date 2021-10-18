@@ -18,7 +18,6 @@ impl Domain for ValueSetDomain {
     type Value = Vec<ValueRange>;
 
     fn join(_l: Option<Self::Value>, _r: Option<Self::Value>) -> Option<Self::Value> {
-        // TODO ... haha
         panic!("implement value set domain join");
         // None
     }
@@ -130,8 +129,8 @@ fn valueset_deref<U: MemoryRange<x86_64>>(values: Vec<ValueRange>, data: &U, siz
                         if let Some(value) = data.read(v + i as u64) {
                             read_value |= (value as u64) << (8 * i);
                         } else {
-                            // TODO: this is ... bad failure mode
-                            println!("Read of {:#x} failed??", v + i as u64);
+                            // TODO: this is a ... bad failure mode
+                            tracing::error!("read of {:#x} failed?", v + i as u64);
                             return None;
                         }
                     }
@@ -153,8 +152,8 @@ fn valueset_deref<U: MemoryRange<x86_64>>(values: Vec<ValueRange>, data: &U, siz
                             if let Some(value) = data.read(v + i as u64) {
                                 read_value |= (value as u64) << (8 * i);
                             } else {
-                                // TODO: this is ... bad failure mode
-                                println!("Read of {:#x} failed??", v + i as u64);
+                                // TODO: this is a ... bad failure mode
+                                tracing::error!("read of {:#x} failed?", v + i as u64);
                                 return None;
                             }
                         }
@@ -247,7 +246,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
     }
 
     fn evaluate_instruction<U: MemoryRange<x86_64>>(instr: &<x86_64 as Arch>::Instruction, addr: <x86_64 as Arch>::Address, dfg: &SSA<x86_64>, contexts: &(), data: &U) {
-        //TODO: handle prefixes like at all
+        //TODO: handle prefixes at all
         match instr.opcode() {
             Opcode::MOVSXD => {
                 match (instr.operand(0), instr.operand(1)) {
@@ -265,16 +264,19 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
-                                if let Some(read_values) = valueset_deref(values.clone(), data, instr.mem_size().unwrap().bytes_size().unwrap()) {
-                                    println!(
-                                        "at {}, Derefed value set {} to read {}",
+                            if let Some(Data::ValueSet(value_set)) = referent(instr, &op, addr, dfg, contexts) {
+                                if let Some(read_values) = valueset_deref(value_set.clone(), data, instr.mem_size().unwrap().bytes_size().unwrap()) {
+                                    let values = Data::ValueSet(value_set);
+                                    let read_values = Data::ValueSet(read_values);
+
+                                    tracing::info!(
+                                        "at {}, derefed value set {} to read {}",
                                         addr.show(),
-                                        Data::ValueSet(values).display(false, None),
-                                        Data::ValueSet(read_values.clone()).display(false, None),
+                                        values.display(false, None),
+                                        read_values.display(false, None),
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
+                                        read_values
                                     );
                                 } else {
                                     // TODO: deref results in all values being invalid
@@ -296,7 +298,7 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                     (Operand::Register(l), op) => {
                         if op.is_memory() {
                             // might be a pointer deref or somesuch.
-                            if let Some(Data::ValueSet(values)) = referent(instr, &op, addr, dfg, contexts) {
+                            if let Some(Data::ValueSet(value_set)) = referent(instr, &op, addr, dfg, contexts) {
                                 let size = match l.class() {
                                     register_class::Q => 8,
                                     register_class::D => 4,
@@ -308,14 +310,16 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
                                         return;
                                     }
                                 };
-                                if let Some(read_values) = valueset_deref(values.clone(), data, size) {
+                                if let Some(read_values) = valueset_deref(value_set.clone(), data, size) {
+                                    let values = Data::ValueSet(value_set);
+                                    let read_values = Data::ValueSet(read_values);
                                     eprintln!(
                                         "Derefed value set {} to read {}",
-                                        Data::ValueSet(values).display(false, None),
-                                        Data::ValueSet(read_values.clone()).display(false, None),
+                                        values.display(false, None),
+                                        read_values.display(false, None),
                                     );
                                     dfg.get_def(addr, Location::Register(l)).update(
-                                        Data::ValueSet(read_values)
+                                        read_values
                                     );
                                 } else {
                                     // TODO: deref results in all values being invalid
@@ -334,17 +338,17 @@ impl ConstEvaluator<x86_64, (), ValueSetDomain> for x86_64 {
             Opcode::JMP => {
                 let jmpop = instr.operand(0);
                 if jmpop.is_memory() {
-                    // TODO !!!
-                    // let r = referent(instr, &jmpop, addr, dfg, contexts);
                     if let Some(Data::ValueSet(values)) = referent(instr, &jmpop, addr, dfg, contexts) {
                         if let Some(read_values) = valueset_deref(values.clone(), data, 8) {
-                            eprintln!("    jump table with {} entries:", read_values.len());
+                            tracing::info!("    jump table with {} entries:", read_values.len());
                             for ent in read_values {
                                 match ent {
                                     ValueRange::Precisely(Data::Concrete(ent, _)) => {
-                                        eprintln!("      {:#x}", ent);
+                                        tracing::info!("      {:#x}", ent);
                                     }
-                                    _ => { panic!("uhh"); }
+                                    entry => {
+                                        tracing::warn!("can't process unknown value range entry: {:?}", entry);
+                                    }
                                 }
                             }
                         }
