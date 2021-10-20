@@ -143,7 +143,6 @@ impl <A: Address + Hash> Serialize for ControlFlowGraph<A> {
     }
 }
 
-#[ignore]
 #[test]
 fn control_flow_graph_construction() {
     let mut cfg: ControlFlowGraph<u32> = ControlFlowGraph::new();
@@ -280,6 +279,7 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
      * disincluded?
      */
     pub fn get_function<U>(&self, start: A, function_table: &HashMap<A, U>) -> ControlFlowGraph<A> {
+        tracing::trace!("get_function!");
         let mut result: ControlFlowGraph<A> = ControlFlowGraph::from(start);
         result.graph = GraphMap::new();
         result.graph.add_node(start);
@@ -298,11 +298,13 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
                     // true anyway.
                     if !function_table.contains_key(&outedge) {
                         bfs_deque.push_back(outedge);
+                        tracing::trace!("add_edge 0: {:x} {:x}", next.to_linear(), outedge.to_linear());
                         result.graph.add_edge(next, outedge, ());
                     }
                 }
             }
 
+            tracing::trace!("block insert 0: {:x} : {:x}", next.to_linear(), self.get_block(next).end.to_linear());
             result.blocks.insert(next, *self.get_block(next));
         }
         return result;
@@ -344,7 +346,6 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
             // find a block before `split_loc`. either there is one, or `split_loc` is the lowest
             // value of `A`, and there is no possible start address before it.
             let mut iter = graph.blocks.range_mut((Included(&A::min_value()), Included(&split_loc))).rev();
-
             let last_block: &mut BasicBlock<A> = if let Some((_, prev)) = iter.next() {
                 prev
             } else {
@@ -358,18 +359,26 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
             }
 
             // ok, we have a basic block that starts before split_loc, so resize it to end at
-            // `split_loc - 1`, with `[split_loc, block.end]` as the block we must insert after it
+            // `split_loc - 1`, with `[split_loc, block.end]` as the block we
+            // must insert after it
+            // println!("original last block: {:x} : {:x}", last_block.start.to_linear(),
+            // last_block.end.to_linear());
             let split_loc_end = last_block.end;
             let last_start = last_block.start;
             last_block.end = split_loc - AddressDiff::one();
+            // println!("last block: {:x} : {:x}", last_start.to_linear(), last_block.end.to_linear());
+            tracing::debug!("block insert because splitting block: {:x} : {:x}", split_loc.to_linear(), split_loc_end.to_linear());
             graph.blocks.insert(split_loc, BasicBlock::new(split_loc, split_loc_end));
 
             let neighbors: Vec<A> = graph.graph.neighbors(last_start).into_iter().collect();
             for next in neighbors.into_iter() {
+                tracing::debug!("Removing destination edge because of split: last_start = {:x} split_loc = {:x} {:x} {:x} -> {:x} {:x}",  last_start.to_linear(), split_loc.to_linear(), last_start.to_linear(), next.to_linear(), split_loc.to_linear(), next.to_linear());
                 graph.graph.remove_edge(last_start, next);
+                tracing::debug!("Adding edge to bottom block: {:x} {:x}", split_loc.to_linear(), next.to_linear());
                 graph.graph.add_edge(split_loc, next, ());
             }
             if preserve_edges {
+                tracing::debug!("add_edge from first part of start to last part: {:x} {:x}", split_loc.to_linear(), last_start.to_linear());
                 graph.graph.add_edge(last_start, split_loc, ());
             } else {
 //                    graph.graph.add_node(new_block.start);
@@ -380,6 +389,8 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
         let mut result: SmallVec<[A; 2]> = SmallVec::new();
 
         let enclosing_block_start: A = self.get_block(at).start;
+
+        tracing::debug!("with_effect: {:x} {:?} stop_after = {:?} dest = {:?}", enclosing_block_start.to_linear(), effect, effect.stop_after, effect.dest);
 
         if effect.stop_after {
             add_split(self, next, false);
@@ -393,7 +404,8 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
                 let dest_addr = next;
                 if add_split(self, dest_addr, true) { // TODO: t.len());
                 }
-                    result.push(dest_addr);
+                result.push(dest_addr);
+                tracing::debug!("add_edge as part of branch: {:x} {:x}", enclosing_block_start.to_linear(), dest_addr.to_linear());
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             }
         }
@@ -405,49 +417,22 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
             // if this is not going to the start of an existing basic block
             Some(Target::Relative(rel)) => {
                 let dest_addr = next.wrapping_offset(*rel);
-                if add_split(self, dest_addr, true) {
-                }
-                    result.push(dest_addr);
+                add_split(self, dest_addr, true);
+                result.push(dest_addr);
                 let enclosing_block_start: A = self.get_block(at).start;
+                tracing::debug!("adding relative jump edge 2: {:x} {:x}", enclosing_block_start.to_linear(), dest_addr.to_linear());
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             },
             Some(Target::Absolute(dest)) => {
                 let dest_addr = *dest;
-                if add_split(self, dest_addr, true) {
-                }
-                    result.push(dest_addr);
-//                let enclosing_block_start: A = self.get_block(at).start;
+                add_split(self, dest_addr, true);
+                result.push(dest_addr);
+//              let enclosing_block_start: A = self.get_block(at).start;
+                tracing::debug!("adding absolute jump edge: {:x} {:x}", enclosing_block_start.to_linear(), dest_addr.to_linear());
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             }
-            Some(Target::Multiple(_targets)) => {
-                /*
-                for target in targets {
-                    match target {
-                        Target::Relative(rel) => {
-                            let dest_addr = next.wrapping_offset(*rel);
-                            if add_split(self, dest_addr, true) {
-                            }
-                                result.push(dest_addr);
-//                            let enclosing_block_start: A = self.get_block(at).start;
-                            self.graph.add_edge(enclosing_block_start, dest_addr, ());
-                        },
-                        Target::Absolute(dest) => {
-                            let dest_addr = *dest;
-                            if add_split(self, dest_addr, true) {
-                            }
-                                result.push(dest_addr);
-//                            let enclosing_block_start: A = self.get_block(at).start;
-                            self.graph.add_edge(enclosing_block_start, dest_addr, ());
-                        }
-                        _ => {
-                            // TODO: handle these.
-                            panic!("Unhandled");
-                        }
-                    }
-                }
-                */
-            },
-            _ => {
+            Some(Target::Multiple(_targets)) => {},
+            e => {
                 // TODO: unhandled!
             }
         }
@@ -480,12 +465,23 @@ pub fn explore_all<'a, A, U, M, Contexts, Update, InstrCallback>(
         if *addr > A::Address::zero() {
             // we've been told by `starts` that control flow leads here
             // so it must be the start of a basic block.
+            tracing::trace!("with_effect 1: {:x} {:x} effect::stop", (*addr - AddressDiff::one()).to_linear(), (*addr).to_linear());
             cfg.with_effect(*addr - AddressDiff::one(), *addr, &Effect::stop());
         }
     }
 
     while let Some(addr) = to_explore.pop_front() {
         let dests = explore_control_flow(data, contexts, cfg, addr, on_instruction_discovered);
+        tracing::trace!("CFG Yield: {:x} -> {:?}", addr.to_linear(), dests);
+        // for b in cfg.blocks(){
+
+        //     let edges = cfg.destinations(b);
+        //     println!("{:x} -> {:?}", b.to_linear(), edges);
+        // }
+        // if addr.to_linear() == 0xfa357{
+            //println!("CFG Yield: {:x} -> {:?}", addr.to_linear(), dests);
+        // }
+
         for next in dests.into_iter() {
             if !seen.contains(&next) {
                 to_explore.push_back(next);
@@ -582,7 +578,6 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
     // can't even assume if the block ends at the same end
     // as we find that we've already seen this, because that
     // would ambiguify single instruction basic blocks
-
     let mut addr = start;
     loop {
         let range = match data.range_from(addr) {
@@ -593,6 +588,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                 let problem_blocks = cfg.graph.neighbors_directed(start, Direction::Incoming).collect::<Vec<A::Address>>();
                 println!("Problem blocks: {:?}", problem_blocks);
                 for problem in problem_blocks.iter() {
+                    println!("Remove edge because it is a part of a problematic block: {:x} {:x}", problem.to_linear(), start.to_linear());
                     cfg.graph.remove_edge(*problem, start);
                 }
                 return SmallVec::new();
@@ -616,6 +612,7 @@ pub fn explore_control_flow<'a, A, U, M, Contexts, Update, InstrCallback>(
                     },
                     // and for any other cases...
                     effect @ _ => {
+                        println!("with_effect because we are at end of a block: {:x} {:x} {:?}", addr.to_linear(), addr.wrapping_offset(instr.len()).to_linear(), &effect );
                         return cfg.with_effect(addr, addr.wrapping_offset(instr.len()), &effect);
                     }
                 }
