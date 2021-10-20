@@ -4,7 +4,7 @@ use data::Direction;
 use tracing::{event, Level};
 
 pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>, Direction)> {
-    fn decompose_write(op: &Operand) -> Vec<(Option<Location>, Direction)> {
+    fn decompose_write(op: &Operand, which: u8) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
             Operand::ImmediateU8(_) |
@@ -23,58 +23,58 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU32(_) |
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
-                vec![(Some(Location::UnevalMem(*op)), Direction::Write)]
+                vec![(Some(Location::UnevalMem(which)), Direction::Write)]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::Nothing => {
@@ -86,7 +86,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         }
     }
     // for LEA
-    fn decompose_read_nonmem(op: &Operand) -> Vec<(Option<Location>, Direction)> {
+    fn decompose_read_nonmem(op: &Operand, which: u8) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
             Operand::ImmediateU8(_) |
@@ -158,7 +158,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             }
         }
     }
-    fn decompose_read(op: &Operand) -> Vec<(Option<Location>, Direction)> {
+    fn decompose_read(op: &Operand, which: u8) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
             Operand::ImmediateU8(_) |
@@ -176,58 +176,58 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU32(_) |
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
-                vec![(Some(Location::UnevalMem(*op)), Direction::Read)]
+                vec![(Some(Location::UnevalMem(which)), Direction::Read)]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read)
+                    (Some(Location::UnevalMem(which)), Direction::Read)
                 ]
             },
             Operand::Nothing => {
@@ -238,7 +238,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             }
         }
     }
-    fn decompose_readwrite(op: &Operand) -> Vec<(Option<Location>, Direction)> {
+    fn decompose_readwrite(op: &Operand, which: u8) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
             Operand::ImmediateU8(_) |
@@ -261,68 +261,68 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             Operand::DisplacementU64(_) => {
                 // TODO: lazy
                 vec![
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write),
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write),
                 ]
             },
             Operand::RegDeref(spec) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegDisp(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegScale(spec, _) => {
                 vec![
                     (Some(Location::Register(*spec)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBase(base, index) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseDisp(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegScaleDisp(base, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScale(base, index, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::RegIndexBaseScaleDisp(base, index, _, _) => {
                 vec![
                     (Some(Location::Register(*base)), Direction::Read),
                     (Some(Location::Register(*index)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Read),
-                    (Some(Location::UnevalMem(*op)), Direction::Write)
+                    (Some(Location::UnevalMem(which)), Direction::Read),
+                    (Some(Location::UnevalMem(which)), Direction::Write)
                 ]
             },
             Operand::Nothing => {
@@ -360,19 +360,19 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::MOVAPD |
         Opcode::MOVQ |
         Opcode::MOV => {
-            let mut locs = decompose_read(&instr.operand(1));
-            locs.append(&mut decompose_write(&instr.operand(0)));
+            let mut locs = decompose_read(&instr.operand(1), 1);
+            locs.append(&mut decompose_write(&instr.operand(0), 0));
             locs
         }
         Opcode::LEA => {
-            let mut locs = decompose_read_nonmem(&instr.operand(1));
-            locs.append(&mut decompose_write(&instr.operand(0)));
+            let mut locs = decompose_read_nonmem(&instr.operand(1), 1);
+            locs.append(&mut decompose_write(&instr.operand(0), 0));
             locs
         }
         Opcode::XADD |
         Opcode::XCHG => {
-            let mut locs = decompose_readwrite(&instr.operand(1));
-            locs.append(&mut decompose_readwrite(&instr.operand(0)));
+            let mut locs = decompose_readwrite(&instr.operand(1), 1);
+            locs.append(&mut decompose_readwrite(&instr.operand(0), 0));
             locs
         }
         Opcode::STI |
@@ -396,8 +396,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::BT |
         Opcode::BSF |
         Opcode::TZCNT => {
-            let mut locs = decompose_read(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_read(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::ZF), Direction::Write));
             locs
         }
@@ -405,8 +405,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::BTR |
         Opcode::BTC |
         Opcode::BSR => {
-            let mut locs = decompose_readwrite(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::ZF), Direction::Write));
             locs
         }
@@ -416,8 +416,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::SHL => {
             // TODO: inspect imm8 and CL if context permits to decide
             // flags more granularly
-            let mut locs = decompose_readwrite(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::SF), Direction::Write));
             locs.push((Some(Location::ZF), Direction::Write));
@@ -431,8 +431,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::ROL => {
             // TODO: inspect imm8 and CL if context permits to decide
             // flags more granularly
-            let mut locs = decompose_readwrite(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
             locs
@@ -441,8 +441,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::SBB => {
             // TODO: this is lazy and assumes writes of all flags
             // this may not be true
-            let mut locs = decompose_read(&instr.operand(1));
-            locs.append(&mut decompose_readwrite(&instr.operand(0)));
+            let mut locs = decompose_read(&instr.operand(1), 1);
+            locs.append(&mut decompose_readwrite(&instr.operand(0), 0));
             locs.push((Some(Location::CF), Direction::Read));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
@@ -481,8 +481,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::UNPCKHPS |
         Opcode::UNPCKLPS |
         Opcode::XORPS => {
-            let mut locs = decompose_read(&instr.operand(1));
-            locs.append(&mut decompose_readwrite(&instr.operand(0)));
+            let mut locs = decompose_read(&instr.operand(1), 1);
+            locs.append(&mut decompose_readwrite(&instr.operand(0), 0));
             locs
         }
         Opcode::ADD |
@@ -492,8 +492,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::OR => {
             // TODO: this is lazy and assumes writes of all flags
             // this may not be true
-            let mut locs = decompose_read(&instr.operand(1));
-            locs.append(&mut decompose_readwrite(&instr.operand(0)));
+            let mut locs = decompose_read(&instr.operand(1), 1);
+            locs.append(&mut decompose_readwrite(&instr.operand(0), 0));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
             locs.push((Some(Location::SF), Direction::Write));
@@ -507,16 +507,16 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             // TODO: this.
             // 1 operand version
             let mut locs = if !instr.operand_present(1) {
-                let mut ls = decompose_read(&instr.operand(0));
+                let mut ls = decompose_read(&instr.operand(0), 0);
                 ls.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
                 ls.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
-                if instr.operand(0).width() != 1 {
+                if instr.operand(0).width() != Some(1) {
                     ls.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
                 };
                 ls
             } else {
-                let mut ls = decompose_readwrite(&instr.operand(0));
-                ls.append(&mut decompose_read(&instr.operand(1)));
+                let mut ls = decompose_readwrite(&instr.operand(0), 0);
+                ls.append(&mut decompose_read(&instr.operand(1), 1));
                 ls
             };
             // locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
@@ -536,16 +536,16 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             // this may not be true
             // TODO: this may not read *dx (if this is idiv r/m 8)
             // let mut locs = if !instr.operand_present(1) {
-            //     decompose_read(&instr.operand(0))
+            //     decompose_read(&instr.operand(0, 0))
             // } else {
             //     let mut ls = decompose_readwrite(&instr.operand(0));
             //     ls.append(&mut decompose_read(&instr.operand(1)));
             //     ls
             // };
-            let mut locs = decompose_read(&instr.operand(0));
+            let mut locs = decompose_read(&instr.operand(0), 0);
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
-            if instr.operand(0).width() != 1 {
+            if instr.operand(0).width() != Some(1) {
                 locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Read));
                 locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
             }
@@ -561,10 +561,10 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::MUL => {
             // TODO: this is lazy and assumes writes of all flags
             // this may not be true
-            let mut locs = decompose_read(&instr.operand(0));
+            let mut locs = decompose_read(&instr.operand(0), 0);
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rax())), Direction::Write));
-            if instr.operand(0).width() != 1 {
+            if instr.operand(0).width() != Some(1) {
                 locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
             }
             locs.push((Some(Location::Register(RegSpec::rdx())), Direction::Write));
@@ -578,14 +578,14 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         }
 
         Opcode::PUSH => {
-            let mut locs = decompose_read(&instr.operand(0));
+            let mut locs = decompose_read(&instr.operand(0), 0);
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
             locs.push((Some(Location::Memory(ANY)), Direction::Write));
             locs
         },
         Opcode::POP => {
-            let mut locs = decompose_write(&instr.operand(0));
+            let mut locs = decompose_write(&instr.operand(0), 0);
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
             locs.push((Some(Location::Memory(ANY)), Direction::Read));
@@ -593,7 +593,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         },
         Opcode::INC |
         Opcode::DEC => {
-            let mut locs = decompose_readwrite(&instr.operand(0));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
             locs.push((Some(Location::OF), Direction::Write));
             locs.push((Some(Location::SF), Direction::Write));
             locs.push((Some(Location::ZF), Direction::Write));
@@ -656,8 +656,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::TEST |
         Opcode::CMP => {
             /* not strictly correct for either */
-            let mut locs = decompose_read(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_read(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::CF), Direction::Write));
             locs.push((Some(Location::OF), Direction::Write));
             locs.push((Some(Location::AF), Direction::Write));
@@ -667,12 +667,12 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
             locs
         }
         Opcode::NEG => {
-            let mut locs = decompose_readwrite(&instr.operand(0));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
             locs.push((Some(Location::CF), Direction::Write));
             locs
         }
         Opcode::NOT => {
-            decompose_readwrite(&instr.operand(0))
+            decompose_readwrite(&instr.operand(0), 0)
         }
         Opcode::CMPXCHG => {
             let mut locs = match &instr.operand(1) {
@@ -714,19 +714,19 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
                 _ => { unreachable!() }
             };
             locs.push((Some(Location::ZF), Direction::Write));
-            locs.append(&mut decompose_readwrite(&instr.operand(0)));
+            locs.append(&mut decompose_readwrite(&instr.operand(0), 0));
             locs
         },
         Opcode::CALLF | // TODO: this is wrong
         Opcode::CALL => {
-            let mut locs = decompose_read(&instr.operand(0));
+            let mut locs = decompose_read(&instr.operand(0), 0);
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Read));
             locs.push((Some(Location::Register(RegSpec::rsp())), Direction::Write));
             locs.push((Some(Location::Memory(ANY)), Direction::Write));
             locs
         }
         Opcode::JMP => {
-            decompose_read(&instr.operand(0))
+            decompose_read(&instr.operand(0), 0)
         },
         Opcode::JMPF => { // TODO: this is wrong.
             vec![]
@@ -754,20 +754,20 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::STMXCSR |
         Opcode::SGDT |
         Opcode::SIDT => {
-            decompose_write(&instr.operand(0))
+            decompose_write(&instr.operand(0), 0)
         }
         Opcode::LDMXCSR |
         Opcode::LGDT |
         Opcode::LIDT => {
-            decompose_read(&instr.operand(0))
+            decompose_read(&instr.operand(0), 0)
         }
         // TODO: this is wrong
         Opcode::SMSW => {
-            decompose_write(&instr.operand(0))
+            decompose_write(&instr.operand(0), 0)
         }
         // TODO: this is wrong
         Opcode::LMSW => {
-            decompose_read(&instr.operand(0))
+            decompose_read(&instr.operand(0), 0)
         }
         Opcode::SWAPGS => {
             vec![
@@ -810,18 +810,18 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         }
         Opcode::VERR |
         Opcode::VERW => {
-            let mut locs = decompose_read(&instr.operand(0));
+            let mut locs = decompose_read(&instr.operand(0), 0);
             locs.push((Some(Location::ZF), Direction::Write));
             locs
         }
         Opcode::SLDT |
         Opcode::STR |
         Opcode::INVLPG => {
-            decompose_write(&instr.operand(0))
+            decompose_write(&instr.operand(0), 0)
         }
         Opcode::LLDT |
         Opcode::LTR => {
-            decompose_read(&instr.operand(0))
+            decompose_read(&instr.operand(0), 0)
         }
         // these are immediate-only or have no operands
         Opcode::JMPE |
@@ -871,8 +871,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::CMOVLE |
         Opcode::CMOVGE |
         Opcode::CMOVL => {
-            let mut locs = decompose_write(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_write(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.extend_from_slice(cond_to_flags(instr.opcode().condition().unwrap()));
             locs
         }
@@ -892,19 +892,19 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::SETLE |
         Opcode::SETGE |
         Opcode::SETL => {
-            let mut locs = decompose_write(&instr.operand(0));
+            let mut locs = decompose_write(&instr.operand(0), 0);
             locs.extend_from_slice(cond_to_flags(instr.opcode().condition().unwrap()));
             locs
         }
         Opcode::LSL => {
-            let mut locs = decompose_write(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_write(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::ZF), Direction::Write));
             locs
         }
         Opcode::LAR => {
-            let mut locs = decompose_write(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_write(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs.push((Some(Location::ZF), Direction::Read));
             locs
         }
@@ -923,8 +923,8 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         Opcode::HADDPS |
         Opcode::HSUBPS |
         Opcode::ADDSUBPS => {
-            let mut locs = decompose_readwrite(&instr.operand(0));
-            locs.append(&mut decompose_read(&instr.operand(1)));
+            let mut locs = decompose_readwrite(&instr.operand(0), 0);
+            locs.append(&mut decompose_read(&instr.operand(1), 1));
             locs
         }
         Opcode::CMPS |

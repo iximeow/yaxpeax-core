@@ -75,7 +75,7 @@ pub enum Location {
     Register(RegSpec),
     Memory(MemoryRegion),
     MemoryLocation(MemoryRegion, u8, Option<(Data, Data)>),
-    UnevalMem(Operand),
+    UnevalMem(u8),
     // not modeling eflags' system bits ... yet?
     CF, PF, AF, ZF, SF, TF, IF, DF, OF, IOPL,
     // necessary to have a location to write that is provably not an Operand variant.
