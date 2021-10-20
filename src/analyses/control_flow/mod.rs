@@ -1,3 +1,5 @@
+use arch::x86_64::MergedContextTable;
+use yaxpeax_x86::x86_64;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::ops::Bound::Included;
@@ -9,6 +11,7 @@ use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
 use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDisplay, Arch, LengthedInstruction};
+use yaxpeax_arch::Decoder;
 
 use arch::DecodeFrom;
 
@@ -24,6 +27,8 @@ pub mod deserialize;
 use serialize::GraphSerializer;
 
 use serde::Serialize;
+use arch::x86_64::display::show_instruction;
+use yaxpeax_x86::long_mode::Opcode;
 
 use serde::ser::SerializeStruct;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -917,4 +922,301 @@ macro_rules! impl_control_flow {
             }
         }
     };
+}
+
+pub fn check_cfg_integrity(blocks: &BTreeMap<u64, VW_Block>, graph: &GraphMap<u64, (), petgraph::Directed>){
+    for (addr,block) in blocks.iter(){
+        //1. check that key points to start of block
+        assert!(*addr == block.start);
+        //2. check that block is in the graph
+        assert!(graph.contains_node(*addr));
+        //3. check that there are no overlapping blocks
+        for (a2,b2) in blocks.iter(){
+            if addr == a2 {continue};
+            let before = block.end < b2.start;
+            let after = block.start > b2.end;
+            if !(before || after) {
+                println!("{:?} {:?}", block.as_str(), b2.as_str());
+                assert!(false);
+            }
+        }
+    }
+    //4. check that same number of blocks and graph nodes.
+    //   along with check 3, shows that block nodes and graph nodes are the
+    //   same
+    assert!(blocks.keys().len() == graph.node_count());
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct VW_Block {
+    pub start: u64,
+    pub end: u64, // inclusive!!
+}
+
+impl VW_Block {
+    pub fn new(start_addr: u64, end_addr: u64) -> VW_Block {
+        VW_Block {
+            start: start_addr,
+            end: end_addr
+        }
+    }
+
+    pub fn as_str(&self) -> std::string::String{
+        return format!("Block[0x{:x}:0x{:x}]", self.start, self.end);
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct VW_CFG{
+    pub entrypoint: u64,
+    pub blocks: BTreeMap<u64, VW_Block>,
+    pub graph: GraphMap<u64, (), petgraph::Directed>
+}
+
+impl VW_CFG{
+
+    pub fn new(entrypoint: u64) -> VW_CFG {
+        VW_CFG {
+            entrypoint: entrypoint,
+            blocks: BTreeMap::new(),
+            graph: GraphMap::new()
+        }
+    }
+
+    pub fn prev_block(&self, addr: u64) -> Option<VW_Block>{
+        for (a,b) in self.blocks.iter(){
+            if (addr > b.start) && (addr < b.end){
+                return Some(*b);
+                }
+            }
+        None
+    }
+
+    pub fn get_block(&self, addr: u64) -> &VW_Block {
+        &self.blocks[&addr]
+    }
+
+    pub fn destinations(&self, addr: u64) -> Vec<u64> {
+        self.graph.neighbors_directed(addr, petgraph::Direction::Outgoing).into_iter().collect()
+    }
+
+    pub fn predecessors(&self, addr: u64) -> Vec<u64> {
+        self.graph.neighbors_directed(addr, petgraph::Direction::Incoming).into_iter().collect()
+    }
+
+    pub fn check_integrity(&self){
+        check_cfg_integrity(&self.blocks, &self.graph);
+        // for (addr,block) in self.blocks.iter(){
+        //     //1. check that key points to start of block
+        //     assert!(*addr == block.start);
+        //     //2. check that block is in the graph
+        //     assert!(self.graph.contains_node(*addr));
+        //     //3. check that there are no overlapping blocks
+        //     for (a2,b2) in self.blocks.iter(){
+        //         if addr == a2 {continue};
+        //         let before = block.end < b2.start;
+        //         let after = block.start > b2.end;
+        //         if !(before || after) {
+        //             println!("{:?} {:?}", block.as_str(), b2.as_str());
+        //             assert!(false);
+        //         }
+        //     }
+        // }
+        // //4. check that same number of blocks and graph nodes.
+        // //   along with check 3, shows that block nodes and graph nodes are the
+        // //   same
+        // assert!(self.blocks.keys().len() == self.graph.node_count());
+    }
+}
+
+#[derive(Default)]
+pub struct VW_CFG_Builder{
+    pub cfg: VW_CFG,
+    pub switch_targets: Option<HashMap<u64, std::vec::Vec<i64>>>,
+    pub unresolved_jumps: u32,
+}
+
+impl VW_CFG_Builder{
+
+    pub fn new(entrypoint : u64, switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>) -> VW_CFG_Builder {
+        VW_CFG_Builder {
+            cfg: VW_CFG::new(entrypoint),
+            switch_targets : switch_targets.map(|x| x.clone()),
+            unresolved_jumps : 0,
+        }
+    }
+
+    //split block_to_split at split_addr
+    fn apply_split(&mut self, block_to_split: &VW_Block, split_addr: u64){
+        //update block index
+        self.cfg.blocks.remove(&block_to_split.start);
+        let b1 = VW_Block::new(block_to_split.start , split_addr - 1);
+        let b2 = VW_Block::new(split_addr, block_to_split.end);
+        self.cfg.blocks.insert(block_to_split.start, b1);
+        self.cfg.blocks.insert(split_addr, b2);
+        
+        //update graph
+        self.cfg.graph.remove_node(block_to_split.start);
+        self.cfg.graph.add_node(block_to_split.start);
+        self.cfg.graph.add_node(split_addr);
+        
+        let neighbors: Vec<u64> = self.cfg.graph.neighbors(block_to_split.start).into_iter().collect();
+        for next in neighbors.into_iter() {
+            self.cfg.graph.remove_edge(block_to_split.start, next);
+            self.cfg.graph.add_edge(split_addr, next, ());
+        }
+        self.cfg.graph.add_edge(block_to_split.start, split_addr, ());
+        
+    }
+
+    // Split if inside block (not first or last address)
+    fn maybe_apply_split(&mut self, split_addr: u64){
+        let block = self.cfg.prev_block(split_addr);
+        if let Some(block_to_split) = block {
+            self.apply_split(&block_to_split, split_addr)
+        };
+    }
+
+
+    fn vw_decode<M>(&mut self, data: &M, contexts: &MergedContextTable, start: u64) -> Option<(Vec<u64>, VW_Block)> where M: MemoryRange<x86_64>{
+        let dsts : Vec<u64> = vec![];
+        let mut addr = start;
+        //show_instruction(data,contexts,addr,None);
+        loop {
+            //show_instruction(data,contexts,addr,None);
+            let mut range = match data.range_from(addr) {
+                Some(range) => range,
+                None => { tracing::warn!("Decoding range error"); return None; }
+            };
+            match x86_64::decode_from(&mut range) {
+                Ok(instr) => {
+                    match get_effect(contexts, &instr, addr) {
+                        Effect { stop_after: false, dest: None } => {
+                            // we can continue!
+                            addr += instr.len();
+                            // if we hit an existing block, stop decoding
+                            if self.cfg.blocks.contains_key(&addr){
+                                let b = VW_Block::new(start, addr - 1);
+                                //println!("Hit already existing block: 0x{:x}", addr);
+                                return Some((vec![addr],b));
+                            }
+                        },
+                        // and for any other cases...
+                        effect @ _ => {
+                            //println!("Maybe branch? effect = {:?} {:x}", &effect,  addr + instr.len());
+                            let dsts = self.effect_to_destinations(&effect, addr + instr.len(), &instr, addr);
+                            let b = VW_Block::new(start, addr + instr.len() - 1);
+                            //println!("Hit branch: {:?}", dsts);
+                            return Some((dsts,b))
+                        }
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("Decode error: {:?} @ {:x}", e, addr);
+                    panic!("Decode error!");
+                    return None;
+                }
+            }
+        }
+    }
+
+    fn process_job<M>(&mut self, data: &M, contexts: &MergedContextTable, start: u64) -> Vec<u64> where M: MemoryRange<x86_64>{
+        //if addr is inside of a block, apply split and return no destinations
+        self.maybe_apply_split(start);
+
+        let decode_result = self.vw_decode(data, contexts, start);
+        //println!("Decode: {:x} -> {:?}", start, decode_result);
+        if let None = decode_result{ 
+            return vec![];
+        }
+        let (dsts,block) = decode_result.unwrap();
+        self.cfg.blocks.insert(start, block);
+        self.cfg.graph.add_node(start);
+        for dst in dsts.clone() {
+            self.cfg.graph.add_edge(start, dst, ());
+            self.maybe_apply_split(dst);
+        }
+        dsts
+    }
+
+    //get destinations at end of block
+    //next = start of next instruction
+    fn effect_to_destinations(&mut self, effect : &Effect<u64>, next: u64, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Vec<u64>{
+        let mut dsts : Vec<u64> = vec![];
+        if !effect.stop_after{
+            dsts.push(next)
+        }
+        match &effect.dest {
+            Some(Target::Relative(rel)) => {
+                let dest_addr = next.wrapping_offset(*rel);
+                dsts.push(dest_addr);
+                return dsts;
+            },
+            Some(Target::Absolute(dest)) => {
+                dsts.push(*dest);
+                return dsts;
+            }
+            Some(Target::Multiple(_targets)) =>  return vec![],
+            Some(Indeterminate) => return vec![],
+            None => {
+                if self.switch_targets.is_none(){
+                    return vec![];
+                }
+                match instr.opcode() {
+                    Opcode::JMP => (),
+                    Opcode::RETURN | Opcode::UD2 => (),
+                    _ => panic!("Unknown indirect control flow transfer {:?}", instr.opcode()),
+                }
+                if let Opcode::JMP = instr.opcode() {
+                    if !self.switch_targets.as_ref().unwrap().contains_key(&addr){
+                        self.unresolved_jumps += 1;
+                        return vec![];
+                        // panic!("No entry in switch_targets for the switch @ {:x}", addr);
+                    }
+                    let switch = self.switch_targets.as_ref().unwrap().get(&addr).unwrap();
+                    let targets: Vec<u64> = switch.into_iter().map(|x| (*x) as u64).rev().collect();
+                    // println!("Indirect jumps discovered");
+                    // for target in &targets{
+                    //     println!("{:x}", target);
+                    // }
+                    return targets;
+                }
+                return vec![];
+            } 
+        }
+    }
+}
+
+fn get_effect(contexts: &MergedContextTable, instr: &yaxpeax_x86::long_mode::Instruction, addr: u64) -> Effect<u64>{
+    let ctx = contexts.at(&addr);
+    instr.control_flow(Some(&ctx))
+}
+
+pub fn get_cfg<M>(
+    data: &M,
+    contexts: &MergedContextTable,
+    entrypoint: u64,
+    switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>,
+) -> (VW_CFG,u32) where M: MemoryRange<x86_64>,
+{
+    let mut cfg_builder = VW_CFG_Builder::new(entrypoint, switch_targets);
+    let mut to_explore: VecDeque<u64> = VecDeque::new();
+    let mut seen: HashSet<u64> = HashSet::new();
+    to_explore.push_back(entrypoint);
+
+    while let Some(addr) = to_explore.pop_front() {
+        let dests = cfg_builder.process_job(data, contexts, addr);
+
+        let out_addrs: Vec<std::string::String> = dests.clone().into_iter().map(|x| format!("{:x}", x)).rev().collect();
+        tracing::trace!("Processed Job: {:x} -> {:?}", addr, out_addrs);
+
+        for next in dests.into_iter() {
+            if !seen.contains(&next) {
+                to_explore.push_back(next);
+                seen.insert(next);
+            }
+        }
+    }
+    cfg_builder.cfg.check_integrity();
+    (cfg_builder.cfg,cfg_builder.unresolved_jumps)
 }
