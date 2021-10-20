@@ -890,15 +890,12 @@ impl <A: Address + ToAddrDiff + Debug> Value for control_flow::Effect<A> {
                 ValueRes::literal(control_flow::Effect {
                     stop_after: self.stop_after || other.stop_after,
                     dest: Some(control_flow::Target::Relative(
-                        A::zero().wrapping_offset(*l).wrapping_offset(*r).diff(&A::zero()).unwrap_or_else(|| unsafe { std::hint::unreachable_unchecked() }) //.expect("can compute diff")
+                        A::zero().wrapping_offset(*l).wrapping_offset(*r).diff(&A::zero()).expect("can compute diff")
                     ))
                 })
             }
             _ => {
-                unsafe {
-                    std::hint::unreachable_unchecked();
-                    // panic!("bad add: {:?} + {:?}", self, other);
-                }
+                panic!("bad add: {:?} + {:?}", self, other);
             }
         }
     }
