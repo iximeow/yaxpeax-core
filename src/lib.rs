@@ -23,6 +23,7 @@ extern crate yaxpeax_pic18;
 pub mod analyses;
 pub mod arch;
 pub mod data;
+#[cfg(target_os = "linux")]
 pub mod debug;
 pub mod display;
 pub mod memory;
