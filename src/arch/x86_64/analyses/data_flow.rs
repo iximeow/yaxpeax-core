@@ -16,7 +16,7 @@ use arch::{AbiDefaults, FunctionAbiReference};
 use analyses::static_single_assignment::{DFGRef, SSAValues};
 use analyses::static_single_assignment::{DataDisplay as SSADataDisplay};
 use data::types::{Typed, TypeSpec, TypeAtlas};
-use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec, Operand};
+use yaxpeax_x86::long_mode::{register_class, ConditionCode, RegSpec};
 use yaxpeax_x86::x86_64;
 
 use std::rc::Rc;

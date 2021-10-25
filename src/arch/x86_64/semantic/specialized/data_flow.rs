@@ -86,7 +86,7 @@ pub(crate) fn decompose_locations(instr: &Instruction) -> Vec<(Option<Location>,
         }
     }
     // for LEA
-    fn decompose_read_nonmem(op: &Operand, which: u8) -> Vec<(Option<Location>, Direction)> {
+    fn decompose_read_nonmem(op: &Operand, _which: u8) -> Vec<(Option<Location>, Direction)> {
         match op {
             Operand::ImmediateI8(_) |
             Operand::ImmediateU8(_) |

@@ -1,3 +1,7 @@
+// some of the VW-specific types added here are prefixed like `VW_*` and don't match the CamelCase
+// style rustc would like to see
+#![allow(non_camel_case_types)]
+
 use arch::x86_64::MergedContextTable;
 use yaxpeax_x86::x86_64;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -11,7 +15,6 @@ use petgraph;
 use petgraph::graphmap::{GraphMap, Nodes};
 
 use yaxpeax_arch::{Address, AddressBase, AddressDiff, AddressDisplay, Arch, LengthedInstruction};
-use yaxpeax_arch::Decoder;
 
 use arch::DecodeFrom;
 
@@ -27,7 +30,6 @@ pub mod deserialize;
 use serialize::GraphSerializer;
 
 use serde::Serialize;
-use arch::x86_64::display::show_instruction;
 use yaxpeax_x86::long_mode::Opcode;
 
 use serde::ser::SerializeStruct;
@@ -437,7 +439,7 @@ impl <A> ControlFlowGraph<A> where A: Address + Debug + petgraph::graphmap::Node
                 self.graph.add_edge(enclosing_block_start, dest_addr, ());
             }
             Some(Target::Multiple(_targets)) => {},
-            e => {
+            _dest => {
                 // TODO: unhandled!
             }
         }
@@ -967,7 +969,7 @@ impl VW_Block {
 }
 
 #[derive(Default, Clone)]
-pub struct VW_CFG{
+pub struct VW_CFG {
     pub entrypoint: u64,
     pub blocks: BTreeMap<u64, VW_Block>,
     pub graph: GraphMap<u64, (), petgraph::Directed>
@@ -984,11 +986,11 @@ impl VW_CFG{
     }
 
     pub fn prev_block(&self, addr: u64) -> Option<VW_Block>{
-        for (a,b) in self.blocks.iter(){
-            if (addr > b.start) && (addr < b.end){
+        for (_block_start, b) in self.blocks.iter(){
+            if (addr > b.start) && (addr < b.end) {
                 return Some(*b);
-                }
             }
+        }
         None
     }
 
@@ -1036,7 +1038,7 @@ pub struct VW_CFG_Builder{
     pub unresolved_jumps: u32,
 }
 
-impl VW_CFG_Builder{
+impl VW_CFG_Builder {
 
     pub fn new(entrypoint : u64, switch_targets: Option<&HashMap<u64, std::vec::Vec<i64>>>) -> VW_CFG_Builder {
         VW_CFG_Builder {
@@ -1054,19 +1056,19 @@ impl VW_CFG_Builder{
         let b2 = VW_Block::new(split_addr, block_to_split.end);
         self.cfg.blocks.insert(block_to_split.start, b1);
         self.cfg.blocks.insert(split_addr, b2);
-        
+
         //update graph
         self.cfg.graph.remove_node(block_to_split.start);
         self.cfg.graph.add_node(block_to_split.start);
         self.cfg.graph.add_node(split_addr);
-        
+
         let neighbors: Vec<u64> = self.cfg.graph.neighbors(block_to_split.start).into_iter().collect();
         for next in neighbors.into_iter() {
             self.cfg.graph.remove_edge(block_to_split.start, next);
             self.cfg.graph.add_edge(split_addr, next, ());
         }
         self.cfg.graph.add_edge(block_to_split.start, split_addr, ());
-        
+
     }
 
     // Split if inside block (not first or last address)
@@ -1079,7 +1081,6 @@ impl VW_CFG_Builder{
 
 
     fn vw_decode<M>(&mut self, data: &M, contexts: &MergedContextTable, start: u64) -> Option<(Vec<u64>, VW_Block)> where M: MemoryRange<x86_64>{
-        let dsts : Vec<u64> = vec![];
         let mut addr = start;
         //show_instruction(data,contexts,addr,None);
         loop {
@@ -1114,7 +1115,7 @@ impl VW_CFG_Builder{
                 Err(e) => {
                     tracing::warn!("Decode error: {:?} @ {:x}", e, addr);
                     panic!("Decode error!");
-                    return None;
+                    // return None;
                 }
             }
         }
@@ -1157,7 +1158,7 @@ impl VW_CFG_Builder{
                 return dsts;
             }
             Some(Target::Multiple(_targets)) =>  return vec![],
-            Some(Indeterminate) => return vec![],
+            Some(Target::Indeterminate) => return vec![],
             None => {
                 if self.switch_targets.is_none(){
                     return vec![];
@@ -1182,7 +1183,7 @@ impl VW_CFG_Builder{
                     return targets;
                 }
                 return vec![];
-            } 
+            }
         }
     }
 }
